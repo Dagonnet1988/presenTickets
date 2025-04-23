@@ -1,0 +1,47 @@
+<div class="form-container" *ngIf="userForm">
+  <h2 class="form-title">Editar Usuario</h2>
+  <form [formGroup]="userForm" (ngSubmit)="saveChanges()">
+    <mat-form-field appearance="fill">
+      <mat-label>Identificador</mat-label>
+      <input matInput formControlName="username" required />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill" *ngIf="userRole === 'admin'">
+      <mat-label>Rol</mat-label>
+      <mat-select formControlName="role" required>
+        <mat-option value="user">Usuario</mat-option>
+        <mat-option value="tech">Técnico</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Correo</mat-label>
+      <input matInput type="email" formControlName="email" />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Nombres</mat-label>
+      <input matInput formControlName="firstname" />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Apellidos</mat-label>
+      <input matInput formControlName="lastname" />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Teléfono</mat-label>
+      <input matInput formControlName="phone" />
+    </mat-form-field>
+
+    <mat-form-field appearance="fill">
+      <mat-label>Creado el</mat-label>
+      <input matInput formControlName="created_at" [value]="userForm.get('created_at')?.value | date : 'd MMMM y, h:mm a'"/>
+    </mat-form-field>
+
+
+    <button mat-raised-button color="primary" type="submit" [disabled]="userForm.invalid">
+      Guardar Cambios
+    </button>
+  </form>
+</div>

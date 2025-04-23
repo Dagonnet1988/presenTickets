@@ -1,0 +1,218 @@
+.home-container {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.tickets-section {
+  flex: 3;
+  margin-right: 20px;
+}
+
+/* Contenedor de la lista de tickets */
+.ticket-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Espaciado entre los tickets */
+  margin-bottom: 20px; /* Espaciado inferior para separar del paginador */
+}
+
+.ticket-item {
+  cursor: pointer;
+  padding: 10px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+  transition: background-color 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket-item:hover {
+  background-color: #f9f9f9;
+}
+
+.ticket-item h3 {
+  margin: 0 0 5px 0;
+}
+
+.ticket-item p {
+  margin: 0 0 10px 0;
+}
+
+.ticket-item .created-at {
+  font-size: 0.9em;
+  color: #555;
+}
+
+.ticket-item .status {
+  font-weight: bold;
+  color: #1976d2;
+}
+
+.ticket-item .priority {
+  margin-top: 5px;
+  font-weight: bold;
+  margin-left: auto;
+}
+
+.ticket-item .assigned-to {
+  margin-left: auto;
+  margin-top: 5px;
+  font-weight: bold;
+}
+
+.status-created {
+  background-color: rgb(53, 248, 53);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-in-progress {
+  background-color: rgb(0, 0, 207);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-in-user {
+  background-color: rgb(186, 0, 207);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-escalated {
+  background-color: orange;
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-closed {
+  background-color: rgb(163, 162, 162);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.priority-low {
+  background-color: #8bc34a; /* Verde claro */
+  color: white;
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.priority-medium {
+  background-color: #ffeb3b; /* Amarillo */
+  color: black;
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.priority-high {
+  background-color: #ff9800; /* Naranja */
+  color: white;
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.priority-urgent {
+  background-color: #f44336; /* Rojo */
+  color: white;
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.filter-panel {
+  flex: 1;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-top: 20px;
+}
+
+.filter-group {
+  margin-bottom: 10px;
+}
+
+.large-select {
+  font-size: 1.2em;
+  padding: 10px;
+}
+
+button {
+  width: 100%;
+  font-size: 1.2em;
+  padding: 10px 20px;
+}
+
+.ticket-item.unassigned {
+  background-color: #ffcccc; /* Color de fondo para tickets no asignados */
+}
+
+/* Controles de Paginación */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px; /* Espaciado superior */
+  gap: 10px;
+}
+
+.pagination-controls button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  background-color: #3f51b5;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.pagination-controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-controls button.active {
+  background-color: #ff9800;
+  font-weight: bold;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background-color: #303f9f;
+}
+
+.pagination-controls span {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.search-bar {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.search-bar input {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.filter-actions {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.filter-actions button {
+  padding: 10px 20px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}

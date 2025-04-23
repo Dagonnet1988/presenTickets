@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+
+ul {
+  padding-left: 20px;
+}
+
+li {
+  color: red;
+}
+
+/* Título del diálogo */
+.dialog-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #d32f2f; /* Rojo para resaltar los errores */
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+/* Contenido del diálogo */
+.dialog-content {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+/* Descripción del diálogo */
+.dialog-description {
+  margin-bottom: 10px;
+  font-style: italic;
+  color: #555;
+}
+
+/* Lista de errores */
+.error-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.error-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #d32f2f; /* Rojo para los errores */
+}
+
+.error-item mat-icon {
+  margin-right: 8px;
+  font-size: 20px;
+}
+
+/* Acciones del diálogo */
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.dialog-actions button {
+  font-size: 14px;
+  padding: 8px 16px;
+}

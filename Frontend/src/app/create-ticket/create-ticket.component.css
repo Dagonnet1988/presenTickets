@@ -1,0 +1,52 @@
+.create-ticket-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+mat-card {
+  width: 100%;
+  max-width: 600px;
+}
+
+mat-form-field {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  position: relative;
+  border: 2px dashed #ccc;
+  padding: 20px;
+  border-radius: 4px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.dragging-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed #1976d2;
+  border-radius: 4px;
+}
+
+.dragging-overlay p {
+  font-size: 1.2em;
+  color: #1976d2;
+}
+
+.form-group.dragging {
+  border-color: #1976d2;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}

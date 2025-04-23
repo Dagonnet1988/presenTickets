@@ -1,0 +1,86 @@
+<div class="table-container">
+  <h2 class="table-title">Gestionar Usuarios</h2>
+
+  <!-- Barra de búsqueda y filtros -->
+  <div class="filter-container">
+    <input
+      class="search-bar"
+      type="text"
+      placeholder="Buscar por identificador, nombre o apellido"
+      [(ngModel)]="searchQuery"
+      (input)="applyFilters()"
+    />
+
+    <div class="filter-group">
+      <!-- Filtro por rol -->
+      <select class="filter-select" [(ngModel)]="selectedRole" (change)="applyFilters()">
+        <option value="all">Todos</option>
+        <option value="user">Usuarios</option>
+        <option value="tech">Técnicos</option>
+      </select>
+
+      <!-- Ordenar por -->
+      <select class="filter-select" [(ngModel)]="sortBy" (change)="applyFilters()">
+        <option value="username">Ordenar por Identificador</option>
+        <option value="firstname">Ordenar por Nombre</option>
+        <option value="role">Ordenar por Rol</option>
+      </select>
+
+      <!-- Botón para alternar entre usuarios activos y suspendidos -->
+      <button mat-button color="primary" class="toggle-button" (click)="toggleSuspendedView()">
+        {{ showSuspended ? 'Ver Usuarios Activos' : 'Ver Usuarios Suspendidos' }}
+      </button>
+    </div>
+  </div>
+
+  <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">
+
+    <ng-container matColumnDef="username">
+      <th mat-header-cell *matHeaderCellDef> Identificador </th>
+      <td mat-cell *matCellDef="let user"> {{ user.username }} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef> Nombres </th>
+      <td mat-cell *matCellDef="let user"> {{ user.firstname }} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="lastname">
+      <th mat-header-cell *matHeaderCellDef> Apellidos </th>
+      <td mat-cell *matCellDef="let user"> {{ user.lastname }} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="role">
+      <th mat-header-cell *matHeaderCellDef> Rol </th>
+      <td mat-cell *matCellDef="let user"> {{ getRoleDisplay(user.role) }} </td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef> Acciones </th>
+      <td mat-cell *matCellDef="let user">
+        <button mat-button color="primary" (click)="editUser(user)">Editar</button>
+        <button mat-button color="warn" *ngIf="user.status" (click)="deleteUser(user)">Suspender</button>
+        <button mat-button color="primary" *ngIf="!user.status" (click)="reactiveUser(user)">Reactivar</button>
+        <button mat-button color="primary" (click)="resetPassword(user)">Restablecer Contraseña</button>
+      </td>
+    </ng-container>
+
+    <!-- Header y filas -->
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+
+  <!-- Paginador -->
+  <mat-paginator [pageSize]="30" [pageSizeOptions]="[10, 20, 30, 50]" showFirstLastButtons></mat-paginator>
+</div>
+
+<ng-template #confirmDialog let-data>
+  <h2 mat-dialog-title>Confirmación</h2>
+  <mat-dialog-content>
+    <p>{{ data.message }}</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="closeDialog(false)">Cancelar</button>
+    <button mat-raised-button color="warn" (click)="closeDialog(true)">Aceptar</button>
+  </mat-dialog-actions>
+</ng-template>

@@ -1,0 +1,28 @@
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center; /* Cambiado a 'flex-start' para alinear al principio */
+  height: 120%; /* Ajustado a 100% para que el contenedor ocupe toda la pantalla */
+  background-image: url('/assets/images/fondo3.jpg');
+  background-size: cover; /* Asegura que la imagen cubra toda el área */
+  background-position: center; /* Mueve la imagen de fondo hacia arriba */
+  background-repeat: no-repeat; /* Evita que la imagen se repita */
+}
+
+mat-card {
+  background-color: rgba(255, 255, 255, 0.8); /* Fondo blanco semi-transparente para el formulario */
+  padding: 10px;
+  align-items: center;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Sombra suave */
+  max-width: 260px; /* Tamaño máximo del formulario */
+  margin-left: 150px;
+  margin-bottom: 150px;
+}
+
+
+
+.error-message {
+  color: red;
+  margin-top: 10px;
+}

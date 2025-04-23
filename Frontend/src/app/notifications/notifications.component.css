@@ -1,0 +1,11 @@
+.notifications-container {
+  padding: 20px;
+}
+
+.notification-badge {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 5px 10px;
+  margin-left: 10px;
+}

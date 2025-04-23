@@ -1,0 +1,186 @@
+<div class="details-ticket-container" *ngIf="ticket">
+  <div class="header-buttons">
+    <button mat-icon-button (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <div class="close-ticket-container">
+      <button
+        mat-raised-button
+        class="close-ticket-button"
+        (click)="confirmAction('cerrar')"
+        *ngIf="
+          ticket.status !== 'Cerrado' &&
+          ticket.status !== 'Resuelto' &&
+          userRole === 'user'
+        "
+      >
+        Cerrar Ticket
+      </button>
+      <button
+        mat-raised-button
+        class="close-ticket-button"
+        (click)="confirmAction('Escalar a Externo')"
+        *ngIf="
+          ticket.status !== 'Cerrado' &&
+          ticket.status !== 'Resuelto' &&
+          ticket.status !== 'Escalado a externo' &&
+          userRole !== 'user'
+        "
+      >
+        Escalar a Externo
+      </button>
+      <button
+        mat-raised-button
+        class="close-ticket-button"
+        (click)="confirmAction('resolver')"
+        *ngIf="
+          ticket.status !== 'Cerrado' &&
+          ticket.status !== 'Resuelto' &&
+          userRole !== 'user'
+        "
+      >
+        Resolver Ticket
+      </button>
+      <div>
+        <mat-form-field *ngIf="userRole !== 'user'" appearance="outline">
+          <mat-label>Prioridad</mat-label>
+          <mat-select
+            [(ngModel)]="ticket.priority"
+            (selectionChange)="updatePriority($event.value)"
+            [disabled]="ticket.priority && userRole !== 'admin'"
+          >
+            <mat-option value="Baja">BAJA</mat-option>
+            <mat-option value="Media">MEDIA</mat-option>
+            <mat-option value="Alta">ALTA</mat-option>
+            <mat-option value="Urgente">URGENTE</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Asignado a</mat-label>
+          <mat-select
+            [(ngModel)]="ticket.assigned_to"
+            (selectionChange)="assignTechnician($event.value)"
+            [disabled]="userRole !== 'admin' && ticket.assigned_to || userRole === 'user'"
+          >
+            <mat-option *ngFor="let tech of technicians" [value]="tech.id">
+              {{ tech.firstname }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <button
+        *ngIf="userRole !== 'user' && ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"
+        mat-raised-button
+        class="close-ticket-button"
+        (click)="confirmAction('reabrir')"
+      >
+        Reabrir Ticket
+      </button>
+    </div>
+  </div>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Ticket # {{ ticket.id }} : {{ ticket.title }}</mat-card-title>
+      <mat-card-subtitle>
+        <span>Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</span>
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <p>{{ ticket.description }}</p>
+      <p><strong>Categoría:</strong> {{ ticket.category }}</p>
+      <p><strong>Área:</strong> {{ ticket.area }}</p>
+      <p *ngIf="userRole !== 'user'"><strong>Creado Por:</strong> {{ getUserName(ticket.user_id).toUpperCase()}}</p>
+      <p>
+        <strong>Estado:</strong>
+        <span [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+      </p>
+      <span *ngIf="ticket.closed_at"><strong> {{ticket.status}} el {{ ticket.closed_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</strong></span>
+      <div *ngIf="ticket.attachments?.length > 0">
+        <h3>Archivos Adjuntos:</h3>
+        <div class="attachments-grid">
+          <div *ngFor="let attachment of ticket.attachments; let i = index" class="attachment-item">
+            <span class="attachment-number">#{{ i + 1 }}</span>
+            <a [href]="'http://localhost:3000' + attachment.filepath" target="_blank" rel="noopener noreferrer">
+              <img *ngIf="isImage(attachment.filename)" [src]="'http://localhost:3000' + attachment.filepath" alt="{{ attachment.filename }}" class="thumbnail" />
+              <div *ngIf="!isImage(attachment.filename)" class="file-extension">
+                {{ getFileExtension(attachment.filename) }}
+              </div>
+            </a>
+            <p class="file-name">{{ attachment.filename }}</p>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Historial de Chat</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngFor="let message of messages">
+        <div
+          class="message-container"
+          [ngClass]="{
+            'message-user': areNumber(message.user_id, authService.getUserId() || ''),
+            'message-other': !areNumber(message.user_id, authService.getUserId() || '')
+          }"
+        >
+          <p><strong>{{ userNames.get(message.user_id)?.toUpperCase() }}:</strong></p>
+          <p>{{ message.comment }}</p>
+          <small>{{ message.created_at | date : "EEEE d MMMM y, h:mm a" }}</small>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card *ngIf="ticket.status !== 'Cerrado' && ticket.status !== 'Resuelto'">
+    <mat-card-header>
+      <mat-card-title>Nuevo Mensaje</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div
+        class="new-message-area"
+        (drop)="onDrop($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        [ngClass]="{ dragging: isDragging }"
+      >
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Nuevo Mensaje</mat-label>
+          <input matInput [(ngModel)]="newMessage" placeholder="Escribe tu mensaje" />
+        </mat-form-field>
+        <div class="drag-drop-text" *ngIf="isDragging">Suelta el archivo aquí para adjuntar</div>
+      </div>
+    </mat-card-content>
+    <mat-card-content>
+      <div class="file-upload">
+        <input type="file" id="fileInput" (change)="onFileSelected($event)" multiple />
+        <label for="fileInput" class="file-input-label">
+          <mat-icon>attach_file</mat-icon> Adjuntar Archivos
+        </label>
+      </div>
+      <ul class="attachments-list">
+        <li *ngFor="let file of selectedFiles; let i = index">
+          {{ file.name }} ({{ file.size / 1024 | number : "1.0-2" }} KB)
+          <button mat-icon-button color="warn" (click)="removeAttachment(i)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </li>
+      </ul>
+    </mat-card-content>
+    <mat-card-actions>
+      <button mat-raised-button color="primary" (click)="sendMessage()">Enviar</button>
+    </mat-card-actions>
+  </mat-card>
+</div>
+
+<!-- Diálogo de confirmación -->
+<ng-template #confirmDialog let-data>
+  <h1 mat-dialog-title>Confirmación</h1>
+  <div mat-dialog-content>¿Estás seguro de que deseas {{ data.action }} este ticket?</div>
+  <div mat-dialog-actions>
+    <button mat-button (click)="dialogRef.close(false)">Cancelar</button>
+    <button mat-button (click)="dialogRef.close(true)">Confirmar</button>
+  </div>
+</ng-template>

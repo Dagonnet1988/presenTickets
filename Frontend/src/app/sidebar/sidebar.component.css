@@ -1,0 +1,33 @@
+.sidenav-container {
+  height: 100%;
+
+}
+
+mat-sidenav {
+  width: 250px;
+  position: fixed;
+  margin-top: 80px;
+}
+
+.sidenav-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+}
+
+mat-sidenav-content {
+  padding: 20px;
+}
+
+.icon {
+  margin-right: 10px;
+}
+
+.active-link {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.content {
+  padding: 20px;
+}

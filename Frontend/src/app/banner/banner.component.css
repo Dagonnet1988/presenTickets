@@ -1,0 +1,29 @@
+.banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-image: url('/assets/images/fondo.png');
+  background-size: 165%;
+  background-position: center;
+  color: white;
+  text-align: center;
+  padding: 10px 0;
+  z-index: 1000; /* Asegúrate de que el banner esté por encima de otros elementos */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  height: 80px;
+  margin-left: 20px;
+}
+
+.user-info {
+  margin-right: 20px;
+}
+
+.welcome-message {
+  margin-right: 10px;
+}

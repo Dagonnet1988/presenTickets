@@ -1,0 +1,13 @@
+<div class="notifications-container">
+  <h2>Notificaciones</h2>
+  <mat-list>
+    <mat-list-item *ngFor="let notification of notifications">
+      <div mat-line>
+        <strong>{{ notification.type }}</strong>: {{ notification.data.message || notification.data.title }}
+      </div>
+      <button mat-button (click)="goToTicket(notification.data.ticketId || notification.data.id)">
+        Ver Ticket
+      </button>
+    </mat-list-item>
+  </mat-list>
+</div>

@@ -1,0 +1,288 @@
+.details-ticket-container {
+  padding: 20px;
+}
+
+.header-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.close-ticket-container {
+  display: flex;
+  justify-content: flex-end;
+}
+
+mat-card {
+  margin-bottom: 20px;
+}
+
+mat-card-content p {
+  margin: 0 0 10px;
+}
+
+/* Contenedor de mensajes */
+.message-container {
+  max-width: 70%;
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  word-wrap: break-word;
+}
+
+/* Contenedor de mensajes centrado */
+.messages-container {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+
+/* Mensajes del usuario (a la derecha) */
+.message-user {
+  align-self: flex-end;
+  background-color: #e3f2fd;
+  color: #0d47a1;
+  text-align: right;
+}
+
+/* Mensajes de otros usuarios (a la izquierda) */
+.message-other {
+  align-self: flex-start;
+  background-color: #fbe6e6;
+  color: #333;
+  text-align: left;
+}
+
+/* Texto del mensaje */
+.message-container p {
+  margin: 0;
+}
+
+/* Fecha y hora del mensaje */
+.message-container small {
+  margin-top: 5px;
+  font-size: 0.8em;
+  color: #777;
+}
+
+/* Ajustes para el campo de entrada */
+mat-card-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+mat-form-field {
+  flex: 1;
+}
+
+.full-width {
+  width: 100%;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.new-message-area {
+  border: 2px dashed #ccc;
+  padding: 20px;
+  border-radius: 5px;
+  position: relative;
+}
+
+.new-message-area.dragging {
+  border-color: #1976d2;
+}
+
+.drag-drop-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.2em;
+  color: #1976d2;
+  pointer-events: none;
+}
+
+.file-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.file-input-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Clases para los diferentes estados del ticket */
+.status-created {
+  background-color: rgb(53, 248, 53);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-in-progress {
+  background-color: rgb(0, 0, 207);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-in-user {
+  background-color: rgb(186, 0, 207);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-escalated {
+  background-color: orange;
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-closed {
+  background-color: rgb(163, 162, 162);
+  color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+/* Estilo para la cuadrícula de archivos adjuntos */
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* Máximo 4 columnas */
+  gap: 15px; /* Espaciado entre los elementos */
+}
+
+.attachment-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  padding: 5px;
+}
+
+.attachment-item img {
+  width: 100px; /* Tamaño de la miniatura */
+  height: 100px;
+  object-fit: cover;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin-bottom: 5px;
+}
+
+.file-extension {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: #f5f5f5;
+  font-size: 16px;
+  font-weight: bold;
+  color: #555;
+}
+
+.file-name {
+  margin-top: 5px;
+  font-size: 14px;
+  color: #333;
+  word-wrap: break-word; /* Permite que el nombre del archivo se ajuste si es muy largo */
+}
+
+.attachment-number {
+  font-size: 0.8em;
+  color: #555;
+  margin-top: 5px;
+}
+
+/* Lista de archivos adjuntos */
+.attachments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.attachments-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #ccc;
+}
+
+.attachments-list li:last-child {
+  border-bottom: none;
+}
+
+/* Media queries para ajustar el número de columnas según el tamaño de la pantalla */
+@media (max-width: 1200px) {
+  .attachment-item {
+    flex: 1 1 33.33%; /* 3 adjuntos por fila */
+    max-width: 33.33%;
+  }
+  .attachments-grid {
+    grid-template-columns: repeat(3, 1fr); /* 3 columnas en pantallas medianas */
+  }
+}
+
+@media (max-width: 992px) {
+  .attachment-item {
+    flex: 1 1 50%; /* 2 adjuntos por fila */
+    max-width: 50%;
+  }
+  .attachments-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columnas en pantallas pequeñas */
+  }
+}
+
+@media (max-width: 768px) {
+  .attachment-item {
+    flex: 1 1 100%; /* 1 adjunto por fila */
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .attachments-grid {
+    grid-template-columns: 1fr; /* 1 columna en pantallas muy pequeñas */
+  }
+}
+
+/* Estilos personalizados */
+.disabled-select .mat-select {
+  background-color: #f0f0f0;
+  color: #999;
+}
+
+.priority-low {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.priority-medium {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.priority-high {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.priority-urgent {
+  background-color: #f5c6cb;
+  color: #721c24;
+}

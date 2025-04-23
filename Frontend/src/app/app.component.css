@@ -1,0 +1,13 @@
+.main-container {
+  display: flex;
+  margin-top: 60px; /* Ajusta este valor según la altura de tu banner */
+}
+
+.sidebar {
+  margin-top: 80px; /* Ajusta este valor según el espacio que desees entre el banner y el sidebar */
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+}

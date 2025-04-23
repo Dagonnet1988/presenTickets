@@ -1,0 +1,12 @@
+<h1 mat-dialog-title class="dialog-title">Errores Encontrados</h1>
+<div mat-dialog-content class="dialog-content">
+  <p class="dialog-description">Se encontraron los siguientes errores al procesar el archivo:</p>
+  <ul class="error-list">
+    <li *ngFor="let error of data.errors" class="error-item">
+      <mat-icon color="warn">error</mat-icon> {{ error }}
+    </li>
+  </ul>
+</div>
+<div mat-dialog-actions class="dialog-actions">
+  <button mat-raised-button color="primary" (click)="close()">Aceptar</button>
+</div>

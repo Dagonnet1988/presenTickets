@@ -1,0 +1,103 @@
+<div class="create-ticket-container">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Crear Ticket</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="ticketForm" (ngSubmit)="onSubmit()">
+        <!-- Título -->
+        <mat-form-field appearance="outline">
+          <mat-label>Título</mat-label>
+          <input matInput formControlName="title" placeholder="Ingresa el título del ticket" />
+          <mat-error *ngIf="ticketForm.get('title')?.invalid && ticketForm.get('title')?.touched">
+            El título es obligatorio.
+          </mat-error>
+        </mat-form-field>
+
+        <!-- Descripción -->
+        <mat-form-field appearance="outline">
+          <mat-label>Descripción</mat-label>
+          <textarea matInput formControlName="description" placeholder="Ingresa la descripción del ticket"></textarea>
+          <mat-error *ngIf="ticketForm.get('description')?.invalid && ticketForm.get('description')?.touched">
+            La descripción es obligatoria.
+          </mat-error>
+        </mat-form-field>
+
+        <!-- Categoría -->
+        <mat-form-field appearance="outline">
+          <mat-label>Categoría</mat-label>
+          <mat-select formControlName="category">
+            <mat-option value="Daño">Daño</mat-option>
+            <mat-option value="Solicitud">Solicitud</mat-option>
+            <mat-option value="Consulta">Consulta</mat-option>
+            <mat-option value="Revisión">Revisión</mat-option>
+            <mat-option value="Ajuste">Ajuste</mat-option>
+          </mat-select>
+          <mat-error *ngIf="ticketForm.get('category')?.invalid && ticketForm.get('category')?.touched">
+            La categoría es obligatoria.
+          </mat-error>
+        </mat-form-field>
+
+        <!-- Área -->
+        <mat-form-field appearance="outline">
+          <mat-label>Área</mat-label>
+          <mat-select formControlName="area">
+            <mat-option value="Admisiones">Admisiones</mat-option>
+            <mat-option value="Almacén">Almacén</mat-option>
+            <mat-option value="Alimentación">Alimentación</mat-option>
+            <mat-option value="Auditorías">Auditorías</mat-option>
+            <mat-option value="Bloque 1">Bloque 1</mat-option>
+            <mat-option value="Bloque 4">Bloque 4</mat-option>
+            <mat-option value="Calidad">Calidad</mat-option>
+            <mat-option value="Centro de ortopedia">Centro de ortopedia</mat-option>
+            <mat-option value="Contabilidad">Contabilidad</mat-option>
+            <mat-option value="Departamento de enfermería">Departamento de enfermería</mat-option>
+            <mat-option value="Dirección">Dirección</mat-option>
+            <mat-option value="Facturación">Facturación</mat-option>
+            <mat-option value="Farmacia">Farmacia</mat-option>
+            <mat-option value="Financiera">Financiera</mat-option>
+            <mat-option value="Fisioterapia">Fisioterapia</mat-option>
+            <mat-option value="Gestión Integral">Gestión Integral</mat-option>
+            <mat-option value="Jurídica">Jurídica</mat-option>
+            <mat-option value="Laboratorio">Laboratorio</mat-option>
+            <mat-option value="Lavandería">Lavandería</mat-option>
+            <mat-option value="Mantenimiento">Mantenimiento</mat-option>
+            <mat-option value="Parqueadero">Parqueadero</mat-option>
+            <mat-option value="Programación de cirugía">Programación de cirugía</mat-option>
+            <mat-option value="Radicación">Radicación</mat-option>
+            <mat-option value="Recepción">Recepción</mat-option>
+            <mat-option value="Registros Médicos">Registros Médicos</mat-option>
+            <mat-option value="Talento Humano">Talento Humano</mat-option>
+            <mat-option value="UCI">UCI</mat-option>
+            <mat-option value="Urgencias">Urgencias</mat-option>
+          </mat-select>
+          <mat-error *ngIf="ticketForm.get('area')?.invalid && ticketForm.get('area')?.touched">
+            La ubicación es obligatoria.
+          </mat-error>
+        </mat-form-field>
+
+        <!-- Adjuntar Archivos -->
+        <div class="file-upload">
+          <input type="file" (change)="onFileChange($event)" multiple />
+          <div class="drop-zone" (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)">
+            Arrastra y suelta archivos aquí o haz clic para seleccionar archivos
+          </div>
+          <ul>
+            <li *ngFor="let file of attachments; let i = index">
+              {{ file.name }} ({{ file.size / 1024 | number: '1.0-2' }} KB)
+              <button type="button" (click)="removeAttachment(i)">Eliminar</button>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Botón Enviar -->
+        <div class="form-actions">
+          <button mat-raised-button color="primary" type="submit" [disabled]="ticketForm.invalid || isSubmitting">
+            <span *ngIf="!isSubmitting">Crear Ticket</span>
+            <mat-spinner *ngIf="isSubmitting" diameter="20"></mat-spinner>
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>

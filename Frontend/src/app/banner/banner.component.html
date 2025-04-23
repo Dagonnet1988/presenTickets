@@ -1,0 +1,13 @@
+<div class="banner">
+  <!-- Logo -->
+  <img src="/assets/images/logo.png" alt="Logo de la Clínica de la Presentación" class="logo">
+
+  <!-- Información de usuario -->
+  <div class="user-info">
+    <span class="welcome-message">Bienvenido,
+      <br>
+      {{ username?.toUpperCase() }} </span>
+    <br>
+    <button (click)="logout()">Cerrar Sesión</button>
+  </div>
+</div>

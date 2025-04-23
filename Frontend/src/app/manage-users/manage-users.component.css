@@ -1,0 +1,101 @@
+:host {
+  display: block;
+}
+
+/* Contenedor principal de la tabla */
+.table-container {
+  max-width: 900px;
+  margin: 50px auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Título de la tabla */
+.table-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #3f51b5;
+}
+
+/* Estilo de la tabla */
+table {
+  width: 100%;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px;
+}
+
+th {
+  background-color: #3f51b5;
+  color: rgb(218, 10, 10);
+}
+
+td button {
+  margin-right: 5px;
+}
+
+.mat-elevation-z8 {
+  border-radius: 8px;
+}
+
+/* Contenedor de los filtros */
+.filter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+/* Barra de búsqueda */
+.search-bar {
+  width: 100%;
+  padding: 10px 15px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+/* Efecto al enfocar la barra de búsqueda */
+.search-bar:focus {
+  border-color: #3f51b5;
+  box-shadow: 0 0 5px rgba(63, 81, 181, 0.5);
+}
+
+/* Grupo de filtros */
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Selectores de filtro */
+.filter-select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.filter-select:focus {
+  border-color: #3f51b5;
+}
+
+/* Botón de alternar vista */
+.toggle-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 4px;
+  text-transform: none;
+}

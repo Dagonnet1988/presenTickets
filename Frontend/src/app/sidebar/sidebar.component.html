@@ -1,0 +1,75 @@
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav #sidenav mode="side" opened>
+    <mat-toolbar color="primary" class="sidenav-header">
+      <span></span>
+    </mat-toolbar>
+    <mat-nav-list>
+      <!-- Enlace para "Mis tickets" -->
+      <a
+        mat-list-item
+        routerLink="/"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{ exact: true }"
+        aria-label="Home"
+      >
+        <mat-icon class="icon">home</mat-icon>
+        <span>Mis tickets</span>
+      </a>
+
+      <!-- Enlace para "Crear Ticket" (solo para usuarios) -->
+      <a
+        mat-list-item
+        *ngIf="userRole === 'user'"
+        routerLink="/create-ticket"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{ exact: true }"
+        aria-label="Create Ticket"
+      >
+        <mat-icon class="icon">add_circle</mat-icon>
+        <span>Crear Ticket</span>
+      </a>
+
+      <!-- Enlace para "Crear Usuario" (solo para administradores) -->
+      <a
+        mat-list-item
+        *ngIf="userRole === 'admin'"
+        routerLink="/create-user"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{ exact: true }"
+        aria-label="Create User"
+      >
+        <mat-icon class="icon">person_add</mat-icon>
+        <span>Crear Usuario</span>
+      </a>
+
+      <!-- Enlace para "Gestionar Usuarios" (solo para administradores) -->
+      <a
+        mat-list-item
+        *ngIf="userRole === 'admin'"
+        routerLink="/manage-users"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{ exact: true }"
+        aria-label="Manage Users"
+      >
+        <mat-icon class="icon">group</mat-icon>
+        <span>Gestionar Usuarios</span>
+      </a>
+
+    </mat-nav-list>
+  </mat-sidenav>
+  <mat-sidenav-content>
+    <mat-toolbar color="primary">
+      <button
+        mat-icon-button
+        (click)="sidenav.toggle()"
+        aria-label="Toggle sidenav"
+      >
+        <mat-icon>menu</mat-icon>
+      </button>
+      <span>Menú</span>
+    </mat-toolbar>
+    <div class="content">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>
