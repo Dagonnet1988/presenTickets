@@ -1,122 +1,4 @@
-<!-- Controles de Paginación -->
-  <div class="pagination-controls">
-    <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 1">Anterior</button>
-    <button
-      *ngFor="let page of [].constructor(totalPages); let i = index"
-      (click)="changePage(i + 1)"
-      [class.active]="currentPage === i + 1"
-    >
-      {{ i + 1 }}
-    </button>
-    <button (click)="changePage(currentPage + 1)" [disabled]="currentPage === totalPages">Siguiente</button>
-  </div>
-
-<div class="home-container">
-
-  <div class="tickets-section">
-    <!-- Barra de Búsqueda -->
-    <div class="search-bar">
-      <input
-        type="text"
-        placeholder="Buscar tickets por título o número de ticket..."
-        [(ngModel)]="searchQuery"
-        (input)="onSearchChange()"
-      />
-    </div>
-    <br>
-    <h1>MIS TICKETS</h1>
-
-    <!-- Lista de Tickets -->
-    <div class="ticket-list">
-      <div
-        class="ticket-item"
-        *ngFor="let ticket of paginatedTickets"
-        [ngClass]="{'unassigned': !ticket.assigned_to && userRole !== 'user'}"
-        (click)="viewTicketDetails(ticket.id)"
-      >
-        <h3>Ticket #{{ ticket.id }}: {{ ticket.title }}</h3>
-        <p class="created-at">
-          Creado el {{ ticket.created_at | date : "EEEE d MMMM y, h:mm a" }}
-        </p>
-        <span *ngIf="userRole !== 'user'" class="created-by"><strong>Creado por: {{ getUserName(ticket.user_id).toUpperCase() }}</strong></span>
-        <span class="area"><strong>Área: {{ ticket.area }}</strong></span>
-        <span *ngIf="userRole !== 'user'" class="priority" [ngClass]="getPriorityClass(ticket.priority)">
-          Prioridad: {{ ticket.priority }}
-        </span>
-        <span class="assigned-to">Asignado a: {{ getUserName(ticket.assigned_to).toUpperCase() }}</span>
-        <span class="status" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
-        <span *ngIf="ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"><strong> {{ticket.status}} el {{ ticket.closed_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</strong></span>
-      </div>
-      <!-- Mensaje cuando no hay tickets -->
-      <div *ngIf="paginatedTickets.length === 0" class="no-tickets">
-        <p>No se encontraron tickets con los filtros aplicados.</p>
-      </div>
-    </div>
-  </div>
-  <!-- Sección de Filtros -->
-<div class="filter-panel">
-  <h2>Filtros de Búsqueda</h2>
-  <form>
-    <!-- Filtro por Estado -->
-    <div class="filter-group">
-      <label for="status">Estado</label>
-      <select
-        id="status"
-        [(ngModel)]="filters.status"
-        name="status"
-        (change)="applyFilters()"
-        class="large-select"
-      >
-        <option value="todos">Todos</option>
-        <option value="abiertos">Abiertos</option>
-        <option value="cerrados">Cerrados</option>
-      </select>
-    </div>
-    <!-- Ordenar por -->
-    <div class="filter-group">
-      <label for="orderBy">Ordenar por</label>
-      <select
-        id="orderBy"
-        [(ngModel)]="filters.orderBy"
-        name="orderBy"
-        (change)="applyFilters()"
-        class="large-select"
-      >
-        <option value="fecha">Fecha</option>
-        <option value="estado">Estado</option>
-      </select>
-    </div>
-    <!-- Filtro por Fecha -->
-    <div class="filter-group">
-      <label for="startDate">Fecha de Inicio</label>
-      <input type="date" id="startDate" [(ngModel)]="filters.startDate" name="startDate" (change)="applyFilters()" class="large-select">
-    </div>
-    <div class="filter-group">
-      <label for="endDate">Fecha Final</label>
-      <input type="date" id="endDate" [(ngModel)]="filters.endDate" name="endDate" (change)="applyFilters()" class="large-select">
-    </div>
-    <!-- Botón para alternar entre ver todos los tickets y ver solo los asignados -->
-    <div class="filter-group" *ngIf="userRole === 'tech'">
-      <button type="button" (click)="toggleShowAllTickets()">
-        {{ showAllTickets ? 'Ver solo mis tickets asignados' : 'Ver todos los tickets' }}
-      </button>
-    </div>
-    <div *ngIf="userRole === 'admin'">
-      <label for="assignedToFilter">Asignado a:</label>
-      <select id="assignedToFilter" [(ngModel)]="filters.assignedTo" name="assignedToFilter" (change)="applyFilters()">
-        <option value="todos">Todos</option>
-        <option value="noAsignado">No asignado</option>
-        <option *ngFor="let userId of getTechNamesKeys()" [value]="userId">{{ getTechName(userId) }}</option>
-      </select>
-    </div>
-  </form>
-  <!-- Botón para Resetear Filtros -->
-  <div class="filter-actions">
-    <button mat-raised-button color="warn" (click)="resetFilters()">Resetear Filtros</button>
-  </div>
-</div>
-</div>
-<!-- Controles de Paginación -->
+<!-- El layout ahora lo maneja MainLayoutComponent, así que solo deja el contenido principal aquí -->
 <div class="pagination-controls">
   <button (click)="changePage(currentPage - 1)" [disabled]="currentPage === 1">Anterior</button>
   <button
@@ -128,3 +10,129 @@
   </button>
   <button (click)="changePage(currentPage + 1)" [disabled]="currentPage === totalPages">Siguiente</button>
 </div>
+<div class="home-container">
+    <div class="tickets-section">
+      <!-- Barra de Búsqueda -->
+      <div class="search-bar">
+        <input
+          type="text"
+          placeholder="Buscar tickets por título o número de ticket..."
+          [(ngModel)]="searchQuery"
+          (input)="onSearchChange()"
+        />
+      </div>
+      <br>
+      <h1>MIS TICKETS</h1>
+      <!-- Lista de Tickets -->
+      <div class="ticket-list">
+        <div
+          class="ticket-item"
+          *ngFor="let ticket of paginatedTickets"
+          [ngClass]="{'unassigned': !ticket.assigned_to && userRole !== 'user'}"
+          (click)="viewTicketDetails(ticket.id)"
+        >
+          <h3>Ticket #{{ ticket.id }}: {{ ticket.title }}</h3>
+          <p class="created-at">
+            Creado el {{ ticket.created_at | date : 'EEEE d MMMM y, h:mm a' }}
+          </p>
+          <span *ngIf="userRole !== 'user'" class="created-by"><strong>Creado por: {{ getUserName(ticket.user_id).toUpperCase() }}</strong></span>
+          <span class="area"><strong>Área: {{ ticket.area }}</strong></span>
+          <span *ngIf="userRole !== 'user'" class="priority" [ngClass]="getPriorityClass(ticket.priority)">
+            Prioridad: {{ ticket.priority }}
+          </span>
+          <span class="assigned-to">Asignado a: {{ getUserName(ticket.assigned_to).toUpperCase() }}</span>
+          <span class="status" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+          <span *ngIf="ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"><strong> {{ticket.status}} el {{ ticket.closed_at | date : 'EEEE d MMMM y, \'a las\' h:mm a' }}</strong></span>
+        </div>
+        <!-- Mensaje cuando no hay tickets -->
+        <div *ngIf="paginatedTickets.length === 0" class="no-tickets">
+          <p>No se encontraron tickets con los filtros aplicados.</p>
+        </div>
+      </div>
+    </div>
+    <!-- Sección de Filtros -->
+    <div class="filter-panel">
+      <h2>Filtros de Búsqueda</h2>
+      <form>
+        <!-- Filtro por Estado -->
+        <div class="filter-group">
+          <label for="status">Estado</label>
+          <select
+            id="status"
+            [(ngModel)]="filters.status"
+            name="status"
+            (change)="onStatusSelectChange()"
+            class="large-select"
+          >
+            <option value="todos">Todos</option>
+            <option value="abiertos">Abiertos</option>
+            <option value="cerrados">Cerrados</option>
+          </select>
+        </div>
+        <!-- Ordenar por -->
+        <div class="filter-group">
+          <label for="orderBy">Ordenar por</label>
+          <select
+            id="orderBy"
+            [(ngModel)]="filters.orderBy"
+            name="orderBy"
+            (change)="applyFilters()"
+            class="large-select"
+          >
+            <option value="fecha">Fecha</option>
+            <option value="estado">Estado</option>
+          </select>
+        </div>
+        <!-- Filtro por Fecha -->
+        <div class="filter-group">
+          <label for="startDate">Fecha de Inicio</label>
+          <input type="date" id="startDate" [(ngModel)]="filters.startDate" name="startDate" (change)="applyFilters()" class="large-select">
+        </div>
+        <div class="filter-group">
+          <label for="endDate">Fecha Final</label>
+          <input type="date" id="endDate" [(ngModel)]="filters.endDate" name="endDate" (change)="applyFilters()" class="large-select">
+        </div>
+        <!-- Botón para alternar entre ver todos los tickets y ver solo los asignados -->
+        <div class="filter-group" *ngIf="userRole === 'tech'">
+          <button type="button" (click)="toggleShowAllTickets()">
+            {{ showAllTickets ? 'Ver solo mis tickets asignados' : 'Ver todos los tickets' }}
+          </button>
+        </div>
+        <div *ngIf="userRole === 'admin'">
+          <label for="assignedToFilter">Asignado a:</label>
+          <select id="assignedToFilter" [(ngModel)]="filters.assignedTo" name="assignedToFilter" (change)="applyFilters()">
+            <option value="todos">Todos</option>
+            <option value="noAsignado">No asignado</option>
+            <option *ngFor="let userId of getTechNamesKeys()" [value]="userId">{{ getTechName(userId) }}</option>
+          </select>
+        </div>
+      </form>
+      <!-- Botón para Resetear Filtros -->
+      <div class="filter-actions">
+        <button mat-raised-button color="warn" (click)="resetFilters()">Resetear Filtros</button>
+      </div>
+      <!-- Botones de conteo de tickets por estado -->
+      <div class="status-counts" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 24px 0 18px 0;">
+        <button mat-stroked-button color="secondary"
+          [class.active-status]="activeStatusFilter === 'Esperando respuesta del usuario'"
+          (click)="filterByStatus('Esperando respuesta del usuario')">
+          Esperando respuesta del usuario: <strong>{{ countEsperandoUsuario }}</strong>
+        </button>
+        <button mat-stroked-button color="accent"
+          [class.active-status]="activeStatusFilter === 'Escalado a externo'"
+          (click)="filterByStatus('Escalado a Externo')">
+          Escalado a Externo: <strong>{{ countEscaladoExterno }}</strong>
+        </button>
+        <button mat-stroked-button color="primary"
+          [class.active-status]="activeStatusFilter === 'Escalado a Tier 3 / Gerente de Cuenta'"
+          (click)="filterByStatus('Escalado a Tier 3 / Gerente de Cuenta')">
+          Escalado a Tier 3: <strong>{{ countEscaladoTier3 }}</strong>
+        </button>
+        <button mat-stroked-button color="warn"
+          [class.active-status]="activeStatusFilter === 'En gestión'"
+          (click)="filterByStatus('En gestión')">
+          En Gestión: <strong>{{ countEnGestion }}</strong>
+        </button>
+      </div>
+    </div>
+  </div>

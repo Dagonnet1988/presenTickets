@@ -10,6 +10,10 @@ import { TicketService } from '../ticket.service';
 import { AuthService } from '../auth.service';
 import { MatCardModule } from '@angular/material/card';
 import { UserService } from '../user.service';
+import { RefreshTicketsService } from '../refresh-tickets.service';
+import { BannerComponent } from '../banner/banner.component';
+import { SidebarComponent } from '../sidebar/sidebar.component';
+import { NotificationBellComponent } from '../notification-bell.component';
 
 @Component({
   selector: 'app-home',
@@ -22,7 +26,7 @@ import { UserService } from '../user.service';
     MatInputModule,
     MatSelectModule,
     MatCardModule,
-    RouterModule
+    RouterModule,
   ],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css']
@@ -47,17 +51,39 @@ export class HomeComponent implements OnInit {
   userRole: string = '';
   showAllTickets: boolean = false;
 
+  // Contadores de tickets por estado
+  countEscaladoExterno = 0;
+  countEscaladoTier3 = 0;
+  countEnGestion = 0;
+  countEsperandoUsuario = 0;
+
+  // Filtro de estado activo para los botones de conteo
+  activeStatusFilter: string | null = null;
+
   constructor(
     private ticketService: TicketService,
     private authService: AuthService,
     private router: Router,
     private userService: UserService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    private refreshTicketsService: RefreshTicketsService
+  ) {
+    this.refreshTicketsService.refresh$.subscribe(() => {
+      this.refreshTickets();
+    });
+  }
 
   ngOnInit(): void {
     this.userRole = this.authService.getUserRole() || '';
     this.loadTickets();
+    this.loadUserNames(); // <--- Asegura que se carguen los nombres de usuario/asignado
+  }
+
+  updateStatusCounts(): void {
+    this.countEscaladoExterno = this.tickets.filter(t => t.status === 'Escalado a externo').length;
+    this.countEscaladoTier3 = this.tickets.filter(t => t.status === 'Escalado a Tier 3 / Gerente de Cuenta').length;
+    this.countEnGestion = this.tickets.filter(t => t.status === 'En gestión').length;
+    this.countEsperandoUsuario = this.tickets.filter(t => t.status === 'Esperando respuesta del usuario').length;
   }
 
   loadTickets(): void {
@@ -72,9 +98,12 @@ export class HomeComponent implements OnInit {
       } else {
         this.tickets = tickets.filter(ticket => ticket.user_id === Number(userId));
       }
-      this.loadUserNames();
-      this.loadTechNames();
-      this.applyFilters(); // Aplicar filtros después de cargar los tickets
+      this.updateStatusCounts();
+      this.applyFilters();
+      this.loadUserNames(); // <--- Refresca los nombres después de cargar tickets
+      this.cdr.detectChanges();
+    }, error => {
+      console.error('[HOME] Error al obtener tickets:', error);
     });
   }
 
@@ -114,7 +143,6 @@ export class HomeComponent implements OnInit {
   }
 
   applyFilters(): void {
-
     this.filteredTickets = this.tickets.filter(ticket => {
       const query = this.searchQuery.toLowerCase();
 
@@ -127,7 +155,11 @@ export class HomeComponent implements OnInit {
       const matchesStatus =
         this.filters.status === 'todos' ||
         (this.filters.status === 'abiertos' && ticket.status !== 'Cerrado' && ticket.status !== 'Resuelto') ||
-        (this.filters.status === 'cerrados' && (ticket.status === 'Cerrado' || ticket.status === 'Resuelto'));
+        (this.filters.status === 'cerrados' && (ticket.status === 'Cerrado' || ticket.status === 'Resuelto')) ||
+        (this.filters.status === 'tier3' && ticket.status === 'Escalado a Tier 3 / Gerente de Cuenta') ||
+        (this.filters.status === 'escaladoExterno' && ticket.status === 'Escalado a externo') ||
+        (this.filters.status === 'enGestion' && ticket.status === 'En gestión') ||
+        (this.filters.status === 'esperando' && ticket.status === 'Esperando respuesta del usuario');
 
       // Filtro por fecha
       const ticketDate = new Date(ticket.created_at);
@@ -152,6 +184,7 @@ export class HomeComponent implements OnInit {
 
     this.sortTickets();
     this.updatePagination();
+    this.updateStatusCounts();
   }
 
   updatePagination(): void {
@@ -207,6 +240,8 @@ export class HomeComponent implements OnInit {
         return 'status-in-user';
       case 'Escalado a externo':
         return 'status-escalated';
+      case 'Escalado a Tier 3 / Gerente de Cuenta':
+        return 'status-tier3';
       case 'Resuelto':
       case 'Cerrado':
         return 'status-closed';
@@ -237,12 +272,57 @@ export class HomeComponent implements OnInit {
   resetFilters(): void {
     this.searchQuery = ''; // Limpiar la barra de búsqueda
     this.filters = {
-      status: 'todos', // Restablecer el filtro de estado a "todos"
+      status: 'abiertos', // Restablecer el filtro de estado a "todos"
       orderBy: 'fecha', // Restablecer el orden a "fecha"
       assignedTo: 'todos', // Restablecer el filtro de asignado a "todos"
       startDate: '', // Limpiar la fecha de inicio
       endDate: '' // Limpiar la fecha final
     };
     this.applyFilters(); // Reaplicar los filtros
+  }
+
+  filterByStatus(status: string): void {
+    // Unificar valores de estado para evitar inconsistencias
+    // Normalizamos el valor recibido para que coincida con los valores de los tickets
+    let normalizedStatus = status.trim();
+    if (normalizedStatus === 'Escalado a Externo') normalizedStatus = 'Escalado a externo';
+    if (normalizedStatus === 'Escalado a Tier 3' || normalizedStatus === 'Escalado a Tier 3 / Gerente de Cuenta') normalizedStatus = 'Escalado a Tier 3 / Gerente de Cuenta';
+
+    if (this.activeStatusFilter === normalizedStatus) {
+      // Si ya está seleccionado, quitar filtro
+      this.activeStatusFilter = null;
+      this.filters.status = 'abiertos';
+    } else {
+      this.activeStatusFilter = normalizedStatus;
+      // Mapear el estado a la clave de filtro correspondiente
+      switch (normalizedStatus) {
+        case 'Esperando respuesta del usuario':
+          this.filters.status = 'esperando';
+          break;
+        case 'Escalado a externo':
+          this.filters.status = 'escaladoExterno';
+          break;
+        case 'Escalado a Tier 3 / Gerente de Cuenta':
+          this.filters.status = 'tier3';
+          break;
+        case 'En gestión':
+          this.filters.status = 'enGestion';
+          break;
+        default:
+          this.filters.status = 'abiertos';
+      }
+    }
+    this.applyFilters();
+  }
+
+  // Limpia el botón activo si el usuario cambia el select de estado manualmente
+  onStatusSelectChange(): void {
+    this.activeStatusFilter = null;
+    this.applyFilters();
+  }
+
+  // Permite refrescar la lista de tickets desde fuera
+  public refreshTickets(): void {
+    this.loadTickets();
   }
 }

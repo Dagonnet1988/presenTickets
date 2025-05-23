@@ -1,0 +1,10 @@
+.timestamp {
+  display: block;
+  font-size: 0.8em;
+  color: #888;
+}
+.empty {
+  padding: 12px 24px;
+  color: #888;
+  display: block;
+}

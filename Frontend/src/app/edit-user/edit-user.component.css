@@ -1,3 +1,33 @@
+/* Moderniza y mejora el estilo del formulario de edición de usuario */
 :host {
   display: block;
+}
+.form-container {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 32px 24px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+}
+.form-title {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #1976d2;
+}
+mat-form-field {
+  width: 100%;
+  margin-bottom: 18px;
+}
+button[mat-raised-button], button[mat-stroked-button] {
+  width: 100%;
+  margin-top: 12px;
+}
+hr {
+  margin: 32px 0 16px 0;
+}
+.text-danger {
+  color: #d32f2f;
+  font-size: 0.95em;
+  margin-top: 4px;
 }

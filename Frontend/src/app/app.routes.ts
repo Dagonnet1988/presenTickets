@@ -5,20 +5,28 @@ import { ProfileComponent } from './profile/profile.component';
 import { CreateTicketComponent } from './create-ticket/create-ticket.component';
 import { DetailsTicketComponent } from './details-ticket/details-ticket.component';
 import { AuthGuard } from './auth.guard';
-import { PruebaComponent } from './prueba/prueba.component';
 import { CreateUserComponent } from './create-user/create-user.component';
 import { ManageUsersComponent } from './manage-users/manage-users.component';
 import { EditUserComponent } from './edit-user/edit-user.component';
+import { LoginGuard } from './login.guard';
+import { MainLayoutComponent } from './main-layout.component';
 
 export const routes: Routes = [
-  { path: '', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: 'auth', component: AuthComponent },
-  { path: 'profile', component: ProfileComponent, canActivate: [AuthGuard] },
-  { path: 'create-ticket', component: CreateTicketComponent, canActivate: [AuthGuard] },
-  { path: 'ticket/:id', component: DetailsTicketComponent, canActivate: [AuthGuard] },
-  { path: 'create-user', component: CreateUserComponent, canActivate: [AuthGuard] },
-  { path: 'manage-users', component: ManageUsersComponent, canActivate: [AuthGuard] },
-  { path: 'prueba', component: PruebaComponent, canActivate: [AuthGuard] },
-  { path: 'edit-user/:id', component: EditUserComponent },
+  {
+    path: '',
+    component: MainLayoutComponent,
+    canActivate: [AuthGuard],
+    children: [
+      { path: '', component: HomeComponent, pathMatch: 'full'},
+      { path: 'profile', component: ProfileComponent },
+      { path: 'create-ticket', component: CreateTicketComponent },
+      { path: 'ticket/:id', component: DetailsTicketComponent },
+      { path: 'create-user', component: CreateUserComponent },
+      { path: 'manage-users', component: ManageUsersComponent },
+      { path: 'edit-user/:id', component: EditUserComponent },
+    ]
+  },
+  { path: 'auth', component: AuthComponent, canActivate: [LoginGuard] },
+  { path: '**', redirectTo: '', pathMatch: 'full' },
 ];
 

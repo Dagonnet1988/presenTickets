@@ -1,7 +1,5 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { BannerComponent } from './banner/banner.component';
-import { SidebarComponent } from './sidebar/sidebar.component';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './auth.service';
 
@@ -10,9 +8,7 @@ import { AuthService } from './auth.service';
   standalone: true,
   imports: [
     RouterOutlet,
-    BannerComponent,
-    SidebarComponent,
-    CommonModule
+    CommonModule,
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']

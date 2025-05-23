@@ -1,9 +1,10 @@
 import express from 'express';
-import { pool } from '../server.js';
+import { pool, emitTicketNotification, getNotificationRecipients } from '../server.js';
 import formidable from 'formidable';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { createNotification } from './notifications.js';
 
 const router = express.Router();
 const uploadDir = path.join(path.resolve(), 'uploads');
@@ -32,47 +33,46 @@ router.post('/:ticketId', (req, res) => {
       return res.status(400).json({ message: 'Error al procesar la solicitud' });
     }
 
-    const message = fields.message[0]?.trim(); // Limpia espacios y toma el primer valor como cadena
-    const userId = parseInt(fields.userId[0], 10); // Convierte a número
+    const message = fields.message?.[0]?.trim() || '';
+    const userId = parseInt(fields.userId?.[0], 10);
 
-    // Validar datos de entrada
-    if (!message || isNaN(userId) || !ticketId || isNaN(parseInt(ticketId, 10))) {
-      return res.status(400).json({ message: 'Comentario, ticketId y userId válidos son obligatorios' });
+    // Permitir mensaje vacío si hay adjuntos
+    const hasFiles = Object.keys(files).length > 0;
+    if ((!message || message.length === 0) && !hasFiles) {
+      return res.status(400).json({ message: 'Debe enviar un mensaje o al menos un archivo adjunto' });
+    }
+    if (isNaN(userId) || !ticketId || isNaN(parseInt(ticketId, 10))) {
+      return res.status(400).json({ message: 'ticketId y userId válidos son obligatorios' });
     }
 
     // Procesar archivos adjuntos
     const attachments = Object.values(files).flat().map(file => {
-          if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-          }
-    
-          if (fs.existsSync(file.filepath)) {
-            const ext = path.extname(file.originalFilename || '');
-            const baseName = path.basename(file.originalFilename || `file_${Date.now()}`, ext);
-            const sanitizedFileName = sanitizeFileName(baseName);
-            const uniqueFileName = `${sanitizedFileName}_${uuidv4()}${ext}`; // Generar un nombre único
-    
-            const newPath = path.join(uploadDir, uniqueFileName);
-    
-            if (fs.existsSync(newPath)) {
-              fs.unlinkSync(newPath); // Eliminar el archivo existente si ya existe
-            }
-    
-            try {
-              fs.renameSync(file.filepath, newPath);
-            } catch (error) {
-              console.error('Error al renombrar el archivo:', error.message);
-              throw new Error('No se pudo guardar el archivo');
-            }
-    
-            return {
-              name: file.originalFilename, // Guardar el nombre único
-              url: `/uploads/${uniqueFileName}` // Guardar la URL basada en el nombre único
-            };
-          } else {
-            throw new Error('El archivo no se cargó correctamente');
-          }
-        });
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      if (fs.existsSync(file.filepath)) {
+        const ext = path.extname(file.originalFilename || '');
+        const baseName = path.basename(file.originalFilename || `file_${Date.now()}`, ext);
+        const sanitizedFileName = sanitizeFileName(baseName);
+        const uniqueFileName = `${sanitizedFileName}_${uuidv4()}${ext}`;
+        const newPath = path.join(uploadDir, uniqueFileName);
+        if (fs.existsSync(newPath)) {
+          fs.unlinkSync(newPath);
+        }
+        try {
+          fs.renameSync(file.filepath, newPath);
+        } catch (error) {
+          console.error('Error al renombrar el archivo:', error.message);
+          throw new Error('No se pudo guardar el archivo');
+        }
+        return {
+          name: file.originalFilename,
+          url: `/uploads/${uniqueFileName}`
+        };
+      } else {
+        throw new Error('El archivo no se cargó correctamente');
+      }
+    });
 
     const client = await pool.connect();
     try {
@@ -81,28 +81,53 @@ router.post('/:ticketId', (req, res) => {
         'INSERT INTO comments (ticket_id, user_id, comment, created_at) VALUES ($1, $2, $3, $4) RETURNING *',
         [ticketId, userId, message, new Date()]
       );
+      const commentId = result.rows[0].id;
 
       for (const attachment of attachments) {
         await client.query(
-          'INSERT INTO attachments (ticket_id, filename, filepath) VALUES ($1, $2, $3)',
-          [ticketId, attachment.name, attachment.url]
+          'INSERT INTO attachments (ticket_id, comment_id, filename, filepath) VALUES ($1, $2, $3, $4)',
+          [ticketId, commentId, attachment.name, attachment.url]
         );
       }
 
-      // Actualizar el estado del ticket según el rol del usuario
-      const statusResult = await client.query('SELECT status FROM tickets WHERE id = $1', [ticketId]);
+      // Obtener roles y datos del ticket
+      const ticketResult = await client.query('SELECT assigned_to, user_id, title FROM tickets WHERE id = $1', [ticketId]);
+      const assignedTo = ticketResult.rows[0]?.assigned_to;
+      const ticketUserId = ticketResult.rows[0]?.user_id;
+      const ticketTitle = ticketResult.rows[0]?.title || '';
       const userResult = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
       const userRole = userResult.rows[0].role;
-      if(statusResult.rows[0].status === 'En gestión' && userRole === 'tech' || 
-        statusResult.rows[0].status === 'Creado' && userRole === 'tech' ||
-        statusResult.rows[0].status === 'Escalado a externo' && userRole === 'tech') {
-        let newStatus = 'Esperando respuesta del usuario';
-        await client.query('UPDATE tickets SET status = $1 WHERE id = $2', [newStatus, ticketId]);
-      }else if(statusResult.rows[0].status === 'Esperando respuesta del usuario' && userRole === 'user') {
-        let newStatus = 'En gestión';
-        await client.query('UPDATE tickets SET status = $1 WHERE id = $2', [newStatus, ticketId]);
+      // --- Lógica de notificaciones por comentario ---
+      let recipients = [];
+      let notificationType = null;
+      if (userRole === 'admin') {
+        if (assignedTo) recipients.push(assignedTo);
+        if (ticketUserId) recipients.push(ticketUserId);
+        notificationType = 'admin_comentario';
+      } else if (userRole === 'tech') {
+        if (ticketUserId) recipients.push(ticketUserId);
+        notificationType = 'comentario_tech';
+      } else if (userRole === 'user') {
+        if (assignedTo) recipients.push(assignedTo);
+        notificationType = 'comentario_user';
       }
-
+      if (notificationType && recipients.length > 0) {
+        emitTicketNotification(notificationType, {
+          ticketId,
+          commentId,
+          userId,
+          title: ticketTitle,
+          createdAt: new Date()
+        }, recipients);
+        for (const uid of recipients) {
+          await createNotification({
+            user_id: uid,
+            type: notificationType,
+            message: `${ticketTitle} - Nuevo mensaje`,
+            ticket_id: ticketId
+          });
+        }
+      }
       res.status(201).json(result.rows[0]);
     } catch (err) {
       console.error('Error al crear el comentario:', err);
@@ -113,19 +138,31 @@ router.post('/:ticketId', (req, res) => {
   });
 });
 
-// Obtener comentarios de un ticket
+// Obtener comentarios de un ticket (con adjuntos)
 router.get('/:ticketId', async (req, res) => {
   const { ticketId } = req.params;
-
-  // Validar datos de entrada
   if (!ticketId || isNaN(ticketId)) {
     return res.status(400).json({ message: 'ticketId válido es obligatorio' });
   }
-
   const client = await pool.connect();
   try {
     const result = await client.query('SELECT * FROM comments WHERE ticket_id = $1 ORDER BY created_at ASC', [ticketId]);
-    res.json(result.rows);
+    const comments = result.rows;
+    // Obtener adjuntos de todos los comentarios
+    const commentIds = comments.map(c => c.id);
+    let attachmentsByComment = {};
+    if (commentIds.length > 0) {
+      const attResult = await client.query('SELECT * FROM attachments WHERE comment_id = ANY($1)', [commentIds]);
+      for (const att of attResult.rows) {
+        if (!attachmentsByComment[att.comment_id]) attachmentsByComment[att.comment_id] = [];
+        attachmentsByComment[att.comment_id].push(att);
+      }
+    }
+    // Agregar los adjuntos a cada comentario
+    for (const comment of comments) {
+      comment.attachments = attachmentsByComment[comment.id] || [];
+    }
+    res.json(comments);
   } catch (err) {
     console.error('Error al obtener los comentarios:', err);
     res.status(500).json({ message: 'Error al obtener los comentarios' });

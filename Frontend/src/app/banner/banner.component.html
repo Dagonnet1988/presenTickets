@@ -2,12 +2,19 @@
   <!-- Logo -->
   <img src="/assets/images/logo.png" alt="Logo de la Clínica de la Presentación" class="logo">
 
-  <!-- Información de usuario -->
-  <div class="user-info">
+  <!-- Quitar en produccion -->
+  <div>
+    <!-- <h1 class="title">PRUEBAS</h1> -->
+  </div>
+
+  <!-- Información de usuario y notificaciones -->
+  <div class="user-info" style="display: flex; align-items: center; gap: 16px;">
+    <app-notification-bell></app-notification-bell>
     <span class="welcome-message">Bienvenido,
       <br>
-      {{ username?.toUpperCase() }} </span>
-    <br>
-    <button (click)="logout()">Cerrar Sesión</button>
+      {{ username?.toUpperCase() }}
+      <br>
+      <button (click)="logout()">Cerrar Sesión</button>
+    </span>
   </div>
 </div>

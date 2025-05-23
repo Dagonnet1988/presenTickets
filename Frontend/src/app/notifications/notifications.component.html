@@ -3,7 +3,9 @@
   <mat-list>
     <mat-list-item *ngFor="let notification of notifications">
       <div mat-line>
-        <strong>{{ notification.type }}</strong>: {{ notification.data.message || notification.data.title }}
+        <strong>{{ notification.type | notificationType }}</strong>:
+        {{ notification.data.title || notification.data.message || notification.data.status }}
+        <span *ngIf="notification.timestamp">- {{ notification.timestamp | date:'short' }}</span>
       </div>
       <button mat-button (click)="goToTicket(notification.data.ticketId || notification.data.id)">
         Ver Ticket

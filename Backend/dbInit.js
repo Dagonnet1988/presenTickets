@@ -47,7 +47,7 @@ const checkAndCreateTables = async () => {
     // Validar y crear la tabla "users"
     const usersTableExists = await client.query(`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT FROM information_schema.tables
         WHERE table_name = 'users'
       );
     `);
@@ -80,7 +80,7 @@ const checkAndCreateTables = async () => {
       ];
       for (const column of usersColumns) {
         const columnExists = await client.query(
-          `SELECT column_name FROM information_schema.columns 
+          `SELECT column_name FROM information_schema.columns
            WHERE table_name = 'users' AND column_name = $1`,
           [column.name]
         );
@@ -94,7 +94,7 @@ const checkAndCreateTables = async () => {
     // Validar y crear la tabla "tickets"
     const ticketsTableExists = await client.query(`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT FROM information_schema.tables
         WHERE table_name = 'tickets'
       );
     `);
@@ -123,7 +123,7 @@ const checkAndCreateTables = async () => {
     // Validar y crear la tabla "comments"
     const commentsTableExists = await client.query(`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT FROM information_schema.tables
         WHERE table_name = 'comments'
       );
     `);
@@ -146,7 +146,7 @@ const checkAndCreateTables = async () => {
     // Validar y crear la tabla "attachments"
     const attachmentsTableExists = await client.query(`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT FROM information_schema.tables
         WHERE table_name = 'attachments'
       );
     `);
@@ -157,12 +157,68 @@ const checkAndCreateTables = async () => {
         CREATE TABLE attachments (
           id SERIAL PRIMARY KEY,
           ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+          comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
           filename VARCHAR(255) NOT NULL,
           filepath VARCHAR(255) NOT NULL
         );
       `);
     } else {
-      console.log("✅ La tabla 'attachments' ya existe.");
+      console.log("✅ La tabla 'attachments' ya existe. Verificando columnas...");
+      // Verificar y agregar columna comment_id si no existe
+      const commentIdColumn = await client.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'attachments' AND column_name = 'comment_id'`
+      );
+      if (commentIdColumn.rows.length === 0) {
+        console.log("➕ Agregando columna 'comment_id' a la tabla 'attachments'");
+        await client.query(`ALTER TABLE attachments ADD COLUMN comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE`);
+      } else {
+          console.log(`✅ La columna 'comment_id' ya existe en la tabla 'attachments'.`);
+        }
+    }
+
+    // Validar y crear la tabla "notifications"
+    const notificationsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'notifications'
+      );
+    `);
+
+    if (!notificationsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'notifications'...");
+      await client.query(`
+        CREATE TABLE notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL,
+          message TEXT NOT NULL,
+          ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+          is_read BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } else {
+      console.log("✅ La tabla 'notifications' ya existe. Verificando columnas...");
+      // Verificar y agregar columnas si faltan
+      const columns = [
+        { name: 'type', type: 'VARCHAR(50) NOT NULL' },
+        { name: 'message', type: 'TEXT NOT NULL' },
+        { name: 'ticket_id', type: 'INTEGER REFERENCES tickets(id) ON DELETE CASCADE' },
+        { name: 'is_read', type: 'BOOLEAN DEFAULT false' },
+        { name: 'created_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' }
+      ];
+      for (const column of columns) {
+        const columnExists = await client.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_name = 'notifications' AND column_name = $1`,
+          [column.name]
+        );
+        if (columnExists.rows.length === 0) {
+          console.log(`➕ Agregando columna '${column.name}' a la tabla 'notifications'`);
+          await client.query(`ALTER TABLE notifications ADD COLUMN ${column.name} ${column.type}`);
+        }
+      }
     }
 
     console.log("✅ Validación y creación de tablas completada.");

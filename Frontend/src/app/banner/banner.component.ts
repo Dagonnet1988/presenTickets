@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '../auth.service';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterModule } from '@angular/router';
+import { NotificationBellComponent } from '../notification-bell.component';
 
 @Component({
   selector: 'app-banner',
@@ -12,7 +13,8 @@ import { RouterModule } from '@angular/router';
     CommonModule, // Para directivas básicas como *ngIf
     MatButtonModule,
     MatIconModule,
-    RouterModule
+    RouterModule,
+    NotificationBellComponent
   ],
   templateUrl: './banner.component.html',
   styleUrls: ['./banner.component.css']
@@ -23,11 +25,11 @@ export class BannerComponent implements OnInit {
   constructor(private authService: AuthService) {}
 
   ngOnInit(): void {
-    this.username = localStorage.getItem('userName'); // Obtener el nombre de usuario de localStorage
+    this.username = this.authService.getUserName(); // Use AuthService instead of localStorage
   }
 
   logout(): void {
     this.authService.logout(); // Lógica de cierre de sesión
-    window.location.href = '/auth'; // Redirigir al login
+    window.location.href = '/'; // Redirigir al login
   }
 }

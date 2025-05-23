@@ -55,7 +55,17 @@ export class CreateTicketComponent implements OnInit {
 
   onFileChange(event: any): void {
     if (event.target.files && event.target.files.length) {
-      this.attachments.push(...Array.from(event.target.files as File[]));
+      const maxFileSize = 200 * 1024 * 1024; // 200 MB in bytes
+      const files = Array.from(event.target.files as File[]);
+      const oversizedFiles = files.filter(file => file.size > maxFileSize);
+
+      if (oversizedFiles.length > 0) {
+        this.snackBar.open('Uno o más archivos superan el tamaño máximo de 200 MB', 'Cerrar', {
+          duration: 3000,
+        });
+      } else {
+        this.attachments.push(...files);
+      }
     }
   }
 

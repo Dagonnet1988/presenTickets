@@ -16,12 +16,10 @@ export class AuthService {
   login(username: string, password: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/login`, { username, password }).pipe(
       tap(response => {
-        if (response.message === 'Inicio de sesión exitoso') {
+        if (response.token) {
           if (this.isLocalStorageAvailable()) {
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('userId', response.user.id); // Almacena el userId en localStorage
-            localStorage.setItem('userName', response.user.username); // Almacena el nombre del usuario en localStorage
-            localStorage.setItem('userRole', response.user.role); // Almacena el rol del usuario en localStorage
+            localStorage.setItem('token', response.token);
+            // No need to store userName or userRole separately
           }
         }
       }),
@@ -35,15 +33,26 @@ export class AuthService {
   // Verificar si el usuario está autenticado
   isLoggedIn(): boolean {
     if (this.isLocalStorageAvailable()) {
-      return !!localStorage.getItem('isLoggedIn');
+      const token = localStorage.getItem('token');
+      // Basic check: token exists and is not expired (optional: decode and check exp)
+      return !!token;
     }
     return false;
   }
 
-  // Obtener el userId del usuario autenticado
+  // Obtener el userId del usuario autenticado (from token if needed)
   getUserId(): string | null {
     if (this.isLocalStorageAvailable()) {
-      return localStorage.getItem('userId');
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Optionally decode JWT to get userId
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return payload.id || payload.userId || null;
+        } catch (e) {
+          return null;
+        }
+      }
     }
     return null;
   }
@@ -51,26 +60,38 @@ export class AuthService {
   // Obtener el nombre del usuario autenticado
   getUserName(): string | null {
     if (this.isLocalStorageAvailable()) {
-      return localStorage.getItem('userName');
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return payload.username || null;
+        } catch (e) {
+          return null;
+        }
+      }
     }
     return null;
   }
 
   getUserRole(): string | null {
     if (this.isLocalStorageAvailable()) {
-      return localStorage.getItem('userRole');
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return payload.role || null;
+        } catch (e) {
+          return null;
+        }
+      }
     }
     return null;
   }
 
-
   // Cerrar sesión
   logout(): void {
     if (this.isLocalStorageAvailable()) {
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userId'); // Elimina el userId de localStorage
-      localStorage.removeItem('userName'); // Elimina el nombre del usuario de localStorage
-      localStorage.removeItem('userRole'); // Elimina el rol del usuario de localStorage
+      localStorage.removeItem('token');
     }
   }
 

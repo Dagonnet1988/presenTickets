@@ -8,6 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { CommonModule } from '@angular/common';
 import { MatInputModule } from '@angular/material/input';
+import { AuthService } from '../auth.service';
 
 @Component({
   selector: 'app-edit-user',
@@ -33,22 +34,15 @@ export class EditUserComponent implements OnInit {
     private userService: UserService,
     private snackBar: MatSnackBar,
     private fb: FormBuilder,
-    private router: Router
+    private router: Router,
+    private authService: AuthService // Inyectar AuthService
   ) {}
 
   ngOnInit() {
     this.userId = this.route.snapshot.paramMap.get('id')!;
-    this.userRole = this.getUserRole();
+    this.userRole = this.authService.getUserRole() || '';
     this.initializeForm();
     this.loadUser();
-  }
-
-  // Método para obtener el rol del usuario
-  getUserRole(): string {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem('userRole') || '';
-    }
-    return ''; // Retorna un valor por defecto si localStorage no está disponible
   }
 
   // Inicializar el formulario

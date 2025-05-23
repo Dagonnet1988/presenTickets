@@ -14,6 +14,7 @@ import { TicketService } from '../ticket.service';
 import { AuthService } from '../auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UserService } from '../user.service';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-details-ticket',
@@ -43,6 +44,7 @@ export class DetailsTicketComponent implements OnInit {
   userRole: string = '';
   technicians: any[] = [];
   dialogRef!: MatDialogRef<any>;
+  ticketLevelAttachments: any[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -55,22 +57,31 @@ export class DetailsTicketComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.loadTicketDetails();
+    // Suscribirse a los cambios de parámetro 'id' para recargar el ticket si cambia
+    this.route.paramMap.subscribe(params => {
+      const ticketId = params.get('id');
+      if (ticketId) {
+        this.loadTicketDetails(ticketId);
+      }
+    });
     this.loadTechnicians();
   }
 
-  loadTicketDetails(): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
+  // Modificar loadTicketDetails para aceptar ticketId como argumento
+  loadTicketDetails(ticketId?: string): void {
+    const id = ticketId || this.route.snapshot.paramMap.get('id');
+    if (id) {
       this.userRole = this.authService.getUserRole() || '';
-      this.ticketService.getTicketDetails(ticketId).subscribe(ticket => {
+      this.ticketService.getTicketDetails(id).subscribe(ticket => {
         this.ticket = ticket;
         this.ticket.created_at = new Date(this.ticket.created_at);
-        this.cdr.detectChanges(); // Forzar detección de cambios
-        this.loadUserNames(); // Cargar nombres de usuario después de obtener los detalles del ticket
+        // Filtrar solo los adjuntos del ticket (sin comment_id)
+        this.ticketLevelAttachments = (this.ticket.attachments || []).filter((att: any) => !att.comment_id);
+        this.cdr.detectChanges();
+        this.loadUserNames();
       });
 
-      this.ticketService.getComments(ticketId).subscribe(comments => {
+      this.ticketService.getComments(id).subscribe(comments => {
         this.messages = comments;
         this.loadUserNames();
         this.cdr.detectChanges(); // Forzar detección después de cargar mensajes
@@ -100,7 +111,7 @@ export class DetailsTicketComponent implements OnInit {
   updateStatus(status: string): void {
     const ticketId = this.route.snapshot.paramMap.get('id');
     if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, status).subscribe({
+      this.ticketService.updateTicketStatus(ticketId, status, this.userRole).subscribe({
         next: () => {
           this.ticket.status = status;
           this.cdr.detectChanges(); // Forzar detección de cambios
@@ -234,8 +245,10 @@ export class DetailsTicketComponent implements OnInit {
           this.resolveTicket();
         } else if (action === 'reabrir') {
           this.uncloseTicket();
-        }else if (action === 'Escalar a Externo') {
+        } else if (action === 'Escalar a Externo') {
           this.updateStatus('Escalado a externo');
+        } else if (action === 'Escalar a Tier 3 / Gerente de Cuenta') {
+          this.updateStatus('Escalado a Tier 3 / Gerente de Cuenta');
         }
       }
     });
@@ -244,7 +257,7 @@ export class DetailsTicketComponent implements OnInit {
   closeTicket(): void {
     const ticketId = this.route.snapshot.paramMap.get('id');
     if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, 'Cerrado').subscribe({
+      this.ticketService.updateTicketStatus(ticketId, 'Cerrado', this.userRole).subscribe({
         next: () => {
           this.ticket.status = 'Cerrado';
           this.loadTicketDetails(); // Reflejar el cambio en la vista
@@ -259,7 +272,7 @@ export class DetailsTicketComponent implements OnInit {
   resolveTicket(): void {
     const ticketId = this.route.snapshot.paramMap.get('id');
     if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, 'Resuelto').subscribe({
+      this.ticketService.updateTicketStatus(ticketId, 'Resuelto', this.userRole).subscribe({
         next: () => {
           this.ticket.status = 'Resuelto';
           this.loadTicketDetails(); // Reflejar el cambio en la vista
@@ -274,7 +287,7 @@ export class DetailsTicketComponent implements OnInit {
   uncloseTicket(): void {
     const ticketId = this.route.snapshot.paramMap.get('id');
     if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, 'Esperando respuesta del usuario').subscribe({
+      this.ticketService.updateTicketStatus(ticketId, 'Esperando respuesta del usuario', this.userRole).subscribe({
         next: () => {
           this.ticket.status = 'Esperando respuesta';
           this.loadTicketDetails(); // Reflejar el cambio en la vista
@@ -311,6 +324,8 @@ export class DetailsTicketComponent implements OnInit {
         return 'status-in-user';
       case 'Escalado a externo':
         return 'status-escalated';
+      case 'Escalado a Tier 3 / Gerente de Cuenta':
+        return 'status-tier3';
       case 'Resuelto':
       case 'Cerrado':
         return 'status-closed';
@@ -327,5 +342,14 @@ export class DetailsTicketComponent implements OnInit {
 
   getUserName(userId: string): string {
     return this.userNames.get(userId) || 'Sin Asignar';
+  }
+
+  // Devuelve la URL absoluta para un adjunto
+  getAttachmentUrl(attachment: any): string {
+    if (!attachment?.filepath) return '';
+    if (attachment.filepath.startsWith('http')) {
+      return attachment.filepath;
+    }
+    return `${environment.backendUrl}${attachment.filepath}`;
   }
 }

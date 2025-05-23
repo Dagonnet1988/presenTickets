@@ -1,12 +1,13 @@
 .home-container {
   display: flex;
-  justify-content: space-between;
-  padding: 20px;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-top: 0; /* El espaciado lo maneja main-layout */
 }
 
 .tickets-section {
-  flex: 3;
-  margin-right: 20px;
+  flex: 2;
+  margin-right: 24px;
 }
 
 /* Contenedor de la lista de tickets */
@@ -15,16 +16,20 @@
   flex-direction: column;
   gap: 20px; /* Espaciado entre los tickets */
   margin-bottom: 20px; /* Espaciado inferior para separar del paginador */
+  margin-top: 16px;
 }
 
 .ticket-item {
   cursor: pointer;
-  padding: 10px;
-  border: 1px solid #ccc;
-  margin-bottom: 10px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 18px;
   transition: background-color 0.3s;
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
 .ticket-item:hover {
@@ -53,12 +58,15 @@
   margin-top: 5px;
   font-weight: bold;
   margin-left: auto;
+  display: inline-block;
+  margin-right: 12px;
 }
 
 .ticket-item .assigned-to {
   margin-left: auto;
   margin-top: 5px;
   font-weight: bold;
+  display: inline-block;
 }
 
 .status-created {
@@ -69,8 +77,8 @@
 }
 
 .status-in-progress {
-  background-color: rgb(0, 0, 207);
-  color: white !important; /* Forzar el color blanco */
+  background-color: #1976d2;
+  color: white !important;
   padding: 5px 10px;
   border-radius: 15px;
 }
@@ -92,6 +100,13 @@
 .status-closed {
   background-color: rgb(163, 162, 162);
   color: white !important; /* Forzar el color blanco */
+  padding: 5px 10px;
+  border-radius: 15px;
+}
+
+.status-tier3 {
+  background-color: #beb030;
+  color: white !important;
   padding: 5px 10px;
   border-radius: 15px;
 }
@@ -126,6 +141,9 @@
 
 .filter-panel {
   flex: 1;
+  min-width: 280px;
+  max-width: 350px;
+  margin-left: 16px;
   padding: 20px;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -191,7 +209,7 @@ button {
 }
 
 .search-bar {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   text-align: center;
 }
 
@@ -215,4 +233,22 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.active-status {
+  border: 2px solid #1976d2 !important;
+  background: #e3f2fd !important;
+  color: #1976d2 !important;
+  font-weight: bold;
+}
+
+@media (max-width: 900px) {
+  .home-container {
+    flex-direction: column;
+  }
+  .filter-panel {
+    margin-left: 0;
+    margin-top: 24px;
+    max-width: 100%;
+  }
 }

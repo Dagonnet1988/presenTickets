@@ -1,0 +1,25 @@
+<button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Notificaciones">
+  <mat-icon>notifications</mat-icon>
+  <span *ngIf="unreadCount > 0" matBadge="{{ unreadCount }}" matBadgeColor="warn" matBadgeOverlap="false"></span>
+</button>
+<mat-menu #menu="matMenu">
+  <ng-container *ngIf="notifications.length > 0; else noNotifications">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px 8px;">
+      <span style="font-size: 0.9em; color: #888;">Notificaciones</span>
+      <button mat-mini-button color="warn" style="font-size: 0.7em; padding: 2px 6px; min-width: 0;"
+      (click)="$event.stopPropagation(); clearAllRead()">Limpiar</button>
+    </div>
+    <button mat-menu-item *ngFor="let n of notifications | slice:0:8" (click)="goToTicket(n)">
+      <mat-icon color="primary">info</mat-icon>
+      <span>
+        <b>{{ n.message || (n.type | notificationType) }}</b>
+        <br />
+        Ticket #{{ n.data.ticketId }}
+        <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
+      </span>
+    </button>
+  </ng-container>
+  <ng-template #noNotifications>
+    <span class="empty">Sin notificaciones</span>
+  </ng-template>
+</mat-menu>

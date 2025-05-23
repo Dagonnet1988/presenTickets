@@ -39,8 +39,8 @@ export class TicketService {
     return this.http.post<any>(`${this.apiUrlComments}/${ticketId}`, formData, { headers: this.getAuthHeaders() });
   }
 
-  updateTicketStatus(ticketId: string, status: string): Observable<any> {
-    return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, { status }, { headers: this.getAuthHeaders() });
+  updateTicketStatus(ticketId: string, status: string, actorRole: string): Observable<any> {
+    return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, { status, actorRole }, { headers: this.getAuthHeaders() });
   }
 
   updateTicketTechnician(ticketId: string, assigned_to: number ): Observable<any> {
