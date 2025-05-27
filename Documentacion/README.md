@@ -30,6 +30,6 @@ Esta documentación está diseñada para:
 
 ## Propiedad Intelectual
 
-Toda la documentación, así como el software al que hace referencia, es propiedad intelectual de Diego Narváez. El uso, reproducción o distribución de estos documentos sin autorización está prohibido.
+Toda la documentación, así como el software al que hace referencia, es propiedad intelectual de Diego Sánchez. El uso, reproducción o distribución de estos documentos sin autorización está prohibido.
 
-© 2023-2025 Diego Narváez. Todos los derechos reservados.
+© 2023-2025 Diego Sánchez. Todos los derechos reservados.

@@ -83,13 +83,13 @@ Para archivos `.sql`, utilizar el siguiente formato:
 ```sql
 /*
  * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
  * 
  * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
- * desarrollado como iniciativa personal por Diego Narváez.
+ * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Narváez y su uso en 
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
  * 
  * Está prohibida la redistribución, modificación o uso no autorizado
@@ -104,14 +104,14 @@ Para archivos como `.json`, `.yaml`, `.env.example`, etc., utilizar el formato a
 Para JSON:
 ```json
 {
-  "_copyright": "PresentiTickets - Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.",
+  "_copyright": "PresentiTickets - Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.",
   // Resto del contenido
 }
 ```
 
 Para YAML, ENV, etc.:
 ```
-# PresentiTickets - Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.
+# PresentiTickets - Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
 # Uso autorizado únicamente según los términos del acuerdo de licencia.
 ```
 
@@ -128,7 +128,7 @@ Para YAML, ENV, etc.:
 
 ```html
 <div class="footer-copyright">
-  © 2023-2025 Diego Narváez. PresentiTickets. Todos los derechos reservados.
+  © 2023-2025 Diego Sánchez. PresentiTickets. Todos los derechos reservados.
 </div>
 ```
 
@@ -212,4 +212,4 @@ La implementación de los avisos de copyright se realizará en las siguientes fa
 
 ---
 
-*Este documento es confidencial y para uso interno. © 2023-2025 Diego Narváez. Todos los derechos reservados.*
+*Este documento es confidencial y para uso interno. © 2023-2025 Diego Sánchez. Todos los derechos reservados.*

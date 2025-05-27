@@ -6,7 +6,7 @@ Este documento confirma que el sistema de gestión de tickets "PresentiTickets" 
 
 **Fecha de Creación Inicial:** Enero 2023  
 **Desarrollador Principal:** Diego Sánchez  
-**Versión Actual:** 1.0.5  
+**Versión Actual:** 2.0.0  
 
 ## Arquitectura Detallada
 
@@ -68,30 +68,39 @@ El backend está estructurado siguiendo una arquitectura modular basada en Expre
 
 ### Componentes del Frontend
 
-La aplicación frontend está desarrollada en Angular 15 siguiendo una arquitectura por módulos:
+La aplicación frontend está desarrollada en Angular 18 siguiendo una **arquitectura standalone components**, sin módulos tradicionales:
 
-#### Módulos Principales
+#### Configuración Standalone
 
-- **AuthModule**: Componentes y servicios de autenticación
-- **TicketsModule**: Gestión completa de tickets
-- **CommentsModule**: Sistema de comentarios
-- **NotificationsModule**: Sistema de notificaciones
-- **UsersModule**: Gestión de usuarios y perfiles
-- **SharedModule**: Componentes y servicios compartidos
+La aplicación utiliza la nueva arquitectura standalone de Angular, configurada en:
+- **app.config.ts**: Configuración principal de la aplicación con providers
+- **app.routes.ts**: Configuración de rutas standalone
+- **main.ts**: Bootstrap de la aplicación standalone
+
+#### Componentes Principales (Standalone)
+
+- **HomeComponent**: Listado principal de tickets con filtros avanzados y paginación
+- **TicketDetailComponent**: Vista detallada de un ticket individual
+- **CreateTicketComponent**: Formulario de creación de tickets
+- **ManageUsersComponent**: Gestión de usuarios (solo admin)
+- **NotificationBellComponent**: Visualización de notificaciones en tiempo real
+- **AboutComponent**: Información sobre la aplicación y derechos de autor
+- **FooterComponent**: Pie de página con información de copyright
 
 #### Servicios Clave
 
-- **AuthService**: Gestión de autenticación y sesiones
+- **AuthService**: Gestión de autenticación y sesiones JWT
 - **TicketService**: Operaciones CRUD para tickets
+- **UserService**: Gestión de usuarios y perfiles
 - **NotificationService**: Sistema de notificaciones
-- **SocketService**: Comunicación en tiempo real con el backend
+- **RefreshTicketsService**: Servicio para refrescar listas de tickets
 
-#### Componentes Principales
+#### Características de la Arquitectura Standalone
 
-- **ticket-list.component**: Listado de tickets con filtros
-- **ticket-detail.component**: Vista detallada de un ticket
-- **notification-bell.component**: Visualización de notificaciones
-- **comment-section.component**: Sección de comentarios en tickets
+- **Sin app.module.ts**: La aplicación no utiliza módulos tradicionales
+- **Imports directos**: Cada componente importa directamente sus dependencias
+- **Lazy loading**: Carga diferida de componentes según las rutas
+- **Tree-shaking mejorado**: Mejor optimización del bundle final
 
 ## Funcionalidades Técnicas Destacadas
 
@@ -199,18 +208,20 @@ const allowedTransitions = {
 
 ### Estrategias de Escalabilidad
 
-1. **Arquitectura modular** que permite escalar componentes individualmente
-2. **Separación clara** entre frontend y backend
+1. **Arquitectura standalone** que permite mejor tree-shaking y optimización
+2. **Separación clara** entre frontend y backend con API REST
 3. **Cache implementado** en consultas frecuentes
-4. **Sistema de colas** para procesamiento de tareas pesadas
+4. **Lazy loading** de componentes para mejorar el tiempo de carga inicial
+5. **Bundling optimizado** gracias a la arquitectura standalone
 
 ### Consideraciones de Mantenimiento
 
 1. **Documentación de código** siguiendo estándares JSDoc/TSDoc
 2. **Pruebas unitarias** para componentes críticos
 3. **Logs estructurados** para facilitar depuración
-4. **Sistema de control de versiones** con Git
+4. **Sistema de control de versiones** con Git y avisos de copyright automáticos
 5. **Estrategia de respaldo** para la base de datos
+6. **Scripts de mantenimiento** para verificación de copyright y actualización de años
 
 ---
 
