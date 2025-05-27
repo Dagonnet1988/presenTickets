@@ -1,3 +1,18 @@
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 import express from 'express';
 import { pool, emitTicketNotification, getNotificationRecipients } from '../server.js';
 import formidable from 'formidable';
@@ -88,26 +103,38 @@ router.post('/:ticketId', (req, res) => {
           'INSERT INTO attachments (ticket_id, comment_id, filename, filepath) VALUES ($1, $2, $3, $4)',
           [ticketId, commentId, attachment.name, attachment.url]
         );
-      }
-
-      // Obtener roles y datos del ticket
-      const ticketResult = await client.query('SELECT assigned_to, user_id, title FROM tickets WHERE id = $1', [ticketId]);
+      }      // Obtener roles y datos del ticket
+      const ticketResult = await client.query('SELECT assigned_to, user_id, title, status FROM tickets WHERE id = $1', [ticketId]);
       const assignedTo = ticketResult.rows[0]?.assigned_to;
       const ticketUserId = ticketResult.rows[0]?.user_id;
       const ticketTitle = ticketResult.rows[0]?.title || '';
-      const userResult = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
-      const userRole = userResult.rows[0].role;
-      // --- Lógica de notificaciones por comentario ---
+      const currentStatus = ticketResult.rows[0]?.status;
+      const userResult = await client.query('SELECT role FROM users WHERE id = $1', [userId]);      const userRole = userResult.rows[0].role;
+      
+        // --- Lógica de notificaciones por comentario ---
       let recipients = [];
       let notificationType = null;
       if (userRole === 'admin') {
         if (assignedTo) recipients.push(assignedTo);
         if (ticketUserId) recipients.push(ticketUserId);
-        notificationType = 'admin_comentario';
-      } else if (userRole === 'tech') {
+        notificationType = 'admin_comentario';      } else if (userRole === 'tech') {
         if (ticketUserId) recipients.push(ticketUserId);
         notificationType = 'comentario_tech';
+          // Actualizar estado del ticket a "Esperando respuesta del usuario" cuando un técnico envía un mensaje
+        // Solo si el estado actual no es "Cerrado" o "Resuelto"
+        if (currentStatus && currentStatus !== 'Cerrado' && currentStatus !== 'Resuelto') {
+          await client.query(
+            'UPDATE tickets SET status = $1 WHERE id = $2',
+            ['Esperando respuesta del usuario', ticketId]
+          );
+        } else {
+          console.log(`[Tech Message] NO se actualiza estado del ticket #${ticketId}. Estado actual: ${currentStatus}`);
+        }
       } else if (userRole === 'user') {
+        await client.query(
+            'UPDATE tickets SET status = $1 WHERE id = $2',
+            ['En gestión', ticketId]
+          );
         if (assignedTo) recipients.push(assignedTo);
         notificationType = 'comentario_user';
       }

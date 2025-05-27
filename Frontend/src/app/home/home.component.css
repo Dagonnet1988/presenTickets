@@ -1,47 +1,77 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 .home-container {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  margin-top: 0; /* El espaciado lo maneja main-layout */
+  gap: 24px;
+  transition: var(--transition);
+  padding: 0 16px;
 }
 
 .tickets-section {
   flex: 2;
-  margin-right: 24px;
+  background: var(--background-color);
+  border-radius: var(--border-radius);
+  height: fit-content;
+  padding: 0;
 }
 
 /* Contenedor de la lista de tickets */
 .ticket-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px; /* Espaciado entre los tickets */
-  margin-bottom: 20px; /* Espaciado inferior para separar del paginador */
-  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+  padding: 16px;
+  transition: var(--transition);
 }
 
 .ticket-item {
-  cursor: pointer;
-  padding: 16px;
-  border-radius: 8px;
   background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 18px;
-  transition: background-color 0.3s;
+  border-radius: var(--border-radius);
+  padding: 20px;
+  box-shadow: var(--box-shadow);
+  transition: var(--transition);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-left: 4px solid var(--primary-color);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
 .ticket-item:hover {
-  background-color: #f9f9f9;
+  background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .ticket-item h3 {
-  margin: 0 0 5px 0;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-color);
 }
 
 .ticket-item p {
   margin: 0 0 10px 0;
+  color: #666;
 }
 
 .ticket-item .created-at {
@@ -143,20 +173,54 @@
   flex: 1;
   min-width: 280px;
   max-width: 350px;
-  margin-left: 16px;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  margin-top: 20px;
+  background: #fff;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 24px;
+  position: sticky;
+  top: 104px;
+  height: fit-content;
+  transition: var(--transition);
+}
+
+.filter-panel h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #3f51b5;
+  font-size: 1.2rem;
+  font-weight: 500;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 10px;
 }
 
 .filter-group {
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
 
-.large-select {
-  font-size: 1.2em;
-  padding: 10px;
+.filter-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.filter-group select,
+.filter-group input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  background-color: #f9f9f9;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  border-color: #3f51b5;
+  box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.2);
+  outline: none;
 }
 
 button {
@@ -174,33 +238,70 @@ button {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 20px; /* Espaciado superior */
-  gap: 10px;
+  margin: 24px 0;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.pagination-controls button {
+.page-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.ellipsis {
+  font-weight: bold;
+  font-size: 16px;
+  color: #555;
+  margin: 0 4px;
+}
+
+.pagination-nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 100px;
   padding: 8px 16px;
   font-size: 14px;
-  border: none;
-  border-radius: 4px;
-  background-color: #3f51b5;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.3s;
+  border-radius: 30px;
+  background-color: #fff;
+  color: #3f51b5;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.page-number-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .pagination-controls button:disabled {
-  background-color: #ccc;
+  background-color: #f5f5f5;
+  color: #bdbdbd;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .pagination-controls button.active {
-  background-color: #ff9800;
   font-weight: bold;
+  transform: scale(1.05);
 }
 
 .pagination-controls button:hover:not(:disabled) {
-  background-color: #303f9f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .pagination-controls span {
@@ -209,17 +310,40 @@ button {
 }
 
 .search-bar {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
   text-align: center;
+  position: relative;
 }
 
 .search-bar input {
   width: 100%;
-  max-width: 400px;
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 14px 20px 14px 48px;
+  font-size: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--border-radius);
+  background-color: #fff;
+  transition: var(--transition);
+}
+
+.search-bar input:focus {
+  border-color: #3f51b5;
+  box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.2);
+  outline: none;
+}
+
+.search-icon {
+  position: absolute;
+  left: calc(50% - 205px);
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .search-bar::before {
+    left: 15px;
+  }
 }
 
 .filter-actions {
@@ -228,27 +352,107 @@ button {
 }
 
 .filter-actions button {
-  padding: 10px 20px;
-  font-size: 14px;
+  padding: 12px 24px;
+  font-size: 15px;
   border: none;
-  border-radius: 4px;
+  border-radius: 30px;
+  background-color: #f44336;
+  color: white;
   cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+  width: auto;
+  max-width: 250px;
+  margin: 0 auto;
 }
 
-.active-status {
-  border: 2px solid #1976d2 !important;
-  background: #e3f2fd !important;
-  color: #1976d2 !important;
-  font-weight: bold;
+.filter-actions button:hover {
+  background-color: #d32f2f;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+}
+
+.status-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.status-counts button {
+  width: auto;
+  font-size: 0.85em;
+  padding: 10px 16px;
+  white-space: nowrap;
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-counts button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.status-counts button strong {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Estilos adicionales para responsive */
+@media (max-width: 1100px) {
+  .home-container {
+    gap: 16px;
+  }
+
+  .filter-panel {
+    min-width: 240px;
+  }
 }
 
 @media (max-width: 900px) {
   .home-container {
     flex-direction: column;
   }
+
+  .tickets-section {
+    width: 100%;
+  }
+
   .filter-panel {
     margin-left: 0;
     margin-top: 24px;
     max-width: 100%;
+    position: static;
+  }
+
+  .status-counts {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .tickets-section,
+  .filter-panel {
+    padding: 16px;
+  }
+
+  .ticket-item {
+    padding: 14px;
+  }
+
+  .status-counts button {
+    font-size: 0.8em;
+    padding: 8px 12px;
+  }
+
+  .pagination-controls button {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 }

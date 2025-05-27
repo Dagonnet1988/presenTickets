@@ -1,86 +1,162 @@
-<div class="table-container">
-  <h2 class="table-title">Gestionar Usuarios</h2>
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+  
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en 
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+  
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
 
-  <!-- Barra de búsqueda y filtros -->
-  <div class="filter-container">
-    <input
-      class="search-bar"
-      type="text"
-      placeholder="Buscar por identificador, nombre o apellido"
-      [(ngModel)]="searchQuery"
-      (input)="applyFilters()"
-    />
+<div class="table-container fade-in">
+  <div class="table-header">
+    <h2 class="table-title">
+      <mat-icon>group</mat-icon>
+      Gestionar Usuarios
+    </h2>
+  </div>
 
-    <div class="filter-group">
+  <div class="table-content slide-in-left">
+    <!-- Buscador y acciones -->
+    <div class="actions-container">
+      <div class="search-container">
+        <mat-icon>search</mat-icon>
+        <input
+          class="search-input"
+          type="text"
+          placeholder="Buscar por identificador, nombre o apellido"
+          [(ngModel)]="searchQuery"
+          (input)="applyFilters()"
+        />
+      </div>
+
+      <button mat-raised-button class="add-user-button" routerLink="/crear-usuario">
+        <mat-icon>person_add</mat-icon>
+        Nuevo Usuario
+      </button>
+    </div>
+
+    <div class="filter-group" style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
       <!-- Filtro por rol -->
-      <select class="filter-select" [(ngModel)]="selectedRole" (change)="applyFilters()">
-        <option value="all">Todos</option>
-        <option value="user">Usuarios</option>
-        <option value="tech">Técnicos</option>
-      </select>
+      <mat-form-field appearance="outline" style="width: 200px;">
+        <mat-label>Filtrar por rol</mat-label>
+        <mat-select [(ngModel)]="selectedRole" (selectionChange)="applyFilters()">
+          <mat-option value="all">Todos</mat-option>
+          <mat-option value="user">Usuarios</mat-option>
+          <mat-option value="tech">Técnicos</mat-option>
+        </mat-select>
+        <mat-icon matSuffix>filter_list</mat-icon>
+      </mat-form-field>
 
       <!-- Ordenar por -->
-      <select class="filter-select" [(ngModel)]="sortBy" (change)="applyFilters()">
-        <option value="username">Ordenar por Identificador</option>
-        <option value="firstname">Ordenar por Nombre</option>
-        <option value="role">Ordenar por Rol</option>
-      </select>
+      <mat-form-field appearance="outline" style="width: 200px;">
+        <mat-label>Ordenar por</mat-label>
+        <mat-select [(ngModel)]="sortBy" (selectionChange)="applyFilters()">
+          <mat-option value="username">Identificador</mat-option>
+          <mat-option value="firstname">Nombre</mat-option>
+          <mat-option value="role">Rol</mat-option>
+        </mat-select>
+        <mat-icon matSuffix>sort</mat-icon>
+      </mat-form-field>
 
       <!-- Botón para alternar entre usuarios activos y suspendidos -->
-      <button mat-button color="primary" class="toggle-button" (click)="toggleSuspendedView()">
+      <button mat-stroked-button color="primary" (click)="toggleSuspendedView()" style="height: 56px;">
+        <mat-icon>{{ showSuspended ? 'person' : 'person_off' }}</mat-icon>
         {{ showSuspended ? 'Ver Usuarios Activos' : 'Ver Usuarios Suspendidos' }}
       </button>
     </div>
+
+    <table mat-table [dataSource]="dataSource" class="users-table">
+      <ng-container matColumnDef="username">
+        <th mat-header-cell *matHeaderCellDef> Identificador </th>
+        <td mat-cell *matCellDef="let user">
+          <div class="user-avatar">
+            <div class="avatar-circle">{{ user.username.charAt(0).toUpperCase() }}</div>
+            <span>{{ user.username }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef> Nombres </th>
+        <td mat-cell *matCellDef="let user"> {{ user.firstname || 'N/A' }} </td>
+      </ng-container>
+
+      <ng-container matColumnDef="lastname">
+        <th mat-header-cell *matHeaderCellDef> Apellidos </th>
+        <td mat-cell *matCellDef="let user"> {{ user.lastname || 'N/A' }} </td>
+      </ng-container>
+
+      <ng-container matColumnDef="role">
+        <th mat-header-cell *matHeaderCellDef> Rol </th>
+        <td mat-cell *matCellDef="let user">
+          <span class="user-role"
+                [ngClass]="{'role-admin': user.role === 'admin', 'role-tech': user.role === 'tech', 'role-user': user.role === 'user'}">
+            {{ getRoleDisplay(user.role) }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef> Acciones </th>
+        <td mat-cell *matCellDef="let user">
+          <div class="action-buttons">
+            <button mat-mini-fab class="action-button edit-button" (click)="editUser(user)" matTooltip="Editar usuario">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-mini-fab class="action-button" [ngClass]="{'delete-button': user.status}" *ngIf="user.status" (click)="deleteUser(user)" matTooltip="Suspender usuario">
+              <mat-icon>person_off</mat-icon>
+            </button>
+            <button mat-mini-fab class="action-button edit-button" *ngIf="!user.status" (click)="reactiveUser(user)" matTooltip="Reactivar usuario">
+              <mat-icon>person</mat-icon>
+            </button>
+            <button mat-mini-fab class="action-button edit-button" (click)="resetPassword(user)" matTooltip="Restablecer contraseña">
+              <mat-icon>lock_reset</mat-icon>
+            </button>
+          </div>
+        </td>
+      </ng-container>
+
+      <!-- Header y filas -->
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+
+    <!-- No data message -->
+    <div *ngIf="dataSource.data.length === 0" class="no-data-message">
+      <mat-icon>person_search</mat-icon>
+      <p>No se encontraron usuarios que coincidan con los criterios de búsqueda.</p>
+    </div>
+
+    <!-- Paginador -->
+    <div class="paginator-container">
+      <mat-paginator [pageSize]="10" [pageSizeOptions]="[5, 10, 20, 50]" showFirstLastButtons></mat-paginator>
+    </div>
   </div>
-
-  <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">
-
-    <ng-container matColumnDef="username">
-      <th mat-header-cell *matHeaderCellDef> Identificador </th>
-      <td mat-cell *matCellDef="let user"> {{ user.username }} </td>
-    </ng-container>
-
-    <ng-container matColumnDef="name">
-      <th mat-header-cell *matHeaderCellDef> Nombres </th>
-      <td mat-cell *matCellDef="let user"> {{ user.firstname }} </td>
-    </ng-container>
-
-    <ng-container matColumnDef="lastname">
-      <th mat-header-cell *matHeaderCellDef> Apellidos </th>
-      <td mat-cell *matCellDef="let user"> {{ user.lastname }} </td>
-    </ng-container>
-
-    <ng-container matColumnDef="role">
-      <th mat-header-cell *matHeaderCellDef> Rol </th>
-      <td mat-cell *matCellDef="let user"> {{ getRoleDisplay(user.role) }} </td>
-    </ng-container>
-
-    <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef> Acciones </th>
-      <td mat-cell *matCellDef="let user">
-        <button mat-button color="primary" (click)="editUser(user)">Editar</button>
-        <button mat-button color="warn" *ngIf="user.status" (click)="deleteUser(user)">Suspender</button>
-        <button mat-button color="primary" *ngIf="!user.status" (click)="reactiveUser(user)">Reactivar</button>
-        <button mat-button color="primary" (click)="resetPassword(user)">Restablecer Contraseña</button>
-      </td>
-    </ng-container>
-
-    <!-- Header y filas -->
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-  </table>
-
-  <!-- Paginador -->
-  <mat-paginator [pageSize]="30" [pageSizeOptions]="[10, 20, 30, 50]" showFirstLastButtons></mat-paginator>
 </div>
 
 <ng-template #confirmDialog let-data>
-  <h2 mat-dialog-title>Confirmación</h2>
-  <mat-dialog-content>
-    <p>{{ data.message }}</p>
-  </mat-dialog-content>
-  <mat-dialog-actions align="end">
-    <button mat-button (click)="closeDialog(false)">Cancelar</button>
-    <button mat-raised-button color="warn" (click)="closeDialog(true)">Aceptar</button>
-  </mat-dialog-actions>
+  <div class="dialog-container">
+    <h2 mat-dialog-title class="dialog-title">
+      <mat-icon color="warn">warning</mat-icon>
+      Confirmación
+    </h2>
+    <mat-dialog-content class="dialog-content">
+      <p>{{ data.message }}</p>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end" class="dialog-actions">
+      <button mat-stroked-button (click)="closeDialog(false)">
+        <mat-icon>cancel</mat-icon>
+        Cancelar
+      </button>
+      <button mat-raised-button color="warn" (click)="closeDialog(true)">
+        <mat-icon>check_circle</mat-icon>
+        Confirmar
+      </button>
+    </mat-dialog-actions>
+  </div>
 </ng-template>

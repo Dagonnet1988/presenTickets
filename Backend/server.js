@@ -1,3 +1,33 @@
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Narváez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Narváez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -142,6 +172,38 @@ app.get('/uploads/:filename', async (req, res) => {
       }
     });
   }
+});
+
+// Ruta específica para forzar descarga de archivos
+app.get('/download/:filename', async (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(uploadDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ message: 'Archivo no encontrado' });
+  }
+
+  let originalName = filename;
+  try {
+    const result = await pool.query('SELECT filename FROM attachments WHERE filepath = $1', [`/uploads/${filename}`]);
+    if (result.rows[0]?.filename) {
+      originalName = result.rows[0].filename;
+    }
+  } catch (e) {
+    // Si falla la consulta, usa el nombre del archivo
+  }
+
+  // Forzar siempre la descarga
+  res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.download(filePath, originalName, (err) => {
+    if (err) {
+      console.error('Error al forzar descarga:', err);
+      res.status(500).json({ message: 'Error al descargar el archivo' });
+    }
+  });
 });
 
 // Rutas API protegidas with JWT

@@ -1,4 +1,208 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ *
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ *
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ *
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 /* You can add global styles to this file, and also import other style files */
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+:root {
+  --primary-color: #1976d2;
+  --secondary-color: #2196f3;
+  --accent-color: #ff4081;
+  --background-color: #f5f5f5;
+  --text-color: #333333;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --transition: all 0.3s ease;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+/* Animation Classes */
+.fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.5s ease forwards;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+html, body {
+  height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  overflow-x: hidden;
+}
+
+/* Enhanced form controls */
+.mat-form-field {
+  width: 100%;
+}
+
+.mat-form-field-appearance-outline .mat-form-field-outline {
+  color: rgba(0, 0, 0, 0.12);
+}
+
+.mat-form-field-appearance-outline.mat-focused .mat-form-field-outline-thick {
+  color: var(--primary-color);
+}
+
+/* Enhanced buttons */
+.mat-raised-button, .mat-flat-button {
+  border-radius: 24px !important;
+  padding: 6px 24px !important;
+  transition: var(--transition) !important;
+}
+
+.mat-raised-button:hover, .mat-flat-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Enhanced cards */
+.mat-card {
+  border-radius: var(--border-radius) !important;
+  box-shadow: var(--box-shadow) !important;
+  transition: var(--transition) !important;
+  overflow: hidden;
+}
+
+.mat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Enhanced dialogs */
+.mat-dialog-container {
+  border-radius: var(--border-radius) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Improved scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Estilos para snackbars */
+.error-snackbar {
+  background: #f44336;
+  color: white;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4) !important;
+}
+
+.error-snackbar .mat-simple-snackbar-action {
+  color: white;
+  font-weight: bold;
+}
+
+.session-expired-snackbar {
+  background: #d32f2f;
+  color: white;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(211, 47, 47, 0.5) !important;
+  padding: 16px !important;
+}
+
+.session-expired-snackbar .mat-simple-snackbar-action {
+  color: white;
+  font-weight: bold;
+  background-color: rgba(255, 255, 255, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.success-snackbar {
+  background: #4CAF50;
+  color: white;
+}
+
+.success-snackbar .mat-simple-snackbar-action {
+  color: white;
+}
+
+.warning-snackbar {
+  background: #ff9800;
+  color: white;
+}
+
+.warning-snackbar .mat-simple-snackbar-action {
+  color: white;
+}
+
+/* Session expired dialog styling */
+.session-expired-dialog .mat-dialog-container {
+  border-top: 4px solid #d32f2f !important;
+  padding: 0 !important;
+}
+
+.session-expired-dialog .mat-dialog-content {
+  margin: 0 !important;
+  padding: 16px 24px !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .mat-raised-button, .mat-flat-button {
+    padding: 4px 16px !important;
+  }
+
+  .mat-card {
+    border-radius: 6px !important;
+  }
+}

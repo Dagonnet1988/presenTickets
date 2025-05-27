@@ -1,3 +1,17 @@
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+  
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en 
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+  
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
 <div class="create-ticket-container">
   <mat-card>
     <mat-card-header>
@@ -9,6 +23,7 @@
         <mat-form-field appearance="outline">
           <mat-label>Título</mat-label>
           <input matInput formControlName="title" placeholder="Ingresa el título del ticket" />
+          <mat-icon matSuffix>title</mat-icon>
           <mat-error *ngIf="ticketForm.get('title')?.invalid && ticketForm.get('title')?.touched">
             El título es obligatorio.
           </mat-error>
@@ -17,7 +32,8 @@
         <!-- Descripción -->
         <mat-form-field appearance="outline">
           <mat-label>Descripción</mat-label>
-          <textarea matInput formControlName="description" placeholder="Ingresa la descripción del ticket"></textarea>
+          <textarea matInput formControlName="description" placeholder="Ingresa la descripción del ticket" rows="4"></textarea>
+          <mat-icon matSuffix>description</mat-icon>
           <mat-error *ngIf="ticketForm.get('description')?.invalid && ticketForm.get('description')?.touched">
             La descripción es obligatoria.
           </mat-error>
@@ -33,6 +49,7 @@
             <mat-option value="Revisión">Revisión</mat-option>
             <mat-option value="Ajuste">Ajuste</mat-option>
           </mat-select>
+          <mat-icon matSuffix>category</mat-icon>
           <mat-error *ngIf="ticketForm.get('category')?.invalid && ticketForm.get('category')?.touched">
             La categoría es obligatoria.
           </mat-error>
@@ -71,6 +88,7 @@
             <mat-option value="UCI">UCI</mat-option>
             <mat-option value="Urgencias">Urgencias</mat-option>
           </mat-select>
+          <mat-icon matSuffix>location_on</mat-icon>
           <mat-error *ngIf="ticketForm.get('area')?.invalid && ticketForm.get('area')?.touched">
             La ubicación es obligatoria.
           </mat-error>
@@ -80,20 +98,30 @@
         <div class="file-upload">
           <input type="file" (change)="onFileChange($event)" multiple />
           <div class="drop-zone" (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)">
-            Arrastra y suelta archivos aquí o haz clic para seleccionar archivos
+            <mat-icon style="font-size: 48px; height: 48px; width: 48px; margin-bottom: 16px; color: #1976d2;">cloud_upload</mat-icon>
+            <span>Arrastra y suelta archivos aquí o haz clic para seleccionar archivos</span>
           </div>
-          <ul>
-            <li *ngFor="let file of attachments; let i = index">
-              {{ file.name }} ({{ file.size / 1024 | number: '1.0-2' }} KB)
-              <button type="button" (click)="removeAttachment(i)">Eliminar</button>
+          <ul class="attachment-list">
+            <li *ngFor="let file of attachments; let i = index" class="attachment-item">
+              <div class="attachment-info">
+                <mat-icon style="margin-right: 8px;">insert_drive_file</mat-icon>
+                <span class="attachment-name">{{ file.name }}</span>
+                <span class="attachment-size">({{ file.size / 1024 | number: '1.0-2' }} KB)</span>
+              </div>
+              <button type="button" class="attachment-remove" (click)="removeAttachment(i)">
+                <mat-icon>delete</mat-icon>
+              </button>
             </li>
           </ul>
         </div>
 
         <!-- Botón Enviar -->
         <div class="form-actions">
-          <button mat-raised-button color="primary" type="submit" [disabled]="ticketForm.invalid || isSubmitting">
-            <span *ngIf="!isSubmitting">Crear Ticket</span>
+          <button mat-raised-button color="primary" class="submit-button" type="submit" [disabled]="ticketForm.invalid || isSubmitting">
+            <span *ngIf="!isSubmitting">
+              <mat-icon>send</mat-icon>
+              Crear Ticket
+            </span>
             <mat-spinner *ngIf="isSubmitting" diameter="20"></mat-spinner>
           </button>
         </div>

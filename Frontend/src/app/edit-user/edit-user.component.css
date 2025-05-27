@@ -1,33 +1,170 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 /* Moderniza y mejora el estilo del formulario de edición de usuario */
 :host {
   display: block;
 }
+
 .form-container {
-  max-width: 400px;
-  margin: 40px auto;
-  padding: 32px 24px;
+  max-width: 500px;
+  margin: 2rem auto;
+  padding: 0;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
+
+.form-container:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.form-header {
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  padding: 1.5rem;
+}
+
 .form-title {
   text-align: center;
-  margin-bottom: 24px;
-  color: #1976d2;
+  margin: 0;
+  font-weight: 500;
+  color: white;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.form-title mat-icon {
+  margin-right: 12px;
+  font-size: 28px;
+  height: 28px;
+  width: 28px;
+}
+
+.form-content {
+  padding: 1.5rem;
+}
+
 mat-form-field {
   width: 100%;
   margin-bottom: 18px;
 }
-button[mat-raised-button], button[mat-stroked-button] {
-  width: 100%;
-  margin-top: 12px;
+
+.form-field {
+  position: relative;
+  margin-bottom: 8px;
 }
-hr {
-  margin: 32px 0 16px 0;
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
 }
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border-radius: 24px !important;
+  transition: all 0.2s ease;
+}
+
+.action-button mat-icon {
+  margin-right: 8px;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.save-button {
+  background-color: #1976d2;
+  color: white;
+}
+
+.delete-button {
+  background-color: #f44336;
+  color: white;
+}
+
+.cancel-button {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.section-divider {
+  margin: 32px 0 24px 0;
+  height: 1px;
+  background: linear-gradient(to right, rgba(0,0,0,0.03), rgba(0,0,0,0.1), rgba(0,0,0,0.03));
+  border: none;
+}
+
+.section-title {
+  font-size: 18px;
+  color: #1976d2;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.section-title mat-icon {
+  margin-right: 8px;
+}
+
 .text-danger {
   color: #d32f2f;
   font-size: 0.95em;
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.text-danger mat-icon {
+  margin-right: 6px;
+  font-size: 18px;
+  height: 18px;
+  width: 18px;
+}
+
+.confirmation-field {
+  margin-top: 16px;
+  padding: 12px;
+  background-color: #ffebee;
+  border-radius: 8px;
+  border-left: 3px solid #f44336;
+}
+
+@media (max-width: 768px) {
+  .form-container {
+    margin: 1rem;
+    border-radius: 8px;
+  }
+
+  .form-header {
+    padding: 1rem;
+  }
+
+  .form-content {
+    padding: 1rem;
+  }
 }

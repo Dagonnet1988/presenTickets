@@ -1,45 +1,290 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 :host {
   display: block;
 }
 
 /* Contenedor principal de la tabla */
 .table-container {
-  max-width: 900px;
-  margin: 50px auto;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: #f9f9f9;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 0;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.table-container:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Encabezado de la tabla */
+.table-header {
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  padding: 1.5rem;
 }
 
 /* Título de la tabla */
 .table-title {
   text-align: center;
   font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 20px;
-  color: #3f51b5;
+  font-weight: 500;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-title mat-icon {
+  margin-right: 12px;
+  font-size: 28px;
+  height: 28px;
+  width: 28px;
+}
+
+/* Contenido de la tabla */
+.table-content {
+  padding: 1.5rem;
+}
+
+/* Buscador y acciones */
+.actions-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  background-color: #f5f5f5;
+  border-radius: 24px;
+  padding: 0 16px;
+  flex: 1;
+  max-width: 400px;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.search-container:focus-within {
+  background-color: #ffffff;
+  border-color: #1976d2;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+}
+
+.search-container mat-icon {
+  color: #757575;
+  margin-right: 8px;
+}
+
+.search-input {
+  border: none;
+  background: transparent;
+  padding: 12px 0;
+  width: 100%;
+  outline: none;
+  font-size: 16px;
+}
+
+.add-user-button {
+  border-radius: 24px;
+  padding: 0 20px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  background-color: #1976d2;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.add-user-button:hover {
+  background-color: #0d47a1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.add-user-button mat-icon {
+  margin-right: 8px;
 }
 
 /* Estilo de la tabla */
-table {
+.users-table {
   width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-th, td {
+.users-table th {
+  background-color: #f5f5f5;
+  color: #333;
+  font-weight: 500;
   text-align: left;
-  padding: 8px;
+  padding: 14px 16px;
+  border-bottom: 2px solid #e0e0e0;
 }
 
-th {
-  background-color: #3f51b5;
-  color: rgb(218, 10, 10);
+.users-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
 }
 
-td button {
-  margin-right: 5px;
+.users-table tr:hover {
+  background-color: #f9f9f9;
 }
+
+.user-avatar {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #1976d2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 500;
+  margin-right: 12px;
+}
+
+.user-role {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.role-admin {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.role-tech {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.role-user {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Acciones de la tabla */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-button {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.edit-button {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.edit-button:hover {
+  background-color: #1976d2;
+  color: white;
+}
+
+.delete-button {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.delete-button:hover {
+  background-color: #d32f2f;
+  color: white;
+}
+
+/* Paginador */
+.paginator-container {
+  margin-top: 1.5rem;
+}
+
+/* Mensaje de no datos */
+.no-data-message {
+  text-align: center;
+  padding: 2rem;
+  font-size: 16px;
+  color: #757575;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.no-data-message mat-icon {
+  font-size: 48px;
+  height: 48px;
+  width: 48px;
+  color: #bdbdbd;
+}
+
+/* Estilos para dispositivos móviles */
+@media (max-width: 768px) {
+  .table-container {
+    margin: 1rem;
+    border-radius: 8px;
+  }
+
+  .table-header {
+    padding: 1rem;
+  }
+
+  .table-content {
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .actions-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-container {
+    max-width: none;
+  }
+}
+
 
 .mat-elevation-z8 {
   border-radius: 8px;

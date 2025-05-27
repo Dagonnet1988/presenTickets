@@ -1,16 +1,60 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 .form-container {
   max-width: 800px;
   margin: 2rem auto;
-  padding: 2rem;
-  border-radius: 16px;
-  background-color: #fdfdfd;
+  padding: 0;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.form-container:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.form-header {
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  padding: 1.5rem;
 }
 
 .form-title {
   text-align: center;
-  margin-bottom: 1.5rem;
-  font-weight: 600;
-  color: #3f51b5;
+  margin: 0;
+  font-weight: 500;
+  color: white;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-title mat-icon {
+  margin-right: 12px;
+  font-size: 28px;
+  height: 28px;
+  width: 28px;
+}
+
+.form-content {
+  padding: 2rem;
 }
 
 .form-grid {
@@ -23,8 +67,158 @@ mat-form-field {
   width: 100%;
 }
 
+.form-field {
+  position: relative;
+}
+
+.form-field mat-icon {
+  color: #757575;
+}
+
 .form-actions {
   display: flex;
   justify-content: center;
   margin-top: 2rem;
+  gap: 1rem;
+}
+
+.action-button {
+  min-width: 150px;
+  border-radius: 24px;
+  padding: 6px 24px;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.action-button mat-icon {
+  margin-right: 8px;
+}
+
+/* Estilos para la sección de carga de archivos */
+hr {
+  margin: 2rem 0;
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, rgba(0,0,0,0.03), rgba(0,0,0,0.1), rgba(0,0,0,0.03));
+}
+
+.file-upload-section {
+  margin-top: 2rem;
+}
+
+.section-title {
+  font-size: 1.2rem;
+  color: #1976d2;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-title mat-icon {
+  margin-right: 8px;
+  font-size: 24px;
+  height: 24px;
+  width: 24px;
+}
+
+.file-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.file-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.file-input {
+  opacity: 0;
+  width: 0.1px;
+  height: 0.1px;
+  position: absolute;
+}
+
+.file-label {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: #f0f7ff;
+  border: 2px dashed #1976d2;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 10px;
+}
+
+.file-label:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.file-label mat-icon {
+  margin-right: 10px;
+  font-size: 24px;
+  height: 24px;
+  width: 24px;
+  color: #1976d2;
+}
+
+.file-name {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #555;
+  font-style: italic;
+}
+
+.file-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.process-button, .template-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 24px;
+  transition: all 0.2s ease;
+}
+
+.process-button mat-icon, .template-button mat-icon {
+  margin-right: 8px;
+}
+
+.process-button:hover, .template-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .form-container {
+    margin: 1rem;
+    border-radius: 8px;
+  }
+
+  .form-content {
+    padding: 1.5rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .action-button {
+    min-width: 120px;
+  }
+
+  .file-actions {
+    flex-direction: column;
+  }
 }

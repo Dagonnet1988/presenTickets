@@ -1,36 +1,96 @@
-<div class="form-container">
-  <h2 class="form-title">Editar Perfil</h2>
-  <form [formGroup]="userForm" (ngSubmit)="saveProfile()">
-    <mat-form-field appearance="fill">
-      <mat-label>Correo</mat-label>
-      <input matInput type="email" formControlName="email">
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Nombres</mat-label>
-      <input matInput formControlName="firstname">
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Apellidos</mat-label>
-      <input matInput formControlName="lastname">
-    </mat-form-field>
-    <mat-form-field appearance="fill">
-      <mat-label>Teléfono</mat-label>
-      <input matInput formControlName="phone">
-    </mat-form-field>
-    <button mat-raised-button color="primary" type="submit">Guardar Cambios</button>
-  </form>
-  <hr>
-  <div *ngIf="!passwordChangeMode">
-    <button mat-stroked-button color="accent" (click)="enablePasswordChange()">Cambiar Contraseña</button>
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+  
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en 
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+  
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+<div class="profile-container fade-in">
+  <div class="form-container">
+    <div class="form-header">
+      <mat-icon class="form-icon">account_circle</mat-icon>
+      <h2 class="form-title">Editar Perfil</h2>
+    </div>
+
+    <div class="user-avatar-container slide-in-left" *ngIf="user">
+      <div class="profile-avatar">
+        <span>{{ user.firstname?.charAt(0).toUpperCase() || 'U' }}</span>
+      </div>
+      <h3 class="username">{{ user.firstname }}</h3>
+      <span class="user-role" [ngClass]="{'role-admin': user.role === 'admin', 'role-tech': user.role === 'tech', 'role-user': user.role === 'user'}">
+        {{ getRoleDisplay(user.role) }}
+      </span>
+    </div>
+
+    <form [formGroup]="userForm" (ngSubmit)="saveProfile()" class="profile-form">
+      <mat-form-field appearance="outline">
+        <mat-label>Correo</mat-label>
+        <mat-icon matPrefix>email</mat-icon>
+        <input matInput type="email" formControlName="email">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Nombres</mat-label>
+        <mat-icon matPrefix>person</mat-icon>
+        <input matInput formControlName="firstname">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Apellidos</mat-label>
+        <mat-icon matPrefix>people</mat-icon>
+        <input matInput formControlName="lastname">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Teléfono</mat-label>
+        <mat-icon matPrefix>phone</mat-icon>
+        <input matInput formControlName="phone">
+      </mat-form-field>
+
+      <button mat-raised-button color="primary" type="submit" class="submit-button">
+        <mat-icon>save</mat-icon>
+        Guardar Cambios
+      </button>
+    </form>
+
+    <div class="divider">
+      <span>Seguridad</span>
+    </div>
+
+    <div *ngIf="!passwordChangeMode" class="password-section">
+      <button mat-stroked-button color="accent" (click)="enablePasswordChange()" class="password-button">
+        <mat-icon>lock</mat-icon>
+        Cambiar Contraseña
+      </button>
+    </div>
+
+    <form *ngIf="passwordChangeMode" [formGroup]="passwordForm" (ngSubmit)="savePassword()" class="password-form">
+      <mat-form-field appearance="outline">
+        <mat-label>Nueva Contraseña</mat-label>
+        <mat-icon matPrefix>vpn_key</mat-icon>
+        <input matInput type="password" formControlName="password">
+        <mat-error *ngIf="passwordForm.get('password')?.invalid && passwordForm.get('password')?.touched">
+          La contraseña debe tener al menos 7 caracteres.
+        </mat-error>
+      </mat-form-field>
+
+      <div class="form-actions">
+        <button mat-stroked-button type="button" (click)="cancelPasswordChange()" class="cancel-button">
+          <mat-icon>cancel</mat-icon>
+          Cancelar
+        </button>
+        <button mat-raised-button color="primary" type="submit" class="submit-button">
+          <mat-icon>lock_reset</mat-icon>
+          Guardar Contraseña
+        </button>
+      </div>
+    </form>
   </div>
-  <form *ngIf="passwordChangeMode" [formGroup]="passwordForm" (ngSubmit)="savePassword()">
-    <mat-form-field appearance="fill">
-      <mat-label>Nueva Contraseña</mat-label>
-      <input matInput type="password" formControlName="password">
-      <mat-error *ngIf="passwordForm.get('password')?.invalid && passwordForm.get('password')?.touched">
-        La contraseña debe tener al menos 7 caracteres.
-      </mat-error>
-    </mat-form-field>
-    <button mat-raised-button color="primary" type="submit">Guardar Contraseña</button>
-  </form>
 </div>

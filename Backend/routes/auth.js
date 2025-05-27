@@ -1,3 +1,18 @@
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -59,15 +74,21 @@ router.post("/login", async (req, res) => {
 // Middleware para proteger rutas con JWT
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers["authorization"];
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader) {
     return res.status(401).json({ message: "Token no proporcionado" });
   }
+  
+  if (!authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Formato de token inválido" });
+  }
+  
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecreto");
     req.user = decoded;
     next();
   } catch (err) {
+    console.error("Token verification failed:", err.message);
     return res.status(401).json({ message: "Token inválido o expirado" });
   }
 }

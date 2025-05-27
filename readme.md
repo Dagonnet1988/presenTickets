@@ -1,6 +1,33 @@
-# Sistema de Gestión de Tickets para Clínica
+# Sistema de Gestión de Tickets para Clínica - PresentiTickets
+
+**Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.**
 
 Este proyecto es una aplicación web para gestionar tickets entre usuarios internos de una clínica y técnicos. La aplicación permite a los usuarios crear, ver y actualizar tickets, mientras que los técnicos pueden gestionar y resolver los tickets asignados.
+
+## Aviso de Propiedad Intelectual
+
+PresentiTickets es propiedad intelectual exclusiva de Diego Sánchez, quien ha desarrollado este sistema como iniciativa personal. El uso de este software por parte de Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+Está prohibida la redistribución, modificación o uso no autorizado de este código sin el consentimiento expreso por escrito del autor.
+
+## Documentación Legal
+
+En la carpeta `Documentacion` se encuentran los siguientes archivos importantes:
+- `terminos_de_uso.md`: Términos y condiciones de uso del sistema
+- `3_documentacion_tecnica.md`: Documentación técnica con declaración de propiedad
+- `4_plantillas_comunicacion.md`: Plantillas para comunicaciones formales
+- `5_guia_implementacion_copyright.md`: Guía para implementar avisos de copyright
+- `6_instrucciones_implementacion.md`: Instrucciones detalladas de implementación
+- `plan_revision_periodica.md`: Plan para el mantenimiento de la protección de propiedad intelectual
+
+## Herramientas de Protección de Copyright
+
+El repositorio incluye varios scripts para mantener la protección de propiedad intelectual:
+- `scripts/add-copyright.js`: Añade avisos de copyright a archivos sin ellos
+- `scripts/check-missing-copyrights.js`: Verifica archivos que necesitan avisos de copyright
+- `scripts/update-copyright-year.js`: Actualiza el año en los avisos de copyright existentes
+
+También se ha implementado un hook de Git que verifica la presencia de avisos de copyright antes de permitir commits.
 
 ## Estructura del Proyecto
 

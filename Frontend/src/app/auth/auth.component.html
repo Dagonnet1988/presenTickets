@@ -1,14 +1,38 @@
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
 <div class="auth-container">
   <mat-card>
     <mat-card-header>
       <mat-card-title>Iniciar Sesión</mat-card-title>
     </mat-card-header>
     <mat-card-content>
+      <!-- Mensaje de sesión expirada -->
+      <div *ngIf="sessionExpired" class="session-expired-alert">
+        <mat-icon>access_time</mat-icon>
+        <div class="session-expired-message">
+          <strong>Tu sesión ha expirado</strong>
+          <p>Por favor, inicia sesión nuevamente para continuar.</p>
+        </div>
+      </div>
+
       <form [formGroup]="authForm" (ngSubmit)="onSubmit()">
         <!-- Usuario -->
         <mat-form-field appearance="outline">
           <mat-label>Nombre de usuario</mat-label>
           <input matInput formControlName="username" placeholder="Ingresa tu nombre de usuario" />
+          <mat-icon matSuffix>account_circle</mat-icon>
           <mat-error *ngIf="authForm.get('username')?.invalid && authForm.get('username')?.touched">
             El nombre de usuario es obligatorio.
           </mat-error>
@@ -18,6 +42,7 @@
         <mat-form-field appearance="outline">
           <mat-label>Contraseña</mat-label>
           <input matInput type="password" formControlName="password" placeholder="Ingresa tu contraseña" />
+          <mat-icon matSuffix>lock</mat-icon>
           <mat-error *ngIf="authForm.get('password')?.invalid && authForm.get('password')?.touched">
             La contraseña es obligatoria.
           </mat-error>
@@ -31,6 +56,7 @@
         <!-- Botón Enviar -->
         <div class="form-actions">
           <button mat-raised-button color="primary" type="submit" [disabled]="authForm.invalid">
+            <mat-icon>login</mat-icon>
             Iniciar Sesión
           </button>
         </div>

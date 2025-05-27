@@ -1,47 +1,99 @@
-<div class="form-container mat-elevation-z4">
-  <h2 class="form-title">👤 Crear Nuevo Usuario</h2>
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+  
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en 
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+  
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
 
-  <form [formGroup]="userForm" (ngSubmit)="onSubmit()" class="user-form">
-    <div class="form-grid">
-      <!-- Campos del formulario -->
-      <mat-form-field appearance="outline">
-        <mat-label>Usuario *</mat-label>
-        <input matInput formControlName="username" />
-      </mat-form-field>
+<div class="form-container">
+  <div class="form-header">
+    <h2 class="form-title">
+      <mat-icon>person_add</mat-icon>
+      Crear Nuevo Usuario
+    </h2>
+  </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Rol *</mat-label>
-        <mat-select formControlName="role">
-          <mat-option *ngFor="let role of roles" [value]="role.value">
-            {{ role.label }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+  <div class="form-content">
+    <form [formGroup]="userForm" (ngSubmit)="onSubmit()" class="user-form">
+      <div class="form-grid">
+        <!-- Campos del formulario -->
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Usuario *</mat-label>
+            <input matInput formControlName="username" placeholder="Ingrese nombre de usuario" />
+            <mat-icon matSuffix>account_circle</mat-icon>
+            <mat-error *ngIf="userForm.get('username')?.invalid && userForm.get('username')?.touched">
+              El nombre de usuario es obligatorio
+            </mat-error>
+          </mat-form-field>
+        </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Nombre</mat-label>
-        <input matInput formControlName="firstname" />
-      </mat-form-field>
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Rol *</mat-label>
+            <mat-select formControlName="role">
+              <mat-option *ngFor="let role of roles" [value]="role.value">
+                {{ role.label }}
+              </mat-option>
+            </mat-select>
+            <mat-icon matSuffix>admin_panel_settings</mat-icon>
+            <mat-error *ngIf="userForm.get('role')?.invalid && userForm.get('role')?.touched">
+              El rol es obligatorio
+            </mat-error>
+          </mat-form-field>
+        </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Apellido</mat-label>
-        <input matInput formControlName="lastname" />
-      </mat-form-field>
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Nombre</mat-label>
+            <input matInput formControlName="firstname" placeholder="Ingrese nombre" />
+            <mat-icon matSuffix>badge</mat-icon>
+          </mat-form-field>
+        </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Correo electrónico</mat-label>
-        <input matInput type="email" formControlName="email" />
-      </mat-form-field>
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Apellido</mat-label>
+            <input matInput formControlName="lastname" placeholder="Ingrese apellido" />
+            <mat-icon matSuffix>badge</mat-icon>
+          </mat-form-field>
+        </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Teléfono</mat-label>
-        <input matInput formControlName="phone" />
-      </mat-form-field>
-    </div>
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Correo electrónico</mat-label>
+            <input matInput type="email" formControlName="email" placeholder="ejemplo@correo.com" />
+            <mat-icon matSuffix>email</mat-icon>
+            <mat-error *ngIf="userForm.get('email')?.invalid && userForm.get('email')?.touched">
+              Ingrese un correo electrónico válido
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-field">
+          <mat-form-field appearance="outline">
+            <mat-label>Teléfono</mat-label>
+            <input matInput formControlName="phone" placeholder="Ingrese número telefónico" />
+            <mat-icon matSuffix>phone</mat-icon>
+          </mat-form-field>
+        </div>
+      </div>
 
     <div class="form-actions">
-      <button mat-flat-button color="primary" type="submit" [disabled]="userForm.invalid">
+      <button mat-raised-button color="primary" type="submit" [disabled]="userForm.invalid" class="action-button">
+        <mat-icon>save</mat-icon>
         Crear Usuario
+      </button>
+      <button mat-stroked-button color="warn" type="button" routerLink="/admin" class="action-button">
+        <mat-icon>cancel</mat-icon>
+        Cancelar
       </button>
     </div>
   </form>
@@ -49,10 +101,30 @@
   <hr />
 
   <!-- Cargar archivo -->
-  <div>
-    <h3>Cargar usuarios desde archivo</h3>
-    <input type="file" (change)="onFileSelected($event)" accept=".txt, .csv" />
-    <button mat-raised-button color="accent" (click)="processFile()">Procesar Archivo</button>
-    <button mat-raised-button color="primary" (click)="downloadTemplate()">Descargar Plantilla</button>
+  <div class="file-upload-section">
+    <h3 class="section-title">
+      <mat-icon>upload_file</mat-icon>
+      Cargar usuarios desde archivo
+    </h3>
+    <div class="file-upload-container">
+      <div class="file-input-wrapper">
+        <input type="file" (change)="onFileSelected($event)" accept=".txt, .csv" id="file-input" class="file-input" />
+        <label for="file-input" class="file-label">
+          <mat-icon>cloud_upload</mat-icon>
+          <span>Seleccionar archivo</span>
+        </label>
+        <span class="file-name" *ngIf="selectedFile">{{ selectedFile.name }}</span>
+      </div>
+      <div class="file-actions">
+        <button mat-raised-button color="accent" (click)="processFile()" class="process-button">
+          <mat-icon>published_with_changes</mat-icon>
+          Procesar Archivo
+        </button>
+        <button mat-stroked-button color="primary" (click)="downloadTemplate()" class="template-button">
+          <mat-icon>download</mat-icon>
+          Descargar Plantilla
+        </button>
+      </div>
+    </div>
   </div>
 </div>

@@ -1,25 +1,65 @@
-<button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Notificaciones">
+<!--
+  PresentiTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.
+  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+<button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Notificaciones" class="badge-container">
   <mat-icon>notifications</mat-icon>
-  <span *ngIf="unreadCount > 0" matBadge="{{ unreadCount }}" matBadgeColor="warn" matBadgeOverlap="false"></span>
+  <span *ngIf="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
 </button>
-<mat-menu #menu="matMenu">
-  <ng-container *ngIf="notifications.length > 0; else noNotifications">
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px 8px;">
-      <span style="font-size: 0.9em; color: #888;">Notificaciones</span>
-      <button mat-mini-button color="warn" style="font-size: 0.7em; padding: 2px 6px; min-width: 0;"
-      (click)="$event.stopPropagation(); clearAllRead()">Limpiar</button>
-    </div>
-    <button mat-menu-item *ngFor="let n of notifications | slice:0:8" (click)="goToTicket(n)">
-      <mat-icon color="primary">info</mat-icon>
-      <span>
-        <b>{{ n.message || (n.type | notificationType) }}</b>
-        <br />
-        Ticket #{{ n.data.ticketId }}
-        <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
-      </span>
-    </button>
-  </ng-container>
-  <ng-template #noNotifications>
-    <span class="empty">Sin notificaciones</span>
-  </ng-template>
+<mat-menu #menu="matMenu" class="notification-menu">
+  <div class="notification-menu-container">    <div class="notification-header">
+      <span style="font-weight: 500; color: #333;">Notificaciones</span>
+      <button mat-button color="primary" style="font-size: 0.8em; min-width: 0;"
+      (click)="$event.stopPropagation(); markAllAsRead()" *ngIf="notifications.length > 0">
+        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
+        Marcar todas como leídas
+      </button>
+    </div>    <ng-container *ngIf="notifications.length > 0; else noNotifications">
+      <div *ngFor="let n of notifications | slice:0:8"
+           class="notification-item"           [class.status-change]="n.type === 'cambio_estado'"
+           [class.reopened]="n.type === 'ticket_reabierto'"
+           [class.new-notification]="!n.id"
+           (click)="goToTicket(n)"
+           [title]="n.id ?
+                   (n.type === 'cambio_estado' ?
+                    'Ticket actualizado. Haz clic para ver los detalles.' :
+                    n.type === 'ticket_reabierto' ?
+                    'Ticket reabierto. Haz clic para ver los detalles.' :
+                    'Haz clic para ir al ticket') :
+                   'Notificación reciente. Haz clic para verla.'">
+        <div style="display: flex; align-items: flex-start;">
+          <mat-icon [color]="n.type === 'cambio_estado' ? 'accent' :
+                           n.type === 'ticket_reabierto' ? 'warn' : 'primary'"
+                   style="margin-right: 10px; margin-top: 2px;">
+            {{ n.type === 'cambio_estado' ? 'update' :
+               n.type === 'ticket_reabierto' ? 'replay' :
+               n.type === 'nuevo_ticket' ? 'add_circle' :
+               n.type === 'ticket_asignado' ? 'person' : 'info' }}
+          </mat-icon>
+          <div>
+            <b>{{ n.message || (n.type | notificationType) }}</b>
+            <div>Ticket #{{ n.data?.ticketId || 'Cargando...' }}</div>
+            <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+    <ng-template #noNotifications>
+      <div class="empty">
+        <mat-icon style="margin-right: 8px; color: #999;">notifications_off</mat-icon>
+        Sin notificaciones
+      </div>
+    </ng-template>
+  </div>
 </mat-menu>

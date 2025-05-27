@@ -1,9 +1,20 @@
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ *
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ *
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ *
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 import express from "express";
-import {
-  pool,
-  emitTicketNotification,
-  getNotificationRecipients,
-} from "../server.js";
+import { pool, emitTicketNotification } from "../server.js";
 import formidable from "formidable";
 import path from "path";
 import fs from "fs";
@@ -171,39 +182,56 @@ router.post("/", (req, res) => {
           new Date(),
         ]
       );
+
       const ticketId = result.rows[0].id;
+
       for (const attachment of attachments) {
         await client.query(
           "INSERT INTO attachments (ticket_id, filename, filepath) VALUES ($1, $2, $3)",
-          [ticketId, attachment.name, attachment.url]
+          [ticketId, attachment.name, attachment.url] // Usar el nombre único y la URL basada en él
         );
       }
-      // Notificar a todos los tech
-      const techUsersResult = await client.query(
-        "SELECT id FROM users WHERE role = 'tech'"
-      );
-      let recipients = techUsersResult.rows.map((row) => row.id);
-      const ticketTitle = ticketData.title;
-      emitTicketNotification(
-        "nuevo_ticket",
-        {
-          data: {
-            ticketId,
-            title: ticketTitle,
-            userId: ticketData.userId,
-          },
-          message: `${ticketTitle} - Nuevo ticket`,
-        },
-        recipients
-      );
-      for (const userId of recipients) {
-        await createNotification({
-          user_id: userId,
-          type: "nuevo_ticket",
-          message: `${ticketTitle} - Nuevo ticket`,
-          ticket_id: ticketId,
-        });
+
+      // Notificar a todos los técnicos sobre el nuevo ticket
+      try {
+        // Obtener todos los usuarios con rol de técnico
+        const techsResult = await client.query(
+          "SELECT id FROM users WHERE role = $1",
+          ["tech"]
+        );
+        const techIds = techsResult.rows.map((tech) => tech.id);
+
+        if (techIds.length > 0) {
+          // Enviar notificación a todos los técnicos
+          for (const techId of techIds) {
+            await createNotification({
+              user_id: techId,
+              type: "nuevo_ticket",
+              message: `Nuevo ticket: ${ticketData.title}`,
+              ticket_id: ticketId,
+            });
+          }
+
+          // Emitir notificación en tiempo real
+          emitTicketNotification(
+            "nuevo_ticket",
+            {
+              ticketId,
+              title: ticketData.title,
+              createdAt: new Date(),
+              message: `Nuevo ticket creado: ${ticketData.title}`,
+            },
+            techIds
+          );
+        }
+      } catch (notifyErr) {
+        console.error(
+          "Error al enviar notificaciones de nuevo ticket:",
+          notifyErr
+        );
+        // No fallamos la operación principal si las notificaciones fallan
       }
+
       res.status(201).json({ ticketId, ...ticketData });
     } catch (err) {
       console.error("Error al guardar el ticket en la base de datos:", err);
@@ -219,157 +247,260 @@ router.post("/", (req, res) => {
 // Actualizar un ticket
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
-  const {
-    priority,
-    assigned_to,
-    status,
-    actorRole,
-    userId: actorId,
-  } = req.body;
+  const { priority, assigned_to, status, name } = req.body;
 
   // Validar que el ID sea un número entero
   if (isNaN(parseInt(id, 10))) {
     return res.status(400).json({ message: "ID de ticket no válido" });
   }
-
   const updates = [];
   const values = [];
   let index = 1;
+  let prevStatus = null;
 
-  // Obtener datos actuales del ticket ANTES de actualizar
-  const client = await pool.connect();
-  let prevStatus, prevAssignedTo, ticketTitle, ticketUserId;
-  try {
-    const ticketResult = await client.query(
-      "SELECT status, assigned_to, user_id, title FROM tickets WHERE id = $1",
+  // Si hay cambio de estado, obtener el estado anterior PRIMERO
+  if (status) {
+    const prevStatusResult = await pool.query(
+      "SELECT status FROM tickets WHERE id = $1",
       [id]
     );
-    if (ticketResult.rows.length === 0) {
-      return res.status(404).json({ message: "Ticket no encontrado" });
-    }
-    prevStatus = ticketResult.rows[0].status;
-    prevAssignedTo = ticketResult.rows[0].assigned_to;
-    ticketUserId = ticketResult.rows[0].user_id;
-    ticketTitle = ticketResult.rows[0].title;
+    prevStatus = prevStatusResult.rows[0]?.status;
+  }
 
-    if (priority) {
-      updates.push(`priority = $${index}`);
-      values.push(priority);
-      index++;
-    }
-    if (status) {
-      updates.push(`status = $${index}`);
-      values.push(status);
-      index++;
-    }
-    if (assigned_to) {
-      updates.push(`assigned_to = $${index}`);
-      values.push(parseInt(assigned_to, 10));
-      index++;
-    }
-    if (status === "Cerrado" || status === "Resuelto") {
-      updates.push(`closed_at = $${index}`);
-      values.push(new Date());
-      index++;
-    }
-    if (updates.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "No se proporcionaron campos para actualizar" });
-    }
-    const query = `UPDATE tickets SET ${updates.join(
-      ", "
-    )} WHERE id = $${index}`;
-    values.push(parseInt(id, 10));
+  if (priority) {
+    updates.push(`priority = $${index}`);
+    values.push(priority);
+    index++;
+  }
+
+  if (status) {
+    updates.push(`status = $${index}`);
+    values.push(status);
+    index++;
+  }
+
+  if (assigned_to) {
+    updates.push(`assigned_to = $${index}`);
+    values.push(parseInt(assigned_to, 10));
+    index++;
+  }
+
+  // Agregar soporte para actualizar el título/nombre del ticket
+  if (name) {
+    updates.push(`title = $${index}`);
+    values.push(name);
+    index++;
+  }
+
+  // Verificar si el estado es 'Cerrado' o 'Resuelto' y actualizar el campo 'closed_at'
+  if (status === "Cerrado" || status === "Resuelto") {
+    updates.push(`closed_at = $${index}`);
+    values.push(new Date());
+    index++;
+  }
+  // Si cambia de cualquier estado cerrado a otro estado (especialmente "Esperando respuesta del usuario"), es una reapertura
+  // En ese caso, establecer closed_at a NULL
+  else if (status && (prevStatus === "Cerrado" || prevStatus === "Resuelto")) {
+    updates.push(`closed_at = NULL`);
+  }
+
+  if (updates.length === 0) {
+    return res
+      .status(400)
+      .json({ message: "No se proporcionaron campos para actualizar" });
+  }
+
+  const query = `UPDATE tickets SET ${updates.join(", ")} WHERE id = $${index}`;
+  values.push(parseInt(id, 10));
+  const client = await pool.connect();
+  try {
     await client.query(query, values);
-
-    // --- Lógica de notificaciones por cambio de estado ---
+    // Si hay cambio de estado, obtener datos necesarios para las notificaciones
     if (status) {
-      let recipients = [];
-      let notificationType = null;
-      // Notificaciones para cambios de estado
-      if (actorRole === "tech") {
-        // Cierre
-        if (status === "Cerrado") {
-          if (ticketUserId) recipients.push(ticketUserId);
-          notificationType = "ticket_cerrado";
-        }
-        // Resolución
-        else if (status === "Resuelto") {
-          if (ticketUserId) recipients.push(ticketUserId);
-          notificationType = "ticket_resuelto";
-        }
-        // Escalado
-        else if (
-          status === "Escalado a Tier 3 / Gerente de Cuenta" ||
-          status === "Escalado a externo"
-        ) {
-          if (ticketUserId) recipients.push(ticketUserId);
-          notificationType = "estado_escalado";
-        }
-      } else if (actorRole === "user") {
-        // Usuario cierra el ticket
-        if (status === "Cerrado" && prevAssignedTo) {
-          recipients.push(prevAssignedTo);
-          notificationType = "cerrado_por_usuario";
-        }
-        // Usuario reabre el ticket
-        else if (
-          prevStatus === "Resuelto" &&
-          status === "Esperando respuesta del usuario" &&
-          prevAssignedTo
-        ) {
-          recipients.push(prevAssignedTo);
-          notificationType = "reabierto_por_usuario";
-        }
-      }
-      // Notificar solo si hay destinatarios y tipo
-      if (notificationType && recipients.length > 0) {
-        const notificationData = {
-          data: {
-            ticketId: id,
-            status: notificationType === "reabierto_por_usuario" ? "Reabierto" : status,
-            title: ticketTitle,
-          },
-          message: notificationType === "reabierto_por_usuario"
-            ? `Nuevo estado: Reabierto`
-            : `Nuevo estado: ${status}`,
-        };
-        emitTicketNotification(notificationType, notificationData, recipients);
-        for (const userId of recipients) {
-          await createNotification({
-            user_id: userId,
-            type: notificationType,
-            message: notificationData.message,
-            ticket_id: id,
-          });
-        }
-      }
-      // Notificar al usuario cuando se le asigne un técnico por primera vez
-      if (assigned_to) {
-        if ((!prevAssignedTo || prevAssignedTo === null) && assigned_to) {
-          emitTicketNotification(
-            "asignado_tecnico",
-            {
-              data: {
-                ticketId: id,
-                assignedTo: assigned_to,
-                title: ticketTitle,
-              },
-              message: `${ticketTitle} - Ticket tomado por técnico`,
-            },
-            [ticketUserId]
+      try {
+        // Obtener detalles del ticket y destinatarios para notificaciones
+        const ticketResult = await client.query(
+          "SELECT title, user_id, assigned_to FROM tickets WHERE id = $1",
+          [id]
+        );
+        if (ticketResult.rows.length > 0) {
+          const { title, user_id, assigned_to } = ticketResult.rows[0];
+          const ticketTitle = title || "Ticket sin título";
+
+          // Determinar el tipo de notificación según el estado
+          let notificationType = "cambio_estado";
+          let notificationMessage = `${ticketTitle}: estado cambiado a ${status}`;
+
+          // Determinar los destinatarios según el estado
+          let recipients = [];
+
+          // Si es "Escalado a externo" o "Escalado a Tier3" o "Resuelto" - notificar al usuario
+          if (
+            status === "Escalado a externo" ||
+            status === "Escalado a Tier 3 / Gerente de Cuenta" ||
+            status === "Resuelto"
+          ) {
+            if (user_id) {
+              recipients.push(user_id);
+
+              // Crear notificación en la base de datos
+              await createNotification({
+                user_id: user_id,
+                type: notificationType,
+                message: notificationMessage,
+                ticket_id: id,
+              });
+
+              // Emitir notificación en tiempo real
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                },
+                [user_id]
+              );
+            } else {
+              console.log(
+                `No se pudo enviar notificación: usuario no encontrado para ticket #${id}`
+              );
+            }
+          }
+          // Si es "Cerrado" - notificar al técnico
+          else if (status === "Cerrado") {
+            if (assigned_to) {
+              recipients.push(assigned_to);
+
+              // Crear notificación en la base de datos
+              await createNotification({
+                user_id: assigned_to,
+                type: notificationType,
+                message: notificationMessage,
+                ticket_id: id,
+              });
+
+              // Emitir notificación en tiempo real
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                },
+                [assigned_to]
+              );
+            } else {
+              console.log(
+                `No se pudo enviar notificación: técnico no asignado para ticket #${id}`
+              );
+            }
+          } // Si es "Esperando respuesta del usuario" - verificar si es una reapertura por el usuario
+          else if (status === "Esperando respuesta del usuario") {
+            // Si hay un técnico asignado y el ticket estaba cerrado o resuelto, notificar como reapertura
+            if (assigned_to && prevStatus === "Resuelto") {
+              // Cambiar el tipo y mensaje para reflejar la reapertura por el usuario
+              notificationType = "ticket_reabierto";
+              notificationMessage = `${ticketTitle}: ha sido reabierto`;
+
+              // Crear notificación en la base de datos
+              await createNotification({
+                user_id: assigned_to,
+                type: notificationType,
+                message: notificationMessage,
+                ticket_id: id,
+              });
+
+              // Emitir notificación en tiempo real
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                },
+                [assigned_to]
+              );
+            } else if (prevStatus === "Cerrado") {
+              notificationType = "ticket_reabierto";
+              notificationMessage = `${ticketTitle}: ha sido reabierto`;
+              
+              if (user_id) {
+                await createNotification({
+                  user_id: user_id,
+                  type: notificationType,
+                  message: notificationMessage,
+                  ticket_id: id,
+                });
+
+                emitTicketNotification(
+                  notificationType,
+                  {
+                    ticketId: id,
+                    title: ticketTitle,
+                    createdAt: new Date(),
+                    message: notificationMessage,
+                  },
+                  [user_id]
+                );
+              }
+            }
+          } else {
+            console.log(`Estado ${status} no requiere notificación específica`);
+          }
+        } else {
+          console.log(
+            `No se encontró el ticket #${id} para enviar notificaciones`
           );
-          await createNotification({
-            user_id: ticketUserId,
-            type: "asignado_tecnico",
-            message: `${ticketTitle} - Ticket tomado por técnico`,
-            ticket_id: id,
-          });
         }
+      } catch (notifyErr) {
+        console.error(
+          "Error al enviar notificaciones de cambio de estado:",
+          notifyErr
+        );
+        // No fallamos la operación principal si las notificaciones fallan
       }
-      res.status(200).json({ message: "Ticket actualizado correctamente" });
     }
+
+    // Enviar notificación al usuario cuando se asigna un ticket
+    if (assigned_to) {
+      try {
+        // Obtener detalles del ticket
+        const ticketResult = await client.query(
+          "SELECT title, user_id FROM tickets WHERE id = $1",
+          [id]
+        );
+        const ticketTitle = ticketResult.rows[0]?.title || "Ticket sin título";
+        const userId = ticketResult.rows[0]?.user_id || null;
+
+        // Crear notificación en la base de datos
+        await createNotification({
+          user_id: userId,
+          type: "ticket_asignado",
+          message: `Ticket ${ticketTitle} asignado`,
+          ticket_id: id,
+        });
+
+        // Enviar notificación en tiempo real
+        emitTicketNotification(
+          "ticket_asignado",
+          {
+            ticketId: id,
+            title: ticketTitle,
+            createdAt: new Date(),
+            message: `Ticket ${ticketTitle} asignado a técnico`,
+          },
+          [userId]
+        );
+      } catch (notifyErr) {
+        console.error("Error al enviar notificación de asignación:", notifyErr);
+      }
+    }
+
+    res.status(200).json({ message: "Ticket actualizado correctamente" });
   } catch (err) {
     console.error("Error al actualizar el ticket:", err);
     res.status(500).json({ message: "Error al actualizar el ticket" });

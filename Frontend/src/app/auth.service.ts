@@ -1,3 +1,33 @@
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.
+ *
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Narváez.
+ *
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Narváez y su uso en
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ *
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
@@ -10,16 +40,15 @@ import { environment } from '../environments/environment';
 export class AuthService {
   private apiUrl = environment.auth;
 
-  constructor(private http: HttpClient) {}
-
-  // Iniciar sesión
+  constructor(private http: HttpClient) {}  // Iniciar sesión
   login(username: string, password: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/login`, { username, password }).pipe(
       tap(response => {
         if (response.token) {
           if (this.isLocalStorageAvailable()) {
             localStorage.setItem('token', response.token);
-            // No need to store userName or userRole separately
+          } else {
+            console.error('localStorage is not available!');
           }
         }
       }),
@@ -38,9 +67,7 @@ export class AuthService {
       return !!token;
     }
     return false;
-  }
-
-  // Obtener el userId del usuario autenticado (from token if needed)
+  }  // Obtener el userId del usuario autenticado (from token if needed)
   getUserId(): string | null {
     if (this.isLocalStorageAvailable()) {
       const token = localStorage.getItem('token');
@@ -50,6 +77,7 @@ export class AuthService {
           const payload = JSON.parse(atob(token.split('.')[1]));
           return payload.id || payload.userId || null;
         } catch (e) {
+          console.error('Error decoding token:', e);
           return null;
         }
       }

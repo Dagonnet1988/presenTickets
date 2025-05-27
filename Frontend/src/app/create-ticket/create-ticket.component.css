@@ -1,26 +1,74 @@
+/*
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
 .create-ticket-container {
   display: flex;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
 }
 
 mat-card {
   width: 100%;
-  max-width: 600px;
+  max-width: 700px;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+mat-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+mat-card-header {
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: white;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+mat-card-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+mat-card-content {
+  padding: 0 24px 24px;
 }
 
 mat-form-field {
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .form-group {
   position: relative;
   border: 2px dashed #ccc;
-  padding: 20px;
-  border-radius: 4px;
+  padding: 24px;
+  border-radius: 8px;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  background-color: #f9f9f9;
+}
+
+.form-group:hover {
+  border-color: #1976d2;
+  background-color: #f0f7ff;
 }
 
 .dragging-overlay {
@@ -29,24 +77,147 @@ mat-form-field {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   justify-content: center;
   align-items: center;
   border: 2px dashed #1976d2;
-  border-radius: 4px;
+  border-radius: 8px;
+  z-index: 10;
 }
 
 .dragging-overlay p {
   font-size: 1.2em;
   color: #1976d2;
+  font-weight: 500;
 }
 
 .form-group.dragging {
   border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+}
+
+.file-upload {
+  position: relative;
+}
+
+.file-upload input[type="file"] {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.drop-zone {
+  padding: 30px;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  background-color: #f9f9f9;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone:hover {
+  border-color: #1976d2;
+  background-color: #f0f7ff;
+}
+
+.attachment-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background-color: #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.attachment-item:hover {
+  background-color: #e0e0e0;
+}
+
+.attachment-info {
+  display: flex;
+  align-items: center;
+}
+
+.attachment-name {
+  margin-right: 8px;
+  font-weight: 500;
+}
+
+.attachment-size {
+  color: #666;
+  font-size: 0.85em;
+}
+
+.attachment-remove {
+  background: none;
+  border: none;
+  color: #f44336;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.attachment-remove:hover {
+  background-color: rgba(244, 67, 54, 0.1);
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.submit-button {
+  padding: 8px 24px;
+  font-size: 16px;
+  border-radius: 24px;
+  transition: all 0.2s ease;
+}
+
+@media (max-width: 768px) {
+  .create-ticket-container {
+    padding: 16px;
+  }
+
+  mat-card {
+    border-radius: 8px;
+  }
+
+  mat-card-header {
+    padding: 16px;
+  }
+
+  mat-card-content {
+    padding: 0 16px 16px;
+  }
+
+  .form-group {
+    padding: 16px;
+  }
+
+  .drop-zone {
+    padding: 20px;
+  }
 }

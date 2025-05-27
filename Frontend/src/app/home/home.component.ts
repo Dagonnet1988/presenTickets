@@ -1,19 +1,35 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * 
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ * 
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ * 
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
+import { Component, OnInit, ChangeDetectorRef, LOCALE_ID } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { CommonModule } from '@angular/common';
+import { CommonModule, registerLocaleData } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatIconModule } from '@angular/material/icon';
 import { TicketService } from '../ticket.service';
 import { AuthService } from '../auth.service';
 import { MatCardModule } from '@angular/material/card';
 import { UserService } from '../user.service';
 import { RefreshTicketsService } from '../refresh-tickets.service';
-import { BannerComponent } from '../banner/banner.component';
-import { SidebarComponent } from '../sidebar/sidebar.component';
-import { NotificationBellComponent } from '../notification-bell.component';
+import localeEs from '@angular/common/locales/es';
+
+registerLocaleData(localeEs, 'es');
 
 @Component({
   selector: 'app-home',
@@ -26,7 +42,11 @@ import { NotificationBellComponent } from '../notification-bell.component';
     MatInputModule,
     MatSelectModule,
     MatCardModule,
+    MatIconModule,
     RouterModule,
+  ],
+  providers: [
+    { provide: LOCALE_ID, useValue: 'es' }
   ],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css']
@@ -319,6 +339,43 @@ export class HomeComponent implements OnInit {
   onStatusSelectChange(): void {
     this.activeStatusFilter = null;
     this.applyFilters();
+  }
+
+  // Devuelve un rango de números de página para mostrar en la paginación
+  getPaginationRange(): number[] {
+    const pageRange: number[] = [];
+    const delta = 2; // Número de páginas a ambos lados del actual
+
+    // Diseño inteligente para mostrar páginas alrededor de la actual
+    if (this.totalPages <= 7) {
+      // Si hay 7 páginas o menos, mostrar todas
+      for (let i = 2; i < this.totalPages; i++) {
+        pageRange.push(i);
+      }
+    } else {
+      // Si current es cercano al inicio
+      if (this.currentPage < 5) {
+        for (let i = 2; i <= 5; i++) {
+          pageRange.push(i);
+        }
+      }
+      // Si current es cercano al final
+      else if (this.currentPage > this.totalPages - 4) {
+        for (let i = this.totalPages - 4; i < this.totalPages; i++) {
+          pageRange.push(i);
+        }
+      }
+      // Si current está en el medio
+      else {
+        for (let i = this.currentPage - delta; i <= this.currentPage + delta; i++) {
+          if (i > 1 && i < this.totalPages) {
+            pageRange.push(i);
+          }
+        }
+      }
+    }
+
+    return pageRange;
   }
 
   // Permite refrescar la lista de tickets desde fuera

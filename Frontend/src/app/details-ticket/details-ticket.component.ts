@@ -1,6 +1,21 @@
-import { Component, OnInit, ChangeDetectorRef, ViewChild, TemplateRef } from '@angular/core';
+/**
+ * PresentiTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ *
+ * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ *
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ *
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
+ */
+
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, TemplateRef, LOCALE_ID, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { Location } from '@angular/common';
+import { Location, registerLocaleData } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -15,6 +30,10 @@ import { AuthService } from '../auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UserService } from '../user.service';
 import { environment } from '../../environments/environment';
+import localeEs from '@angular/common/locales/es';
+import { forkJoin, map, catchError, of, finalize, Subscription, switchMap, tap } from 'rxjs';
+
+registerLocaleData(localeEs, 'es');
 
 @Component({
   selector: 'app-details-ticket',
@@ -29,11 +48,13 @@ import { environment } from '../../environments/environment';
     MatIconModule,
     MatSelectModule,
     MatDialogModule
+  ],  providers: [
+    { provide: LOCALE_ID, useValue: 'es' }
   ],
-  templateUrl: './details-ticket.component.html',
-  styleUrls: ['./details-ticket.component.css'],
+  templateUrl: './details-ticket.component.html',  styleUrls: ['./details-ticket.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DetailsTicketComponent implements OnInit {
+export class DetailsTicketComponent implements OnInit, OnDestroy {
   @ViewChild('confirmDialog') confirmDialog!: TemplateRef<any>;
   ticket: any;
   messages: any[] = [];
@@ -45,6 +66,7 @@ export class DetailsTicketComponent implements OnInit {
   technicians: any[] = [];
   dialogRef!: MatDialogRef<any>;
   ticketLevelAttachments: any[] = [];
+  private subscriptions: Subscription = new Subscription();
 
   constructor(
     private route: ActivatedRoute,
@@ -54,106 +76,231 @@ export class DetailsTicketComponent implements OnInit {
     public userService: UserService,
     private cdr: ChangeDetectorRef,
     private dialog: MatDialog
-  ) {}
+  ) {}  // Referencia a la función enlazada para poder eliminarla correctamente
+  private boundRefreshHandler: any;
 
-  ngOnInit(): void {
-    // Suscribirse a los cambios de parámetro 'id' para recargar el ticket si cambia
-    this.route.paramMap.subscribe(params => {
-      const ticketId = params.get('id');
-      if (ticketId) {
-        this.loadTicketDetails(ticketId);
-      }
-    });
-    this.loadTechnicians();
+  // Método helper para obtener el ID del ticket actual de manera consistente
+  private getCurrentTicketId(): string | null {
+    return this.ticket?.id?.toString() || null;
   }
 
+  ngOnInit(): void {
+    // Suscribirse a los cambios de parámetros de la ruta para detectar navegación entre tickets
+    this.subscriptions.add(
+      this.route.paramMap.subscribe(params => {
+        const ticketId = params.get('id');
+        if (ticketId) {
+          console.log('Detectado cambio de ticket ID:', ticketId);
+          // Cargar datos del nuevo ticket
+          this.loadTicketDetails(ticketId);
+        } else {
+          console.error('No se encontró ID del ticket en la URL');
+        }
+      })
+    );
+
+    // Cargar técnicos una sola vez (no depende del ticket específico)
+    this.loadTechnicians();
+
+    // Crear una referencia enlazada a la función para poder eliminarla después
+    this.boundRefreshHandler = this.handleTicketRefresh.bind(this);
+
+    // Agregar listener para el evento de recarga desde notificaciones del mismo ticket
+    window.addEventListener('refresh-ticket-details', this.boundRefreshHandler);
+  }
+
+  ngOnDestroy(): void {
+    // Limpiar suscripciones para evitar fugas de memoria
+    this.subscriptions.unsubscribe();
+
+  // Eliminar el listener del evento de recarga usando la referencia guardada
+    window.removeEventListener('refresh-ticket-details', this.boundRefreshHandler);
+  }
+
+  // Manejador para el evento de recarga desde notificaciones del mismo ticket
+  handleTicketRefresh() {
+    console.log('Recibido evento para actualizar ticket desde notificación del mismo ticket');
+    const currentTicketId = this.ticket?.id;
+    if (currentTicketId) {
+      this.loadTicketDetails(currentTicketId.toString());
+
+      // También recargar comentarios y otra información relacionada
+      this.ticketService.getComments(currentTicketId.toString()).subscribe(comments => {
+        this.messages = comments;
+        this.loadUserNames();
+        this.cdr.detectChanges();
+      });
+    }
+  }
   // Modificar loadTicketDetails para aceptar ticketId como argumento
   loadTicketDetails(ticketId?: string): void {
     const id = ticketId || this.route.snapshot.paramMap.get('id');
-    if (id) {
-      this.userRole = this.authService.getUserRole() || '';
-      this.ticketService.getTicketDetails(id).subscribe(ticket => {
-        this.ticket = ticket;
-        this.ticket.created_at = new Date(this.ticket.created_at);
-        // Filtrar solo los adjuntos del ticket (sin comment_id)
-        this.ticketLevelAttachments = (this.ticket.attachments || []).filter((att: any) => !att.comment_id);
-        this.cdr.detectChanges();
-        this.loadUserNames();
-      });
-
-      this.ticketService.getComments(id).subscribe(comments => {
-        this.messages = comments;
-        this.loadUserNames();
-        this.cdr.detectChanges(); // Forzar detección después de cargar mensajes
-      });
+    if (!id) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
     }
-  }
 
+    this.userRole = this.authService.getUserRole() || '';
+
+    // Usar forkJoin para coordinar múltiples llamadas
+    this.subscriptions.add(
+      forkJoin([
+        this.ticketService.getTicketDetails(id),
+        this.ticketService.getComments(id)
+      ]).subscribe({
+        next: ([ticket, comments]) => {
+          this.ticket = ticket;
+          if (this.ticket.created_at) {
+            this.ticket.created_at = new Date(this.ticket.created_at);
+          }
+          // Filtrar solo los adjuntos del ticket (sin comment_id)
+          this.ticketLevelAttachments = (this.ticket.attachments || []).filter((att: any) => !att.comment_id);
+          this.messages = comments;
+
+          // Cargar nombres de usuarios una sola vez después de tener todos los datos
+          this.loadUserNames();
+
+          // Una única detección de cambios al final
+          this.cdr.markForCheck();
+        },
+        error: (err) => {
+          console.error('Error al cargar detalles del ticket:', err);
+        }
+      })
+    );
+  }
   loadTechnicians(): void {
-    this.userService.getUsers().subscribe(users => {
-      this.technicians = users.filter(user => user.role === 'tech');
+    this.subscriptions.add(
+      this.userService.getUsers().subscribe({
+        next: (users) => {
+          this.technicians = users.filter(user => user.role === 'tech');
+          this.cdr.markForCheck(); // Notificar al detector de cambios
+        },
+        error: (err) => {
+          console.error('Error al cargar técnicos:', err);
+          this.cdr.markForCheck();
+        }
+      })
+    );
+  }loadUserNames(): void {
+    // Crear una lista de IDs única con verificación de valor indefinido
+    const userIds = [];
+    if (this.ticket && this.ticket.user_id) {
+      userIds.push(this.ticket.user_id);
+    }
+    if (this.messages && this.messages.length > 0) {
+      // Agregar IDs de mensajes solo si existen y son válidos
+      this.messages.forEach(message => {
+        if (message && message.user_id) {
+          userIds.push(message.user_id);
+        }
+      });
+    }
+
+    // Eliminar duplicados
+    const uniqueUserIds = [...new Set(userIds)];
+
+    if (uniqueUserIds.length === 0) {
+      return; // No hay usuarios para cargar
+    }
+
+    // Cargar todos los nombres de usuario en paralelo
+    this.subscriptions.add(
+      forkJoin(
+        uniqueUserIds
+          .filter(userId => userId && !this.userNames.has(userId))
+          .map(userId =>
+            this.userService.getUser(userId).pipe(
+              map(user => ({
+                userId,
+                username: user ? `${user.firstname} ${user.lastname}` : 'Usuario Desconocido'
+              }))
+            )
+          )
+      ).subscribe({
+        next: (results) => {
+          // Actualizar todos los nombres de una vez
+          results.forEach(result => {
+            this.userNames.set(result.userId, result.username);
+          });
+          // Una sola actualización de la vista
+          this.cdr.markForCheck();
+        },
+        error: (err) => {
+          console.error('Error al cargar nombres de usuarios:', err);
+        }
+      })
+    );
+  }  updateStatus(status: string): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    this.ticketService.updateTicketStatus(ticketId, status, this.userRole).subscribe({
+      next: () => {
+        // Actualizar el estado localmente
+        this.ticket.status = status;
+
+        // Recargar datos completos para obtener timestamps actualizados
+        this.loadTicketDetails(ticketId);
+
+        // Notificar la vista del cambio
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        console.error('Error al actualizar el estado del ticket:', error.message);
+        this.cdr.markForCheck();
+      },
     });
-  }
+  }  updatePriority(priority: string): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
 
-  loadUserNames(): void {
-    const userIds = [this.ticket.user_id, ...new Set(this.messages.map(message => message.user_id))];
-    userIds.forEach(userId => {
-      if (!this.userNames.has(userId)) {
-        this.userService.getUser(userId).subscribe(user => {
-          const username = user?.firstname +' '+ user?.lastname || 'Usuario Desconocido';
-          this.userNames.set(userId, username);
-          this.cdr.detectChanges(); // Forzar detección de cambios para nombres de usuario
-        });
-      }
+    this.ticketService.updateTicketPriority(ticketId, priority).subscribe({
+      next: () => {
+        // Actualizar prioridad localmente
+        this.ticket.priority = priority;
+
+        // Recargar datos completos
+        this.loadTicketDetails(ticketId);
+
+        // Notificar la vista del cambio
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        console.error('Error al actualizar la prioridad del ticket:', error.message);
+        this.cdr.markForCheck();
+      },
     });
-  }
+  }  assignTechnician(assigned_to: number): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
 
-  updateStatus(status: string): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, status, this.userRole).subscribe({
-        next: () => {
-          this.ticket.status = status;
-          this.cdr.detectChanges(); // Forzar detección de cambios
-          this.loadTicketDetails(); // Recargar detalles del ticket
-        },
-        error: (error: HttpErrorResponse) => {
-          console.error('Error al actualizar el estado del ticket:', error.message);
-        },
+    this.ticketService.updateTicketTechnician(ticketId, assigned_to).subscribe({
+      next: () => {
+        // Actualizar localmente
+        this.ticket.assigned_to = assigned_to;
+
+        // Recargar datos para obtener toda la información actualizada
+        this.loadTicketDetails(ticketId);
+
+        // Notificar a la vista
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        console.error('Error al asignar el técnico al ticket:', error.message);
+        this.cdr.markForCheck();
+      },
       });
     }
-  }
-
-  updatePriority(priority: string): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
-      this.ticketService.updateTicketPriority(ticketId, priority ).subscribe({
-        next: () => {
-          this.ticket.priority = priority;
-          this.cdr.detectChanges(); // Forzar detección de cambios
-          this.loadTicketDetails(); // Recargar detalles del ticket
-        },
-        error: (error: HttpErrorResponse) => {
-          console.error('Error al actualizar la prioridad del ticket:', error.message);
-        },
-      });
-    }
-  }
-
-  assignTechnician(assigned_to: number): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
-      this.ticketService.updateTicketTechnician(ticketId, assigned_to ).subscribe({
-        next: () => {
-          this.ticket.assigned_to = assigned_to;
-          this.cdr.detectChanges(); // Forzar detección de cambios
-        },
-        error: (error: HttpErrorResponse) => {
-          console.error('Error al asignar el técnico al ticket:', error.message);
-        },
-      });
-    }
-  }
 
   getPriorityClass(priority: string): string {
     switch (priority) {
@@ -170,10 +317,9 @@ export class DetailsTicketComponent implements OnInit {
     }
   }
 
-
   sendMessage(): void {
     if (this.newMessage.trim() || this.selectedFiles.length > 0) {
-      const ticketId = this.route.snapshot.paramMap.get('id');
+      const ticketId = this.getCurrentTicketId();
       const userId = this.authService.getUserId();
 
       if (ticketId) {
@@ -185,12 +331,26 @@ export class DetailsTicketComponent implements OnInit {
 
         this.selectedFiles.forEach(file => {
           formData.append('attachments', file, file.name);
-        });
+        });        this.ticketService.sendMessage(ticketId, formData).subscribe({
+          next: (comment) => {
+            this.newMessage = '';
+            this.selectedFiles = [];
 
-        this.ticketService.sendMessage(ticketId, formData).subscribe(comment => {
-          this.newMessage = '';
-          this.selectedFiles = [];
-          this.loadTicketDetails(); // Recargar detalles del ticket
+            // Si el usuario es técnico, actualizar estado en la UI también
+            if (this.userRole === 'tech' &&
+                this.ticket &&
+                this.ticket.status !== 'Cerrado' &&
+                this.ticket.status !== 'Resuelto') {
+              this.ticket.status = 'Esperando respuesta del usuario';
+            }
+
+            // Recargar detalles del ticket para asegurar sincronización con la BD
+            this.loadTicketDetails(ticketId);
+          },
+          error: (error) => {
+            console.error('Error al enviar el mensaje:', error);
+            this.cdr.markForCheck();
+          }
         });
       }
     }
@@ -251,58 +411,107 @@ export class DetailsTicketComponent implements OnInit {
           this.updateStatus('Escalado a Tier 3 / Gerente de Cuenta');
         }
       }
-    });
-  }
-
+    });  }
   closeTicket(): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    this.subscriptions.add(
       this.ticketService.updateTicketStatus(ticketId, 'Cerrado', this.userRole).subscribe({
         next: () => {
           this.ticket.status = 'Cerrado';
-          this.loadTicketDetails(); // Reflejar el cambio en la vista
+          this.loadTicketDetails(ticketId); // Reflejar el cambio en la vista
+          this.cdr.markForCheck();
         },
         error: (error: HttpErrorResponse) => {
           console.error('Error al cerrar el ticket:', error.message);
-        },
-      });
-    }
-  }
-
+          this.cdr.markForCheck();
+        }
+      })
+    );  }
   resolveTicket(): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    this.subscriptions.add(
       this.ticketService.updateTicketStatus(ticketId, 'Resuelto', this.userRole).subscribe({
         next: () => {
           this.ticket.status = 'Resuelto';
-          this.loadTicketDetails(); // Reflejar el cambio en la vista
+          this.loadTicketDetails(ticketId); // Reflejar el cambio en la vista
+          this.cdr.markForCheck();
         },
         error: (error: HttpErrorResponse) => {
           console.error('Error al resolver el ticket:', error.message);
-        },
-      });
-    }
-  }
-
-  uncloseTicket(): void {
-    const ticketId = this.route.snapshot.paramMap.get('id');
-    if (ticketId) {
-      this.ticketService.updateTicketStatus(ticketId, 'Esperando respuesta del usuario', this.userRole).subscribe({
-        next: () => {
-          this.ticket.status = 'Esperando respuesta';
-          this.loadTicketDetails(); // Reflejar el cambio en la vista
+          this.cdr.markForCheck();
         }
-      });
-      this.ticketService.updateTicketName(ticketId, 'REABIERTO ').subscribe({
-        next: () => {
-          this.ticket.title = 'REABIERTO ' + this.ticket.name;
-          this.loadTicketDetails(); // Reflejar el cambio en la vista
-        },
-        error: (error: HttpErrorResponse) => {
-          console.error('Error al reabrir el ticket:', error.message);
-        },
-      });
+      })
+    );  }  uncloseTicket(): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
     }
+
+    // Preparar el título con prefijo REABIERTO
+    const originalTitle = this.ticket?.title || '';
+    const newTitle = originalTitle.startsWith('REABIERTO')
+      ? originalTitle
+      : 'REABIERTO ' + originalTitle;
+
+    console.log(`Reabriendo ticket #${ticketId} - Título original: "${originalTitle}" - Nuevo título: "${newTitle}"`);
+
+    // Operaciones secuenciales con switchMap de rxjs
+    this.subscriptions.add(
+      // Primero actualizamos el título
+      this.ticketService.updateTicketName(ticketId, newTitle).pipe(
+        // Registrar éxito del cambio de nombre
+        tap((response: any) => {
+          console.log('Título de ticket actualizado correctamente:', response);
+        }),
+        // Luego actualizamos el estado
+        switchMap(() => {
+          console.log(`Cambiando estado del ticket #${ticketId} a "Esperando respuesta del usuario"`);
+          return this.ticketService.updateTicketStatus(ticketId, 'Esperando respuesta del usuario', this.userRole);
+        }),
+        // Registrar éxito del cambio de estado
+        tap((response: any) => {
+          console.log('Estado de ticket actualizado correctamente:', response);
+        }),
+        // Manejo de errores mejorado
+        catchError((error: any) => {
+          console.error('Error al reabrir el ticket:', error);
+          if (error.status) {
+            console.error('Código de estado:', error.status, error.statusText);
+          }
+          if (error.error) {
+            console.error('Mensaje del servidor:', error.error);
+          }
+          this.cdr.markForCheck();
+          return of(null); // Continuar con el flujo para evitar error fatal
+        }),
+        // Asegurar que siempre se ejecute markForCheck
+        finalize(() => {
+          console.log(`Recargando detalles del ticket #${ticketId} tras la reapertura`);
+          this.loadTicketDetails(ticketId);
+          this.cdr.markForCheck();
+        })
+      ).subscribe({
+        next: (result) => {
+          if (result) {
+            console.log('Ticket reabierto con éxito');
+          }
+        },
+        error: (err) => {
+          console.error('Error en la suscripción de reapertura:', err);
+        }
+      })
+    );
   }
 
   isImage(fileName: string): boolean {
@@ -342,14 +551,29 @@ export class DetailsTicketComponent implements OnInit {
 
   getUserName(userId: string): string {
     return this.userNames.get(userId) || 'Sin Asignar';
-  }
-
-  // Devuelve la URL absoluta para un adjunto
+  }  // Devuelve la URL absoluta para un adjunto
   getAttachmentUrl(attachment: any): string {
     if (!attachment?.filepath) return '';
     if (attachment.filepath.startsWith('http')) {
       return attachment.filepath;
     }
     return `${environment.backendUrl}${attachment.filepath}`;
+  }
+
+  // Devuelve la URL para forzar descarga de un archivo
+  getDownloadUrl(attachment: any): string {
+    if (!attachment?.filepath) return '';
+    const filename = attachment.filepath.split('/').pop();
+    return `${environment.backendUrl}/download/${filename}`;
+  }
+
+  // Obtiene las iniciales del nombre de usuario para mostrar en el avatar
+  getUserInitials(name: string | undefined): string {
+    if (!name) return '?';
+    return name.split(' ')
+      .map(part => part.charAt(0))
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
   }
 }
