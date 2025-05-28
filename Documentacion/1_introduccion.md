@@ -1,8 +1,8 @@
-# PresentiTickets - Sistema de Gestión de Tickets
+# PresenTickets - Sistema de Gestión de Tickets
 
 ## Introducción
 
-PresentiTickets es una aplicación web completa diseñada para la gestión eficiente de tickets de soporte técnico en la Clínica de la Presentación. Proporciona un sistema integral para el registro, seguimiento y resolución de incidentes y solicitudes técnicas, mejorando significativamente la comunicación entre usuarios y el equipo de soporte técnico.
+PresenTickets es una aplicación web completa diseñada para la gestión eficiente de tickets de soporte técnico en la Clínica de la Presentación. Proporciona un sistema integral para el registro, seguimiento y resolución de incidentes y solicitudes técnicas, mejorando significativamente la comunicación entre usuarios y el equipo de soporte técnico.
 
 ## Características Principales
 
@@ -36,7 +36,7 @@ PresentiTickets es una aplicación web completa diseñada para la gestión efici
 
 ## Arquitectura del Sistema
 
-PresentiTickets sigue una arquitectura cliente-servidor con separación clara entre el frontend y el backend:
+PresenTickets sigue una arquitectura cliente-servidor con separación clara entre el frontend y el backend:
 
 1. **Frontend (Cliente)**: Aplicación Angular que proporciona la interfaz de usuario.
 2. **Backend (Servidor)**: API RESTful construida con Express que gestiona la lógica de negocio y el acceso a datos.

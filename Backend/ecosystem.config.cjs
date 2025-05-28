@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
       {
-        name: 'Presentickets-Backend', // Nombre de la aplicación
+        name: 'PresenTickets-Backend', // Nombre de la aplicación
         script: './server.js', // Archivo principal del backend
         env: {
           NODE_ENV: 'development', // Entorno de desarrollo

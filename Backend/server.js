@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -14,14 +14,13 @@
  */
 
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Narváez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
- * desarrollado como iniciativa personal por Diego Narváez.
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Narváez y su uso en 
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en 
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
  * 
  * Está prohibida la redistribución, modificación o uso no autorizado
@@ -61,26 +60,11 @@ const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de seguridad
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'", "http://localhost:4200"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "http://localhost:4200"],
-        styleSrc: ["'self'", "'unsafe-inline'", "http://localhost:4200"],
-        imgSrc: ["'self'", "data:", "http://localhost:4200"],
-        connectSrc: ["'self'", "ws://localhost:3000", "http://localhost:4200"],
-        fontSrc: ["'self'", "http://localhost:4200"],
-        objectSrc: ["'none'"],
-        frameSrc: ["'none'"],
-      },
-    },
-  })
-);
+// Configuración básica de seguridad
+app.use(helmet());
 
 // Configuración de CORS
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:4200').split(',');
+const allowedOrigins = (process.env.FRONTEND_URL ||'http://localhost:4200').split(',');
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -203,6 +187,17 @@ app.get('/download/:filename', async (req, res) => {
       console.error('Error al forzar descarga:', err);
       res.status(500).json({ message: 'Error al descargar el archivo' });
     }
+  });
+});
+
+// Health check endpoint (debe estar antes de las rutas API)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+    database: 'connected'
   });
 });
 

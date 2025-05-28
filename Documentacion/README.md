@@ -1,6 +1,6 @@
-# Documentación de PresentiTickets
+# Documentación de PresenTickets
 
-Este directorio contiene la documentación completa del sistema PresentiTickets, incluyendo tanto documentación técnica como legal.
+Este directorio contiene la documentación completa del sistema PresenTickets, incluyendo tanto documentación técnica como legal.
 
 ## Contenido
 
@@ -32,4 +32,4 @@ Esta documentación está diseñada para:
 
 Toda la documentación, así como el software al que hace referencia, es propiedad intelectual de Diego Sánchez. El uso, reproducción o distribución de estos documentos sin autorización está prohibido.
 
-© 2023-2025 Diego Sánchez. Todos los derechos reservados.
+© 2025 Diego Sánchez. Todos los derechos reservados.

@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -25,10 +25,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { TicketService } from '../ticket.service';
-import { AuthService } from '../auth.service';
+import { TicketService } from '../shared/services/ticket.service';
+import { AuthService } from '../shared/services/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
-import { UserService } from '../user.service';
+import { UserService } from '../shared/services/user.service';
 import { environment } from '../../environments/environment';
 import localeEs from '@angular/common/locales/es';
 import { forkJoin, map, catchError, of, finalize, Subscription, switchMap, tap } from 'rxjs';
@@ -90,7 +90,6 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       this.route.paramMap.subscribe(params => {
         const ticketId = params.get('id');
         if (ticketId) {
-          console.log('Detectado cambio de ticket ID:', ticketId);
           // Cargar datos del nuevo ticket
           this.loadTicketDetails(ticketId);
         } else {
@@ -119,7 +118,6 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
 
   // Manejador para el evento de recarga desde notificaciones del mismo ticket
   handleTicketRefresh() {
-    console.log('Recibido evento para actualizar ticket desde notificación del mismo ticket');
     const currentTicketId = this.ticket?.id;
     if (currentTicketId) {
       this.loadTicketDetails(currentTicketId.toString());
@@ -213,7 +211,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
             this.userService.getUser(userId).pipe(
               map(user => ({
                 userId,
-                username: user ? `${user.firstname} ${user.lastname}` : 'Usuario Desconocido'
+                username: user ? `${user.firstname}` : 'Usuario Desconocido'
               }))
             )
           )
@@ -464,24 +462,13 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       ? originalTitle
       : 'REABIERTO ' + originalTitle;
 
-    console.log(`Reabriendo ticket #${ticketId} - Título original: "${originalTitle}" - Nuevo título: "${newTitle}"`);
-
     // Operaciones secuenciales con switchMap de rxjs
     this.subscriptions.add(
       // Primero actualizamos el título
       this.ticketService.updateTicketName(ticketId, newTitle).pipe(
-        // Registrar éxito del cambio de nombre
-        tap((response: any) => {
-          console.log('Título de ticket actualizado correctamente:', response);
-        }),
         // Luego actualizamos el estado
         switchMap(() => {
-          console.log(`Cambiando estado del ticket #${ticketId} a "Esperando respuesta del usuario"`);
           return this.ticketService.updateTicketStatus(ticketId, 'Esperando respuesta del usuario', this.userRole);
-        }),
-        // Registrar éxito del cambio de estado
-        tap((response: any) => {
-          console.log('Estado de ticket actualizado correctamente:', response);
         }),
         // Manejo de errores mejorado
         catchError((error: any) => {
@@ -497,16 +484,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         }),
         // Asegurar que siempre se ejecute markForCheck
         finalize(() => {
-          console.log(`Recargando detalles del ticket #${ticketId} tras la reapertura`);
           this.loadTicketDetails(ticketId);
           this.cdr.markForCheck();
         })
       ).subscribe({
-        next: (result) => {
-          if (result) {
-            console.log('Ticket reabierto con éxito');
-          }
-        },
+        next: () => {},
+
         error: (err) => {
           console.error('Error en la suscripción de reapertura:', err);
         }

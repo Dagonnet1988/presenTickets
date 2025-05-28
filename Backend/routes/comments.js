@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -117,28 +117,27 @@ router.post('/:ticketId', (req, res) => {
       if (userRole === 'admin') {
         if (assignedTo) recipients.push(assignedTo);
         if (ticketUserId) recipients.push(ticketUserId);
-        notificationType = 'admin_comentario';      } else if (userRole === 'tech') {
-        if (ticketUserId) recipients.push(ticketUserId);
-        notificationType = 'comentario_tech';
-          // Actualizar estado del ticket a "Esperando respuesta del usuario" cuando un técnico envía un mensaje
-        // Solo si el estado actual no es "Cerrado" o "Resuelto"
-        if (currentStatus && currentStatus !== 'Cerrado' && currentStatus !== 'Resuelto') {
+        notificationType = 'admin_comentario'
+        } else if (userRole === 'tech') {
+          if (ticketUserId) recipients.push(ticketUserId);
+          notificationType = 'comentario_tech';
           await client.query(
             'UPDATE tickets SET status = $1 WHERE id = $2',
             ['Esperando respuesta del usuario', ticketId]
           );
-        } else {
-          console.log(`[Tech Message] NO se actualiza estado del ticket #${ticketId}. Estado actual: ${currentStatus}`);
-        }
-      } else if (userRole === 'user') {
-        await client.query(
-            'UPDATE tickets SET status = $1 WHERE id = $2',
-            ['En gestión', ticketId]
-          );
-        if (assignedTo) recipients.push(assignedTo);
-        notificationType = 'comentario_user';
-      }
-      if (notificationType && recipients.length > 0) {
+        } else if (userRole === 'user') {
+          if (currentStatus === 'Creado' || currentStatus === 'Esperando respuesta del usuario') {
+            await client.query(
+              'UPDATE tickets SET status = $1 WHERE id = $2',
+              ['En gestión', ticketId]
+            );
+            recipients.push(assignedTo);
+            notificationType = 'comentario_user';
+            } else if (currentStatus === 'Escalado a externo' || currentStatus === 'Escalado a Tier 3 / Gerente de Cuenta') {
+              recipients.push(assignedTo);
+              notificationType = 'comentario_user';
+            }
+        } if (notificationType && recipients.length > 0) {
         emitTicketNotification(notificationType, {
           ticketId,
           commentId,

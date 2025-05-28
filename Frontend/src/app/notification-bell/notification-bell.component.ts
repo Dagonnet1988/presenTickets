@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -19,8 +19,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatMenuModule } from '@angular/material/menu';
 import { Router } from '@angular/router';
-import { NotificationService, TicketNotification } from './notification.service';
-import { NotificationTypePipe } from './notification-type.pipe';
+import { NotificationService, TicketNotification } from '../shared/services/notification.service';
+import { NotificationTypePipe } from '../shared/pipes/notification-type.pipe';
 
 @Component({
   selector: 'app-notification-bell',

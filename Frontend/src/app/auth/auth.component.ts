@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -23,7 +23,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { AuthService } from '../auth.service';
+import { AuthService } from '../shared/services/auth.service';
 
 @Component({
   selector: 'app-auth',

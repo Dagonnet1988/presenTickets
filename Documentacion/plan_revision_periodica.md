@@ -1,8 +1,8 @@
-# Plan de Revisión Periódica de Derechos de Autor - PresentiTickets
+# Plan de Revisión Periódica de Derechos de Autor - PresenTickets
 
 ## Propósito
 
-Este documento establece un plan sistemático para la revisión periódica y mantenimiento de los avisos de copyright y la documentación legal asociada al sistema PresentiTickets. El objetivo es garantizar la continua protección de los derechos de propiedad intelectual de Diego Sánchez sobre el sistema.
+Este documento establece un plan sistemático para la revisión periódica y mantenimiento de los avisos de copyright y la documentación legal asociada al sistema PresenTickets. El objetivo es garantizar la continua protección de los derechos de propiedad intelectual de Diego Sánchez sobre el sistema.
 
 ## Calendario de Revisiones
 

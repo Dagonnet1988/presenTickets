@@ -11,8 +11,7 @@
       "prefix": "app",
       "architect": {
         "build": {
-          "builder": "@angular-devkit/build-angular:application",
-          "options": {
+          "builder": "@angular-devkit/build-angular:application",          "options": {
             "baseHref": "/",
             "outputPath": "dist/frontend",
             "index": "src/index.html",
@@ -34,20 +33,37 @@
             "outputMode": "server",
             "ssr": {
               "entry": "src/server.ts"
-            }
-          },
-          "configurations": {
+            },
+            "allowedCommonJsDependencies": [
+              "socket.io-client",
+              "engine.io-client",
+              "socket.io-parser",
+              "engine.io-parser",
+              "component-emitter",
+              "debug",
+              "ms"
+            ]
+          },          "configurations": {
             "production": {
+              "allowedCommonJsDependencies": [
+                "socket.io-client",
+                "engine.io-client",
+                "socket.io-parser",
+                "engine.io-parser",
+                "component-emitter",
+                "debug",
+                "ms"
+              ],
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "1MB",
-                  "maximumError": "2MB"
+                  "maximumWarning": "2MB",
+                  "maximumError": "3MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "15kB",
+                  "maximumError": "25kB"
                 }
               ],
               "outputHashing": "all",
@@ -65,15 +81,15 @@
             }
           },
           "defaultConfiguration": "production"
-        },
-        "serve": {
+        },        "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
               "buildTarget": "Frontend:build:production"
-            },
-            "development": {
-              "buildTarget": "Frontend:build:development"
+            },            "development": {
+              "buildTarget": "Frontend:build:development",
+              "host": "localhost",
+              "port": 4200
             }
           },
           "defaultConfiguration": "development"

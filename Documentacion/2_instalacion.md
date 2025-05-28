@@ -18,7 +18,7 @@
 1. **Clonar el repositorio**:
    ```powershell
    git clone <repositorio>
-   cd Presentickets/Backend
+   cd PresenTickets/Backend
    ```
 
 2. **Instalar dependencias**:
@@ -115,7 +115,7 @@
        }
 
        location / {
-           root /ruta/a/tu/frontend/dist/presentickets;
+           root /ruta/a/tu/frontend/dist/presenticketsapp;
            try_files $uri $uri/ /index.html;
        }
    }
@@ -130,7 +130,7 @@
    ```
 
 2. **Despliegue de archivos estáticos**:
-   Copiar el contenido del directorio `dist/presentickets` al directorio raíz del servidor web configurado en NGINX.
+   Copiar el contenido del directorio `dist/presenticketsapp` al directorio raíz del servidor web configurado en NGINX.
 
 ## Verificación de la Instalación
 

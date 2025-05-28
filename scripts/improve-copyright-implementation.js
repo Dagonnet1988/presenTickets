@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
  * Script mejorado para añadir automáticamente avisos de copyright a archivos específicos.
  */
@@ -34,10 +34,10 @@ const importantFiles = [
 // Avisos de copyright específicos por extensión
 const COPYRIGHT_NOTICES = {
   js: `/**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -50,10 +50,10 @@ const COPYRIGHT_NOTICES = {
 
 `,
     ts: `/**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -66,10 +66,10 @@ const COPYRIGHT_NOTICES = {
 
 `,
     html: `<!--
-  PresentiTickets - Sistema de Gestión de Tickets de Soporte
-  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
   
-  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
   desarrollado como iniciativa personal por Diego Sánchez.
   
   Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -82,10 +82,10 @@ const COPYRIGHT_NOTICES = {
 
 `,
   css: `/*
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.

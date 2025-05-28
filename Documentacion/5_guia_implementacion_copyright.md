@@ -1,6 +1,6 @@
 # Guía de Implementación de Avisos de Copyright
 
-Esta guía proporciona instrucciones detalladas para implementar los avisos de copyright en todos los archivos del sistema PresentiTickets.
+Esta guía proporciona instrucciones detalladas para implementar los avisos de copyright en todos los archivos del sistema PresenTickets.
 
 ## 1. Propósito
 
@@ -19,10 +19,10 @@ Para archivos `.js`, `.ts`, `.jsx` y `.tsx`, utilizar el siguiente formato:
 
 ```javascript
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -40,10 +40,10 @@ Para archivos `.html`, utilizar el siguiente formato:
 
 ```html
 <!--
-  PresentiTickets - Sistema de Gestión de Tickets de Soporte
-  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
   
-  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
   desarrollado como iniciativa personal por Diego Sánchez.
   
   Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -61,10 +61,10 @@ Para archivos `.css` y `.scss`, utilizar el siguiente formato:
 
 ```css
 /*
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -82,10 +82,10 @@ Para archivos `.sql`, utilizar el siguiente formato:
 
 ```sql
 /*
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  * 
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -104,14 +104,14 @@ Para archivos como `.json`, `.yaml`, `.env.example`, etc., utilizar el formato a
 Para JSON:
 ```json
 {
-  "_copyright": "PresentiTickets - Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.",
+  "_copyright": "PresenTickets - Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.",
   // Resto del contenido
 }
 ```
 
 Para YAML, ENV, etc.:
 ```
-# PresentiTickets - Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+# PresenTickets - Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
 # Uso autorizado únicamente según los términos del acuerdo de licencia.
 ```
 
@@ -128,7 +128,7 @@ Para YAML, ENV, etc.:
 
 ```html
 <div class="footer-copyright">
-  © 2023-2025 Diego Sánchez. PresentiTickets. Todos los derechos reservados.
+  © 2025 Diego Sánchez. PresenTickets. Todos los derechos reservados.
 </div>
 ```
 
@@ -177,9 +177,9 @@ Implementar una página de información legal en la aplicación con las siguient
 ### Aviso de Copyright
 
 ```
-© 2023-2025 Diego Sánchez. Todos los derechos reservados.
+© 2025 Diego Sánchez. Todos los derechos reservados.
 
-PresentiTickets es un sistema de gestión de tickets de soporte técnico desarrollado por Diego Sánchez como una iniciativa personal. El sistema, incluyendo su código fuente, diseño, estructura, lógica de negocio y documentación, es propiedad intelectual exclusiva de Diego Sánchez.
+PresenTickets es un sistema de gestión de tickets de soporte técnico desarrollado por Diego Sánchez como una iniciativa personal. El sistema, incluyendo su código fuente, diseño, estructura, lógica de negocio y documentación, es propiedad intelectual exclusiva de Diego Sánchez.
 
 El uso de este software por parte de Clínica La Presentación está autorizado mediante una licencia no exclusiva y no transferible, según los términos establecidos en el acuerdo de licencia.
 
@@ -212,4 +212,4 @@ La implementación de los avisos de copyright se realizará en las siguientes fa
 
 ---
 
-*Este documento es confidencial y para uso interno. © 2023-2025 Diego Sánchez. Todos los derechos reservados.*
+*Este documento es confidencial y para uso interno. © 2025 Diego Sánchez. Todos los derechos reservados.*

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  * 
  * Script para actualizar automáticamente el año en los avisos de copyright
  * Este script debe ejecutarse al inicio de cada año.

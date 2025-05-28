@@ -1,19 +1,19 @@
-# Notificación Formal - PresentiTickets
+# Notificación Formal - PresenTickets
 
 ## Correo Electrónico para Enviar
 
-**Asunto:** Notificación formal: Derechos de autor y licencia del sistema PresentiTickets
+**Asunto:** Notificación formal: Derechos de autor y licencia del sistema PresenTickets
 
 ```
 Estimada Dirección de Clínica La Presentación,
 
-Por medio de la presente, me dirijo a usted para formalizar la situación legal del sistema de gestión de tickets "PresentiTickets" que he desarrollado e implementado en Clínica La Presentación como parte de mi iniciativa personal para mejorar los procesos internos de la institución.
+Por medio de la presente, me dirijo a usted para formalizar la situación legal del sistema de gestión de tickets "PresenTickets" que he desarrollado e implementado en Clínica La Presentación como parte de mi iniciativa personal para mejorar los procesos internos de la institución.
 
 Como desarrollador del sistema, me gustaría clarificar los siguientes puntos importantes:
 
-1. PROPIEDAD INTELECTUAL: El sistema PresentiTickets, incluyendo su código fuente, diseño, arquitectura y documentación, es mi propiedad intelectual exclusiva. He desarrollado este sistema utilizando mis conocimientos técnicos, fuera del ámbito específico de mis responsabilidades contractuales con la Clínica.
+1. PROPIEDAD INTELECTUAL: El sistema PresenTickets, incluyendo su código fuente, diseño, arquitectura y documentación, es mi propiedad intelectual exclusiva. He desarrollado este sistema utilizando mis conocimientos técnicos, fuera del ámbito específico de mis responsabilidades contractuales con la Clínica.
 
-2. LICENCIA DE USO: Por la presente, otorgo a Clínica La Presentación una licencia no exclusiva y no transferible para utilizar el sistema PresentiTickets exclusivamente para sus operaciones internas de gestión de tickets de soporte técnico.
+2. LICENCIA DE USO: Por la presente, otorgo a Clínica La Presentación una licencia no exclusiva y no transferible para utilizar el sistema PresenTickets exclusivamente para sus operaciones internas de gestión de tickets de soporte técnico.
 
 3. TÉRMINOS DE USO: He preparado un documento formal de "Términos de Uso" que detalla las condiciones bajo las cuales se concede esta licencia, incluyendo limitaciones, garantías y condiciones de uso. Este documento requiere la revisión y firma de un representante autorizado de la Clínica.
 
@@ -33,7 +33,7 @@ Quedo atento a su respuesta para coordinar los próximos pasos.
 Atentamente,
 
 Diego Sánchez
-Desarrollador de PresentiTickets
+Desarrollador de PresenTickets
 ```
 
 ## Lista de Verificación para la Reunión

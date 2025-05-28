@@ -1,8 +1,8 @@
-# Documentación Técnica - PresentiTickets
+# Documentación Técnica - PresenTickets
 
 ## Declaración de Propiedad
 
-Este documento confirma que el sistema de gestión de tickets "PresentiTickets" es propiedad intelectual exclusiva de **Diego Sánchez**, quien lo ha desarrollado como una iniciativa personal para mejorar los procesos de soporte técnico en Clínica La Presentación.
+Este documento confirma que el sistema de gestión de tickets "PresenTickets" es propiedad intelectual exclusiva de **Diego Sánchez**, quien lo ha desarrollado como una iniciativa personal para mejorar los procesos de soporte técnico en Clínica La Presentación.
 
 **Fecha de Creación Inicial:** Enero 2023  
 **Desarrollador Principal:** Diego Sánchez  
@@ -227,7 +227,7 @@ const allowedTransitions = {
 
 ## Declaración de Derechos de Autor
 
-© Diego Sánchez 2023-2025. Todos los derechos reservados.
+© Diego Sánchez 2025. Todos los derechos reservados.
 
 Este software es propiedad intelectual exclusiva de Diego Sánchez. El uso de este software por parte de Clínica La Presentación está sujeto a los términos establecidos en el documento de "Términos de Uso" proporcionado por separado.
 

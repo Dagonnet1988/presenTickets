@@ -1,12 +1,12 @@
-# Sistema de Gestión de Tickets para Clínica - PresentiTickets
+# Sistema de Gestión de Tickets para Clínica - PresenTickets
 
-**Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.**
+**Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.**
 
 Este proyecto es una aplicación web para gestionar tickets entre usuarios internos de una clínica y técnicos. La aplicación permite a los usuarios crear, ver y actualizar tickets, mientras que los técnicos pueden gestionar y resolver los tickets asignados.
 
 ## Aviso de Propiedad Intelectual
 
-PresentiTickets es propiedad intelectual exclusiva de Diego Sánchez, quien ha desarrollado este sistema como iniciativa personal. El uso de este software por parte de Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+PresenTickets es propiedad intelectual exclusiva de Diego Sánchez, quien ha desarrollado este sistema como iniciativa personal. El uso de este software por parte de Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
 
 Está prohibida la redistribución, modificación o uso no autorizado de este código sin el consentimiento expreso por escrito del autor.
 

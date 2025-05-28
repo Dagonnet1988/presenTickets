@@ -1,4 +1,4 @@
-# PresentiTickets - Índice de Documentación
+# PresenTickets - Índice de Documentación
 
 ## Documentación Técnica
 
@@ -77,6 +77,6 @@
 
 ---
 
-**© 2023-2025 Diego Sánchez. Todos los derechos reservados.**
+**© 2025 Diego Sánchez. Todos los derechos reservados.**
 
 *Este índice y toda la documentación referenciada son propiedad intelectual de Diego Sánchez y están protegidos por leyes de copyright. El uso no autorizado está prohibido.*

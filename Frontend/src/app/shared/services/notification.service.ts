@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -17,8 +17,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, NgZone } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
-import { environment } from '../environments/environment';
+import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
+import { RefreshTicketsService } from './refresh-tickets.service';
 
 export interface TicketNotification {
   id?: number;
@@ -35,7 +36,12 @@ export class NotificationService {
   private notificationsSubject = new BehaviorSubject<TicketNotification[]>([]);
   notifications$ = this.notificationsSubject.asObservable();
 
-  constructor(private ngZone: NgZone, private authService: AuthService, private http: HttpClient) {
+  constructor(
+    private ngZone: NgZone,
+    private authService: AuthService,
+    private http: HttpClient,
+    private refreshTicketsService: RefreshTicketsService
+  ) {
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
       withCredentials: true
@@ -69,6 +75,20 @@ export class NotificationService {
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
           }, 100);
+        }        // *** NUEVA FUNCIONALIDAD: Refresh automático del home ***
+        // Si es una notificación que requiere actualización del home, refrescar la lista de tickets
+        const requiresHomeRefresh = notification.type?.includes('comentario') ||
+                                   notification.type?.includes('admin_comentario') ||
+                                   notification.type === 'cambio_estado' ||
+                                   notification.type === 'ticket_reabierto' ||
+                                   notification.type === 'ticket_asignado' ||
+                                   notification.type === 'nuevo_ticket';
+
+        if (requiresHomeRefresh) {
+          // Refrescar lista de tickets con un pequeño delay para asegurar que el backend terminó de procesar
+          setTimeout(() => {
+            this.refreshTicketsService.triggerRefresh();
+          }, 300);
         }
 
         // Actualizar la UI inmediatamente

@@ -1,6 +1,6 @@
 # Instrucciones para Implementación de Protección de Propiedad Intelectual
 
-Este documento proporciona instrucciones detalladas para la implementación completa de las medidas de protección de propiedad intelectual en el sistema PresentiTickets. Estas instrucciones están dirigidas al personal técnico responsable de la implementación.
+Este documento proporciona instrucciones detalladas para la implementación completa de las medidas de protección de propiedad intelectual en el sistema PresenTickets. Estas instrucciones están dirigidas al personal técnico responsable de la implementación.
 
 ## Paso 1: Implementación de Avisos de Copyright en el Código
 
@@ -9,7 +9,7 @@ Este documento proporciona instrucciones detalladas para la implementación comp
 Se ha desarrollado un script que automatiza la implementación de avisos de copyright en los archivos clave del sistema. Para ejecutarlo:
 
 ```powershell
-cd "c:\Users\SISTEMAS3\Documents\Diego\Presentickets"
+cd "c:\Users\SISTEMAS3\Documents\Diego\PresenTickets"
 node scripts/improve-copyright-implementation.js
 ```
 
@@ -36,7 +36,7 @@ Después de ejecutar el script, realizar una revisión manual para verificar la 
 ### 1.3 Inclusión en Archivos Nuevos
 
 Para todos los nuevos archivos que se creen, se debe incluir el aviso de copyright correspondiente. Usar como referencia las plantillas en:
-`c:\Users\SISTEMAS3\Documents\Diego\Presentickets\Documentacion\copyright_headers.js`
+`c:\Users\SISTEMAS3\Documents\Diego\PresenTickets\Documentacion\copyright_headers.js`
 
 ## Paso 2: Implementación del Componente "Acerca de"
 
@@ -70,15 +70,15 @@ Se ha creado un componente de pie de página que incluye información de copyrig
 Los siguientes documentos legales deben estar disponibles para referencia:
 
 1. **Términos de Uso**:
-   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\Presentickets\Documentacion\terminos_de_uso.md`
+   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\PresenTickets\Documentacion\terminos_de_uso.md`
    - Este documento debe ser convertido a PDF y estar disponible para consulta
 
 2. **Documentación Técnica con Declaración de Propiedad**:
-   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\Presentickets\Documentacion\3_documentacion_tecnica.md`
+   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\PresenTickets\Documentacion\3_documentacion_tecnica.md`
    - Debe mantenerse actualizada con cada cambio significativo en el sistema
 
 3. **Guía de Implementación de Copyright**:
-   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\Presentickets\Documentacion\5_guia_implementacion_copyright.md`
+   - Archivo: `c:\Users\SISTEMAS3\Documents\Diego\PresenTickets\Documentacion\5_guia_implementacion_copyright.md`
    - Este documento debe compartirse con todos los desarrolladores del proyecto
 
 ## Paso 5: Comunicación Formal a la Dirección
@@ -86,7 +86,7 @@ Los siguientes documentos legales deben estar disponibles para referencia:
 Para formalizar la propiedad intelectual del sistema, es necesario comunicarlo oficialmente a la dirección de la Clínica:
 
 1. **Envío de Comunicación**:
-   - Utilizar la plantilla en `c:\Users\SISTEMAS3\Documents\Diego\Presentickets\Documentacion\4_plantillas_comunicacion.md`
+   - Utilizar la plantilla en `c:\Users\SISTEMAS3\Documents\Diego\PresenTickets\Documentacion\4_plantillas_comunicacion.md`
    - Personalizar con los datos correspondientes y convertir a formato formal
    - Incluir los documentos de Términos de Uso y Documentación Técnica como anexos
 

@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -247,7 +247,7 @@ router.post("/", (req, res) => {
 // Actualizar un ticket
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
-  const { priority, assigned_to, status, name } = req.body;
+  const { priority, assigned_to, status, name, actorRole } = req.body;
 
   // Validar que el ID sea un número entero
   if (isNaN(parseInt(id, 10))) {
@@ -396,46 +396,39 @@ router.patch("/:id", async (req, res) => {
               console.log(
                 `No se pudo enviar notificación: técnico no asignado para ticket #${id}`
               );
-            }
-          } // Si es "Esperando respuesta del usuario" - verificar si es una reapertura por el usuario
+            }          } // Si es "Esperando respuesta del usuario" - verificar si es una reapertura
           else if (status === "Esperando respuesta del usuario") {
-            // Si hay un técnico asignado y el ticket estaba cerrado o resuelto, notificar como reapertura
-            if (assigned_to && prevStatus === "Resuelto") {
-              // Cambiar el tipo y mensaje para reflejar la reapertura por el usuario
-              notificationType = "ticket_reabierto";
-              notificationMessage = `${ticketTitle}: ha sido reabierto`;
-
-              // Crear notificación en la base de datos
-              await createNotification({
-                user_id: assigned_to,
-                type: notificationType,
-                message: notificationMessage,
-                ticket_id: id,
-              });
-
-              // Emitir notificación en tiempo real
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                [assigned_to]
-              );
-            } else if (prevStatus === "Cerrado") {
-              notificationType = "ticket_reabierto";
-              notificationMessage = `${ticketTitle}: ha sido reabierto`;
+            // Si hay un técnico asignado y el ticket estaba cerrado o resuelto, es una reapertura
+            if (assigned_to && (prevStatus === "Resuelto" || prevStatus === "Cerrado")) {
+              // Determinar quién está reabriendo el ticket basado en el rol del usuario autenticado
+              const currentUserRole = req.user?.role; // Obtener el rol del usuario autenticado
               
-              if (user_id) {
+              notificationType = "ticket_reabierto";
+              
+              // Determinar el destinatario y mensaje según quién reabre el ticket
+              let recipientId = null;
+              
+              if (currentUserRole === "user") {
+                // Usuario reabre el ticket -> notificar al técnico asignado
+                recipientId = assigned_to;
+                notificationMessage = `${ticketTitle}: ha sido reabierto por el usuario`;
+              } else if (currentUserRole === "tech" || currentUserRole === "admin") {
+                // Técnico/Admin reabre el ticket -> notificar al usuario creador
+                recipientId = user_id;
+                notificationMessage = `${ticketTitle}: ha sido reabierto por soporte técnico`;
+              }
+              
+              // Solo crear notificación si hay un destinatario válido
+              if (recipientId) {
+                // Crear notificación en la base de datos
                 await createNotification({
-                  user_id: user_id,
+                  user_id: recipientId,
                   type: notificationType,
                   message: notificationMessage,
                   ticket_id: id,
                 });
 
+                // Emitir notificación en tiempo real
                 emitTicketNotification(
                   notificationType,
                   {
@@ -444,7 +437,7 @@ router.patch("/:id", async (req, res) => {
                     createdAt: new Date(),
                     message: notificationMessage,
                   },
-                  [user_id]
+                  [recipientId]
                 );
               }
             }

@@ -1,8 +1,8 @@
 /**
- * PresentiTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -15,10 +15,10 @@
 
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { BannerComponent } from './banner/banner.component';
-import { SidebarComponent } from './sidebar/sidebar.component';
+import { BannerComponent } from '../../banner/banner.component';
+import { SidebarComponent } from '../../sidebar/sidebar.component';
 import { CommonModule } from '@angular/common';
-import { FooterComponent } from './footer/footer.component';
+import { FooterComponent } from '../../footer/footer.component';
 
 @Component({
   selector: 'app-main-layout',

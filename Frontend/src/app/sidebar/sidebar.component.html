@@ -1,8 +1,8 @@
 <!--
-  PresentiTickets - Sistema de Gestión de Tickets de Soporte
-  Copyright (c) 2023-2025 Diego Sánchez. Todos los derechos reservados.
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
 
-  Este archivo es parte de PresentiTickets, un sistema de gestión de tickets
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
   desarrollado como iniciativa personal por Diego Sánchez.
 
   Uso autorizado únicamente según los términos del acuerdo de licencia.
@@ -81,7 +81,9 @@
     >
       <mat-icon class="nav-icon">group</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Gestionar Usuarios</span>
-    </a>    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
+    </a>
+
+    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
     <a
       mat-list-item
       routerLink="/profile"
@@ -97,10 +99,11 @@
     <!-- Enlace para "Acerca de" (todos los usuarios) -->
     <a
       mat-list-item
+      *ngIf="userRole === 'admin'"
       routerLink="/about"
       routerLinkActive="active-link"
       [routerLinkActiveOptions]="{ exact: true }"
-      aria-label="Acerca de PresentiTickets"
+      aria-label="Acerca de PresenTickets"
       class="nav-item"
     >
       <mat-icon class="nav-icon">info</mat-icon>

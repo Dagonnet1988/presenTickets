@@ -1,21 +1,21 @@
-# Plantillas de Comunicación - PresentiTickets
+# Plantillas de Comunicación - PresenTickets
 
-Este documento contiene plantillas profesionales para comunicar formalmente a Clínica La Presentación los términos de licencia y uso del sistema PresentiTickets.
+Este documento contiene plantillas profesionales para comunicar formalmente a Clínica La Presentación los términos de licencia y uso del sistema PresenTickets.
 
 ## Correo Electrónico Formal - Notificación de Derechos de Autor
 
-**Asunto:** Notificación formal: Derechos de autor y licencia del sistema PresentiTickets
+**Asunto:** Notificación formal: Derechos de autor y licencia del sistema PresenTickets
 
 ```
 Estimado/a [Nombre del Director/a de Tecnología/Administrador/a],
 
-Por medio de la presente, me dirijo a usted para formalizar la situación legal del sistema de gestión de tickets "PresentiTickets" que he desarrollado e implementado en Clínica La Presentación como parte de mi iniciativa personal para mejorar los procesos internos de la institución.
+Por medio de la presente, me dirijo a usted para formalizar la situación legal del sistema de gestión de tickets "PresenTickets" que he desarrollado e implementado en Clínica La Presentación como parte de mi iniciativa personal para mejorar los procesos internos de la institución.
 
 Como desarrollador del sistema, me gustaría clarificar los siguientes puntos importantes:
 
-1. PROPIEDAD INTELECTUAL: El sistema PresentiTickets, incluyendo su código fuente, diseño, arquitectura y documentación, es mi propiedad intelectual exclusiva. He desarrollado este sistema utilizando mis conocimientos técnicos, fuera del ámbito específico de mis responsabilidades contractuales con la Clínica.
+1. PROPIEDAD INTELECTUAL: El sistema PresenTickets, incluyendo su código fuente, diseño, arquitectura y documentación, es mi propiedad intelectual exclusiva. He desarrollado este sistema utilizando mis conocimientos técnicos, fuera del ámbito específico de mis responsabilidades contractuales con la Clínica.
 
-2. LICENCIA DE USO: Por la presente, otorgo a Clínica La Presentación una licencia no exclusiva y no transferible para utilizar el sistema PresentiTickets exclusivamente para sus operaciones internas de gestión de tickets de soporte técnico.
+2. LICENCIA DE USO: Por la presente, otorgo a Clínica La Presentación una licencia no exclusiva y no transferible para utilizar el sistema PresenTickets exclusivamente para sus operaciones internas de gestión de tickets de soporte técnico.
 
 3. TÉRMINOS DE USO: He preparado un documento formal de "Términos de Uso" que detalla las condiciones bajo las cuales se concede esta licencia, incluyendo limitaciones, garantías y condiciones de uso. Este documento requiere la revisión y firma de un representante autorizado de la Clínica.
 
@@ -35,7 +35,7 @@ Quedo atento a su respuesta para coordinar los próximos pasos.
 Atentamente,
 
 Diego Sánchez
-Desarrollador de PresentiTickets
+Desarrollador de PresenTickets
 [Contacto]
 ```
 
@@ -49,15 +49,15 @@ Desarrollador de PresentiTickets
 Clínica La Presentación
 [Dirección]
 
-Asunto: Declaración formal de propiedad intelectual - Sistema PresentiTickets
+Asunto: Declaración formal de propiedad intelectual - Sistema PresenTickets
 
 Estimado/a [Nombre]:
 
-Por medio de la presente comunicación formal, yo, Diego Sánchez, deseo dejar constancia escrita sobre la propiedad intelectual del sistema de gestión de tickets denominado "PresentiTickets", actualmente en uso en las instalaciones de Clínica La Presentación.
+Por medio de la presente comunicación formal, yo, Diego Sánchez, deseo dejar constancia escrita sobre la propiedad intelectual del sistema de gestión de tickets denominado "PresenTickets", actualmente en uso en las instalaciones de Clínica La Presentación.
 
 DECLARACIÓN DE HECHOS:
 
-1. Soy el creador y desarrollador exclusivo del sistema PresentiTickets, una aplicación web diseñada para la gestión de tickets de soporte técnico.
+1. Soy el creador y desarrollador exclusivo del sistema PresenTickets, una aplicación web diseñada para la gestión de tickets de soporte técnico.
 
 2. He desarrollado este sistema por iniciativa propia, utilizando mis conocimientos y habilidades técnicas, y sin que esto formara parte de mis obligaciones contractuales específicas como [cargo] en la institución.
 
@@ -69,7 +69,7 @@ DECLARACIÓN DE PROPIEDAD:
 
 Por lo anterior, declaro formalmente que:
 
-1. Soy el único y exclusivo propietario de todos los derechos de autor y propiedad intelectual asociados con el sistema PresentiTickets, incluyendo pero no limitado a su código fuente, diseño, arquitectura, algoritmos y documentación.
+1. Soy el único y exclusivo propietario de todos los derechos de autor y propiedad intelectual asociados con el sistema PresenTickets, incluyendo pero no limitado a su código fuente, diseño, arquitectura, algoritmos y documentación.
 
 2. La implementación y uso actual del sistema por parte de Clínica La Presentación se realiza bajo una licencia de uso no exclusiva, según se detalla en el documento de "Términos de Uso" adjunto.
 
@@ -89,7 +89,7 @@ Atentamente,
 
 ________________________
 Diego Sánchez
-Desarrollador de PresentiTickets
+Desarrollador de PresenTickets
 [Información de contacto]
 
 
@@ -105,10 +105,10 @@ En representación de Clínica La Presentación
 
 **DE:** Diego Sánchez  
 **PARA:** Departamento de Sistemas  
-**ASUNTO:** Implementación de avisos de copyright en el sistema PresentiTickets  
+**ASUNTO:** Implementación de avisos de copyright en el sistema PresenTickets  
 **FECHA:** [Fecha]
 
-Por medio del presente memorando, informo que como parte de la formalización de la propiedad intelectual del sistema PresentiTickets, se procederá a la implementación de avisos de copyright en el código fuente y en las interfaces de usuario del sistema.
+Por medio del presente memorando, informo que como parte de la formalización de la propiedad intelectual del sistema PresenTickets, se procederá a la implementación de avisos de copyright en el código fuente y en las interfaces de usuario del sistema.
 
 Esta acción es necesaria para proteger adecuadamente los derechos de autor del sistema, según lo establecido en la legislación de propiedad intelectual vigente y en los términos de licencia que han sido comunicados formalmente a la dirección de la Clínica.
 
@@ -133,4 +133,4 @@ Agradezco su atención y colaboración. Quedo a disposición para resolver cualq
 Atentamente,
 
 Diego Sánchez  
-Desarrollador de PresentiTickets
+Desarrollador de PresenTickets

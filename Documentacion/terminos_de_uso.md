@@ -1,12 +1,12 @@
-# Términos de Uso - PresentiTickets
+# Términos de Uso - PresenTickets
 
 ## 1. Introducción
 
-Este documento establece los términos y condiciones de uso del sistema de gestión de tickets "PresentiTickets", en adelante "el Software", desarrollado por Diego Sánchez, en adelante "el Desarrollador".
+Este documento establece los términos y condiciones de uso del sistema de gestión de tickets "PresenTickets", en adelante "el Software", desarrollado por Diego Sánchez, en adelante "el Desarrollador".
 
 ## 2. Propiedad Intelectual
 
-PresentiTickets, incluyendo pero no limitado a su código fuente, estructura, organización, diseño, algoritmos, interfaces, documentación y todos los demás componentes del software, es propiedad intelectual exclusiva del Desarrollador. Todos los derechos de autor, patentes, secretos comerciales y otros derechos de propiedad intelectual relacionados con el Software pertenecen exclusivamente al Desarrollador.
+PresenTickets, incluyendo pero no limitado a su código fuente, estructura, organización, diseño, algoritmos, interfaces, documentación y todos los demás componentes del software, es propiedad intelectual exclusiva del Desarrollador. Todos los derechos de autor, patentes, secretos comerciales y otros derechos de propiedad intelectual relacionados con el Software pertenecen exclusivamente al Desarrollador.
 
 ## 3. Licencia de Uso
 
@@ -70,7 +70,7 @@ Fecha: ________________________
 
 ________________________
 Diego Sánchez
-Desarrollador de PresentiTickets
+Desarrollador de PresenTickets
 
 **La Clínica:**
 
