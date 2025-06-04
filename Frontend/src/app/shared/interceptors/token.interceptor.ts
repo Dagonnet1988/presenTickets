@@ -15,19 +15,23 @@
 
 import { inject } from '@angular/core';
 import { HttpInterceptorFn } from '@angular/common/http';
+import { AuthService } from '../services/auth.service';
 
 export const tokenInterceptor: HttpInterceptorFn = (req, next) => {
-  // Obtener token del localStorage
-  const token = localStorage.getItem('token');
+  const authService = inject(AuthService);
 
-  // Si existe token y la petición no es a la ruta de login, añadir Authorization header
-  if (token && !req.url.includes('/auth/login')) {
-    const authReq = req.clone({
-      setHeaders: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    return next(authReq);
+  // Verificar si el usuario está logueado y el token es válido
+  if (authService.isLoggedIn() && !req.url.includes('/auth/login')) {
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      const authReq = req.clone({
+        setHeaders: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return next(authReq);
+    }
   }
 
   return next(req);

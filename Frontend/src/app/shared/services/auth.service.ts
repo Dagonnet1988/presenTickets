@@ -58,16 +58,35 @@ export class AuthService {
       })
     );
   }
-
   // Verificar si el usuario está autenticado
   isLoggedIn(): boolean {
     if (this.isLocalStorageAvailable()) {
       const token = localStorage.getItem('token');
-      // Basic check: token exists and is not expired (optional: decode and check exp)
-      return !!token;
+      if (!token) {
+        return false;
+      }
+
+      try {
+        // Decodificar el JWT para verificar su expiración
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const currentTime = Math.floor(Date.now() / 1000); // Tiempo actual en segundos
+
+        // Verificar si el token ha expirado
+        if (payload.exp && payload.exp < currentTime) {
+          console.log('Token expirado, removiendo del localStorage');
+          localStorage.removeItem('token');
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.error('Error al decodificar el token:', e);
+        localStorage.removeItem('token'); // Remover token malformado
+        return false;
+      }
     }
     return false;
-  }  // Obtener el userId del usuario autenticado (from token if needed)
+  }// Obtener el userId del usuario autenticado (from token if needed)
   getUserId(): string | null {
     if (this.isLocalStorageAvailable()) {
       const token = localStorage.getItem('token');
@@ -120,6 +139,45 @@ export class AuthService {
   logout(): void {
     if (this.isLocalStorageAvailable()) {
       localStorage.removeItem('token');
+    }
+  }
+
+  // Verificar si un token es válido (no expirado)
+  private isTokenValid(token: string): boolean {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      return payload.exp && payload.exp > currentTime;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Obtener información del token (incluyendo tiempo de expiración)
+  getTokenInfo(): { isValid: boolean; expiresAt: Date | null; timeLeft: number } | null {
+    if (!this.isLocalStorageAvailable()) {
+      return null;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      const expiresAt = payload.exp ? new Date(payload.exp * 1000) : null;
+      const timeLeft = payload.exp ? Math.max(0, payload.exp - currentTime) : 0;
+
+      return {
+        isValid: this.isTokenValid(token),
+        expiresAt,
+        timeLeft
+      };
+    } catch (e) {
+      console.error('Error al obtener información del token:', e);
+      return null;
     }
   }
 

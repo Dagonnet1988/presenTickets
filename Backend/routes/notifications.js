@@ -15,30 +15,12 @@
 
 import express from 'express';
 import { pool } from '../server.js';
-import jwt from 'jsonwebtoken';
+import { authMiddleware } from './auth.js';
 
 const router = express.Router();
 
-// Middleware para autenticar JWT
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) {
-    console.log('NO TOKEN PRESENT');
-    return res.sendStatus(401);
-  }
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      console.log('JWT VERIFY ERROR:', err);
-      return res.sendStatus(403);
-    }
-    req.user = user;
-    next();
-  });
-}
-
 // Obtener notificaciones no leídas del usuario
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
@@ -53,7 +35,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Marcar notificación como leída
-router.post('/read/:id', authenticateToken, async (req, res) => {
+router.post('/read/:id', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const notificationId = req.params.id;
@@ -69,7 +51,7 @@ router.post('/read/:id', authenticateToken, async (req, res) => {
 });
 
 // Eliminar todas las notificaciones leídas del usuario autenticado
-router.delete('/read/all', authenticateToken, async (req, res) => {
+router.delete('/read/all', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     await pool.query('DELETE FROM notifications WHERE user_id = $1 AND is_read = true', [userId]);
@@ -80,7 +62,7 @@ router.delete('/read/all', authenticateToken, async (req, res) => {
 });
 
 // Eliminar una notificación por ID (solo si pertenece al usuario autenticado)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const notificationId = req.params.id;
