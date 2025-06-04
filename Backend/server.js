@@ -13,20 +13,6 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-/**
- * PresenTickets - Sistema de Gestión de Tickets de Soporte * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
- * 
- * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
- * desarrollado como iniciativa personal por Diego Sánchez.
- * 
- * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Sánchez y su uso en 
- * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
- * 
- * Está prohibida la redistribución, modificación o uso no autorizado
- * de este código sin el consentimiento expreso por escrito del autor.
- */
-
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -40,6 +26,7 @@ import ticketRoutes from './routes/tickets.js';
 import userRoutes from './routes/users.js';
 import commentRoutes from './routes/comments.js';
 import notificationRoutes from './routes/notifications.js';
+import analyticsRoutes from './routes/analytics.js';
 import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -64,22 +51,92 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 
 // Configuración de CORS
-const allowedOrigins = (process.env.FRONTEND_URL ||'http://localhost:4200').split(',');
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+const allowedOrigins = [
+  frontendUrl,
+  'http://192.162.2.5',
+  'http://192.162.2.5:80',
+  'http://localhost:4200',
+  'http://localhost:80',
+  'file://' // Para páginas de prueba locales
+];
+
+// Middleware básico de logging
+app.use((req, res, next) => {
+  next();
+});
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('No permitido por CORS'));
+    // Permitir solicitudes sin origen (por ejemplo, desde aplicaciones móviles o Postman)
+    if (!origin) {
+      return callback(null, true);
     }
+    
+    // Verificar si el origen está en la lista permitida
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error(`CORS: Origen ${origin} no permitido`));
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Algunos navegadores legacy (IE11, varios SmartTVs) interpretan el estado 204 como error
 }));
 
-// Middleware para procesar JSON y datos de formularios
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Middleware para procesar JSON y datos de formularios (SOLO si NO es multipart/form-data)
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+    // Si es multipart/form-data, saltar el parsing de Express y dejar que formidable lo maneje
+  if (contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  
+  // Para todo lo demás, usar los parsers de Express
+  express.json({ limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  
+  // Solo procesar con urlencoded si NO es multipart/form-data
+  if (!contentType.includes('multipart/form-data')) {
+    express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+  } else {
+    next();
+  }
+});
+
+// Middleware específico para manejar errores de parsing
+app.use((err, req, res, next) => {
+  const localTime = new Date().toLocaleString('es-CO', { 
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') {
+    console.error(`❌ [${localTime}] Error de parsing:`, {
+      type: err.type,
+      message: err.message,
+      method: req.method,
+      url: req.url,
+      contentType: req.headers['content-type']
+    });
+    return res.status(400).json({ 
+      error: 'Error al procesar la solicitud', 
+      details: err.message 
+    });
+  }
+  
+  next(err);
+});
 
 // Configuración del directorio de subida
 const uploadDir = path.join(path.resolve(), 'uploads');
@@ -206,6 +263,7 @@ app.use('/api/tickets', authMiddleware, ticketRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/comments', authMiddleware, commentRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
+app.use('/api/analytics', authMiddleware, analyticsRoutes);
 // Rutas públicas
 app.use('/api/auth', authRoutes);
 
@@ -216,8 +274,40 @@ app.use((req, res, next) => {
 
 // Manejo de errores globales
 app.use((err, req, res, next) => {
-  console.error('Error global:', err);
-  res.status(500).json({ message: 'Error interno del servidor' });
+  const localTime = new Date().toLocaleString('es-CO', { 
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  console.error(`❌ [${localTime}] ERROR GLOBAL:`, {
+    message: err.message,
+    stack: err.stack,
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body ? 'Presente' : 'Ausente'
+  });
+  
+  // Si es un error CORS, no reiniciar el servidor
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ 
+      error: 'Error de CORS', 
+      message: err.message 
+    });
+  }
+  
+  // Para otros errores, enviar respuesta genérica
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      timestamp: localTime
+    });
+  }
 });
 
 // --- SOCKET.IO para notificaciones en tiempo real ---
@@ -300,5 +390,47 @@ cron.schedule('0 2 * * *', async () => {
 checkAndCreateTables().then(() => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
+  });
+});
+
+// Manejo de errores no capturados para evitar crashes
+process.on('uncaughtException', (err) => {
+  const localTime = new Date().toLocaleString('es-CO', { 
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  console.error(`💥 [${localTime}] EXCEPCIÓN NO CAPTURADA:`, {
+    message: err.message,
+    stack: err.stack,
+    name: err.name
+  });
+  
+  // No terminar el proceso inmediatamente, dar tiempo para log
+  setTimeout(() => {
+    console.error(`⚠️ [${localTime}] Reiniciando servidor debido a error crítico...`);
+    process.exit(1);
+  }, 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  const localTime = new Date().toLocaleString('es-CO', { 
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  console.error(`🚫 [${localTime}] PROMESA RECHAZADA NO MANEJADA:`, {
+    reason: reason,
+    promise: promise
   });
 });

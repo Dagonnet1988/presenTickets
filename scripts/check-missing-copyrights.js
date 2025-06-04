@@ -22,7 +22,14 @@ const EXCLUDE_DIRS = [
   '.git',
   'coverage',
   'uploads',
-  'temp'
+  'temp',
+  '.angular',
+  '.vscode',
+  '.idea',
+  'build',
+  'logs',
+  '.cache',
+  'public'
 ];
 
 // Extensiones de archivo a verificar
@@ -52,12 +59,17 @@ async function traverseDirectory(dirPath) {
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry);
       const entryStat = await stat(fullPath);
-      
-      // Excluir directorios especificados
-      if (entryStat.isDirectory() && !EXCLUDE_DIRS.includes(entry)) {
-        const subResults = await traverseDirectory(fullPath);
-        filesProcessed += subResults.filesProcessed;
-        filesMissingCopyright = filesMissingCopyright.concat(subResults.filesMissingCopyright);
+        // Excluir directorios especificados - verificar tanto el nombre como la ruta completa
+      if (entryStat.isDirectory()) {
+        const shouldExclude = EXCLUDE_DIRS.some(excludeDir => 
+          entry === excludeDir || fullPath.includes(path.sep + excludeDir + path.sep) || fullPath.endsWith(path.sep + excludeDir)
+        );
+        
+        if (!shouldExclude) {
+          const subResults = await traverseDirectory(fullPath);
+          filesProcessed += subResults.filesProcessed;
+          filesMissingCopyright = filesMissingCopyright.concat(subResults.filesMissingCopyright);
+        }
       } else if (entryStat.isFile()) {
         const ext = path.extname(fullPath).substring(1).toLowerCase();
         

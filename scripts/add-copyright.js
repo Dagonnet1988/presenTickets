@@ -22,7 +22,14 @@ const EXCLUDE_DIRS = [
   '.git',
   'coverage',
   'uploads',
-  'temp'
+  'temp',
+  '.angular',
+  '.vscode',
+  '.idea',
+  'build',
+  'logs',
+  '.cache',
+  'public'
 ];
 
 // Extensiones de archivo y sus correspondientes avisos de copyright
@@ -182,11 +189,16 @@ async function processDirectory(dirPath, results = { processed: 0, modified: 0 }
     
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
-      
-      // Saltear directorios excluidos
-      if (entry.isDirectory() && !EXCLUDE_DIRS.includes(entry.name)) {
-        await processDirectory(fullPath, results);
-      } 
+        // Saltear directorios excluidos - verificar tanto el nombre como la ruta completa
+      if (entry.isDirectory()) {
+        const shouldExclude = EXCLUDE_DIRS.some(excludeDir => 
+          entry.name === excludeDir || fullPath.includes(path.sep + excludeDir + path.sep) || fullPath.endsWith(path.sep + excludeDir)
+        );
+        
+        if (!shouldExclude) {
+          await processDirectory(fullPath, results);
+        }
+      }
       else if (entry.isFile()) {
         const ext = path.extname(entry.name).substring(1).toLowerCase();
         if (EXT_MAP[ext]) {

@@ -23,6 +23,7 @@ import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/
 import { MatPaginatorIntl } from '@angular/material/paginator';
 import { CustomPaginatorIntl } from './shared/services/custom-paginator-intl';
 import { authInterceptor } from './shared/interceptors/auth-interceptor';
+import { tokenInterceptor } from './shared/interceptors/token.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -32,10 +33,9 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(withEventReplay()),
     importProvidersFrom(
       BrowserAnimationsModule
-    ),
-    provideHttpClient(
+    ),    provideHttpClient(
       withFetch(),
-      withInterceptors([authInterceptor])
+      withInterceptors([tokenInterceptor, authInterceptor])
     )
   ]
 };

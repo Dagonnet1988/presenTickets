@@ -45,16 +45,17 @@ export class TicketService {
   getComments(ticketId: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.apiUrlComments}/${ticketId}`, { headers: this.getAuthHeaders() });
   }
-
   createTicket(ticketData: FormData): Observable<any> {
-    return this.http.post<any>(this.apiUrl, ticketData, { headers: this.getAuthHeaders() });
+    // Para FormData, dejamos que el interceptor agregue automáticamente el token
+    return this.http.post<any>(this.apiUrl, ticketData);
   }
-
   sendMessage(ticketId: string, formData: FormData): Observable<any> {
-    return this.http.post<any>(`${this.apiUrlComments}/${ticketId}`, formData, { headers: this.getAuthHeaders() });
+    // Para FormData, dejamos que el interceptor agregue automáticamente el token
+    // No agregamos Content-Type porque el navegador lo hace automáticamente para FormData
+    return this.http.post<any>(`${this.apiUrlComments}/${ticketId}`, formData);
   }
-
   updateTicketStatus(ticketId: string, status: string, actorRole: string): Observable<any> {
+    console.log(`🌐 TicketService: Enviando PATCH a /tickets/${ticketId}`, { status, actorRole });
     return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, { status, actorRole }, { headers: this.getAuthHeaders() });
   }
 

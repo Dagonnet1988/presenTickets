@@ -6,20 +6,9 @@
       "cwd": "/var/www/presentickets/Backend",
       "env": {
         "NODE_ENV": "development"
-      },      "env_production": {
-        "NODE_ENV": "production",
-        "PORT": 3000,
-        "DB_HOST": "192.162.2.5",
-        "DB_USER": "postgres",
-        "DB_NAME": "presentickets",
-        "DB_PASSWORD": "postgres",
-        "DB_PORT": 5432,
-        "DB_SSL": false,
-        "BASE_URL": "http://192.162.2.5:3000",
-        "FRONTEND_URL": "http://192.162.2.5",
-        "JWT_SECRET": "supersecreto123",
-        "UPLOAD_PATH": "/var/www/presentickets-backend/uploads",
-        "LOG_LEVEL": "info"
+      },
+      "env_production": {
+        "NODE_ENV": "production"
       },
       "instances": 1,
       "exec_mode": "fork",

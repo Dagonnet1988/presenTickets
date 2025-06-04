@@ -41,17 +41,18 @@ import { EditUserComponent } from './edit-user/edit-user.component';
 import { LoginGuard } from './shared/guards/login.guard';
 import { MainLayoutComponent } from './shared/components/main-layout.component';
 import { AboutComponent } from './about/about.component';
+import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 
 export const routes: Routes = [
   {
     path: '',
     component: MainLayoutComponent,
     canActivate: [AuthGuard],
-    children: [
-      { path: '', component: HomeComponent, pathMatch: 'full'},
+    children: [      { path: '', component: HomeComponent, pathMatch: 'full'},
       { path: 'profile', component: ProfileComponent },
       { path: 'create-ticket', component: CreateTicketComponent },
       { path: 'ticket/:id', component: DetailsTicketComponent },
+      { path: 'admin-dashboard', component: AdminDashboardComponent },
       { path: 'create-user', component: CreateUserComponent },
       { path: 'manage-users', component: ManageUsersComponent },
       { path: 'edit-user/:id', component: EditUserComponent },

@@ -22,22 +22,25 @@ import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { SessionExpiredDialogComponent } from '../components/session-expired-dialog.component';
 
+// Variable global para controlar si ya se está manejando la expiración de sesión
+let isHandlingSessionExpired = false;
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const router = inject(Router);
   const dialog = inject(MatDialog);
 
-  // Variable para evitar mostrar múltiples diálogos
-  let isDialogOpen = false;
-
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Si es error 401 (No autorizado) o 403 (Prohibido)
-      if ((error.status === 401 || error.status === 403) && !isDialogOpen) {
+      // Si es error 401 (No autorizado) o 403 (Prohibido) y no se está manejando ya
+      if ((error.status === 401 || error.status === 403) && !isHandlingSessionExpired) {
         console.log('Token expirado o inválido - Código:', error.status);
 
-        // Evitar mostrar múltiples diálogos
-        isDialogOpen = true;
+        // Marcar que se está manejando la expiración de sesión
+        isHandlingSessionExpired = true;
+
+        // Cerrar sesión inmediatamente
+        authService.logout();
 
         // Mostrar diálogo de sesión expirada
         const dialogRef = dialog.open(SessionExpiredDialogComponent, {
@@ -48,12 +51,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
         // Cuando se cierre el diálogo, redirigir a login
         dialogRef.afterClosed().subscribe(() => {
-          // Cerrar sesión y redirigir al login
-          authService.logout();
           router.navigate(['/auth'], {
             queryParams: { expired: 'true' }
           });
-          isDialogOpen = false;
+          // Reset el flag después de un pequeño delay
+          setTimeout(() => {
+            isHandlingSessionExpired = false;
+          }, 1000);
         });
       }
 

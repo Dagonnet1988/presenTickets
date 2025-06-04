@@ -314,9 +314,9 @@ router.patch("/:id", async (req, res) => {
   values.push(parseInt(id, 10));
   const client = await pool.connect();
   try {
-    await client.query(query, values);
-    // Si hay cambio de estado, obtener datos necesarios para las notificaciones
+    await client.query(query, values);    // Si hay cambio de estado, obtener datos necesarios para las notificaciones
     if (status) {
+      
       try {
         // Obtener detalles del ticket y destinatarios para notificaciones
         const ticketResult = await client.query(
@@ -332,14 +332,13 @@ router.patch("/:id", async (req, res) => {
           let notificationMessage = `${ticketTitle}: estado cambiado a ${status}`;
 
           // Determinar los destinatarios según el estado
-          let recipients = [];
-
-          // Si es "Escalado a externo" o "Escalado a Tier3" o "Resuelto" - notificar al usuario
+          let recipients = [];// Si es "Escalado a externo" o "Escalado a Tier3" o "Resuelto" - notificar al usuario
           if (
             status === "Escalado a externo" ||
             status === "Escalado a Tier 3 / Gerente de Cuenta" ||
             status === "Resuelto"
           ) {
+            
             if (user_id) {
               recipients.push(user_id);
 
@@ -362,9 +361,10 @@ router.patch("/:id", async (req, res) => {
                 },
                 [user_id]
               );
+
             } else {
               console.log(
-                `No se pudo enviar notificación: usuario no encontrado para ticket #${id}`
+                `❌ No se pudo enviar notificación: usuario no encontrado para ticket #${id}`
               );
             }
           }

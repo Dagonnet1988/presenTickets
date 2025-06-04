@@ -1,12 +1,35 @@
-<div class="details-ticket-container" *ngIf="ticket">
-  <div class="header-buttons">
-    <button mat-icon-button (click)="goBack()">
-      <mat-icon>arrow_back</mat-icon>
-    </button>
-    <div class="close-ticket-container">
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.
+  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+<div class="details-ticket-container fade-in-up" *ngIf="ticket">
+
+  <!-- Header Section -->
+  <div class="header-section">
+    <div class="back-navigation">
+      <button mat-raised-button class="back-button" (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+        Regresar
+      </button>
+      <h1 class="page-title">Detalles del Ticket</h1>
+    </div>
+
+    <div class="actions-container">
       <button
         mat-raised-button
-        class="close-ticket-button"
+        color="warn"
+        class="action-button"
         (click)="confirmAction('cerrar')"
         *ngIf="
           ticket.status !== 'Cerrado' &&
@@ -14,11 +37,12 @@
           userRole === 'user'
         "
       >
+        <mat-icon>close</mat-icon>
         Cerrar Ticket
-      </button>
-      <button
+      </button>      <button
         mat-raised-button
-        class="close-ticket-button"
+        color="accent"
+        class="action-button"
         (click)="confirmAction('Escalar a Externo')"
         *ngIf="
           ticket.status !== 'Cerrado' &&
@@ -27,11 +51,30 @@
           userRole !== 'user'
         "
       >
+        <mat-icon>trending_up</mat-icon>
         Escalar a Externo
       </button>
+
       <button
         mat-raised-button
-        class="close-ticket-button"
+        color="warn"
+        class="action-button"
+        (click)="confirmAction('Escalar a Tier 3')"
+        *ngIf="
+          ticket.status !== 'Cerrado' &&
+          ticket.status !== 'Resuelto' &&
+          ticket.status !== 'Escalado a Tier 3 / Gerente de Cuenta' &&
+          userRole !== 'user'
+        "
+      >
+        <mat-icon>supervisor_account</mat-icon>
+        Escalar a Tier 3
+      </button>
+
+      <button
+        mat-raised-button
+        color="primary"
+        class="action-button"
         (click)="confirmAction('resolver')"
         *ngIf="
           ticket.status !== 'Cerrado' &&
@@ -39,10 +82,25 @@
           userRole !== 'user'
         "
       >
+        <mat-icon>check_circle</mat-icon>
         Resolver Ticket
       </button>
-      <div>
-        <mat-form-field *ngIf="userRole !== 'user'" appearance="outline">
+
+      <button
+        *ngIf="userRole !== 'user' && ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"
+        mat-raised-button
+        color="primary"
+        class="action-button"
+        (click)="confirmAction('reabrir')"
+      >
+        <mat-icon>refresh</mat-icon>
+        Reabrir Ticket
+      </button>
+
+
+    <div class="ticket-controls">
+      <div class="control-field" *ngIf="userRole !== 'user'">
+        <mat-form-field appearance="outline">
           <mat-label>Prioridad</mat-label>
           <mat-select
             [(ngModel)]="ticket.priority"
@@ -55,6 +113,9 @@
             <mat-option value="Urgente">URGENTE</mat-option>
           </mat-select>
         </mat-form-field>
+      </div>
+
+      <div class="control-field">
         <mat-form-field appearance="outline">
           <mat-label>Asignado a</mat-label>
           <mat-select
@@ -68,75 +129,95 @@
           </mat-select>
         </mat-form-field>
       </div>
-      <button
-        *ngIf="userRole !== 'user' && ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"
-        mat-raised-button
-        class="close-ticket-button"
-        (click)="confirmAction('reabrir')"
-      >
-        Reabrir Ticket
-      </button>
     </div>
-  </div>
-  <mat-card>
+    </div>
+  </div>  <!-- Ticket Information Card -->
+  <mat-card class="ticket-info-card">
     <mat-card-header>
-      <mat-card-title>Ticket # {{ ticket.id }} : {{ ticket.title }}</mat-card-title>
-      <mat-card-subtitle>
-        <span>Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</span>
-      </mat-card-subtitle>
+      <div class="ticket-header-content">
+        <div class="ticket-badge">
+          <span [ngClass]="getPriorityClass(ticket.priority)">{{ ticket.priority }}</span>
+        </div>
+        <mat-card-title>Ticket #{{ ticket.id }}: {{ ticket.title }}</mat-card-title>
+        <mat-card-subtitle>
+          <mat-icon class="info-icon">schedule</mat-icon>
+          Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}
+        </mat-card-subtitle>
+      </div>
     </mat-card-header>
+
     <mat-card-content>
-      <p>{{ ticket.description }}</p>
-      <p><strong>Categoría:</strong> {{ ticket.category }}</p>
-      <p><strong>Área:</strong> {{ ticket.area }}</p>
-      <p *ngIf="userRole !== 'user'"><strong>Creado Por:</strong> {{ getUserName(ticket.user_id).toUpperCase()}}</p>
-      <p>
-        <strong>Estado:</strong>
-        <span [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
-      </p>
-      <span *ngIf="ticket.closed_at"><strong> {{ticket.status}} el {{ ticket.closed_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</strong></span>
-      <div *ngIf="ticket.attachments?.length > 0">
+      <div class="ticket-description">
+        <h3>Descripción</h3>
+        <p>{{ ticket.description }}</p>
+      </div>
+
+      <div class="ticket-metadata">
+        <div class="metadata-item">
+          <mat-icon>category</mat-icon>
+          <span><strong>Categoría:</strong> {{ ticket.category }}</span>
+        </div>
+
+        <div class="metadata-item">
+          <mat-icon>business</mat-icon>
+          <span><strong>Área:</strong> {{ ticket.area }}</span>
+        </div>
+
+        <div class="metadata-item" *ngIf="userRole !== 'user'">
+          <mat-icon>person</mat-icon>
+          <span><strong>Creado Por:</strong> {{ getUserName(ticket.user_id).toUpperCase() }}</span>
+        </div>
+
+        <div class="metadata-item">
+          <mat-icon>info</mat-icon>
+          <span><strong>Estado:</strong>
+            <span class="status-chip" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+          </span>
+        </div>
+
+        <div class="metadata-item" *ngIf="ticket?.closed_at">
+          <mat-icon>event</mat-icon>
+          <span><strong>{{ ticket.status }} el:</strong> {{ ticket.closed_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</span>
+        </div>
+      </div><div *ngIf="ticketLevelAttachments.length > 0">
         <h3>Archivos Adjuntos:</h3>
         <div class="attachments-grid">
-          <div *ngFor="let attachment of ticket.attachments; let i = index" class="attachment-item">
+          <div *ngFor="let attachment of ticketLevelAttachments; let i = index" class="attachment-item">
             <span class="attachment-number">#{{ i + 1 }}</span>
-            <a [href]="'http://192.162.2.5:3000' + attachment.filepath" target="_blank" rel="noopener noreferrer">
-              <img *ngIf="isImage(attachment.filename)" [src]="'http://192.162.2.5:3000' + attachment.filepath" alt="{{ attachment.filename }}" class="thumbnail" />
+            <a [href]="getAttachmentUrl(attachment)" target="_blank" rel="noopener noreferrer" class="attachment-link">
+              <img *ngIf="isImage(attachment.filename)" [src]="getAttachmentUrl(attachment)" alt="{{ attachment.filename }}" class="thumbnail" loading="lazy" />
               <div *ngIf="!isImage(attachment.filename)" class="file-extension">
                 {{ getFileExtension(attachment.filename) }}
-              </div>
-            </a>
-            <p class="file-name">{{ attachment.filename }}</p>
+              </div>            </a>
+            <p class="file-name" [title]="attachment.filename">{{ attachment.filename }}</p>
+            <div class="attachment-actions">
+              <button
+                mat-icon-button
+                class="view-btn"
+                [attr.aria-label]="'Ver ' + attachment.filename"
+                (click)="viewAttachment(attachment)">
+                <mat-icon>visibility</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                class="download-btn"
+                [attr.aria-label]="'Descargar ' + attachment.filename"
+                (click)="downloadAttachment(attachment)">
+                <mat-icon>download</mat-icon>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </mat-card-content>
+      </div>    </mat-card-content>
   </mat-card>
 
-  <mat-card>
+  <!-- Nuevo Mensaje - Movido antes del historial de chat -->
+  <mat-card *ngIf="ticket.status !== 'Cerrado' && ticket.status !== 'Resuelto'" class="new-message-card">
     <mat-card-header>
-      <mat-card-title>Historial de Chat</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div *ngFor="let message of messages">
-        <div
-          class="message-container"
-          [ngClass]="{
-            'message-user': areNumber(message.user_id, authService.getUserId() || ''),
-            'message-other': !areNumber(message.user_id, authService.getUserId() || '')
-          }"
-        >
-          <p><strong>{{ userNames.get(message.user_id)?.toUpperCase() }}:</strong></p>
-          <p>{{ message.comment }}</p>
-          <small>{{ message.created_at | date : "EEEE d MMMM y, h:mm a" }}</small>
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
-
-  <mat-card *ngIf="ticket.status !== 'Cerrado' && ticket.status !== 'Resuelto'">
-    <mat-card-header>
-      <mat-card-title>Nuevo Mensaje</mat-card-title>
+      <mat-card-title>
+        <mat-icon>edit</mat-icon>
+        Nuevo Mensaje
+      </mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div
@@ -145,34 +226,134 @@
         (dragover)="onDragOver($event)"
         (dragleave)="onDragLeave($event)"
         [ngClass]="{ dragging: isDragging }"
-      >
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Nuevo Mensaje</mat-label>
-          <input matInput [(ngModel)]="newMessage" placeholder="Escribe tu mensaje" />
+      >        <mat-form-field appearance="outline" class="message-textarea">
+          <mat-label>Escribe tu mensaje aquí</mat-label>
+          <textarea
+            matInput
+            [(ngModel)]="newMessage"
+            rows="4"
+            cdkTextareaAutosize
+            cdkAutosizeMinRows="3"
+            cdkAutosizeMaxRows="10"
+            (paste)="onPaste($event)"
+            (dragover)="onTextareaDragOver($event)"
+            (drop)="onTextareaDrop($event)"
+            (dragleave)="isDragging = false"
+            style="resize: vertical; min-height: 120px;">
+          </textarea>
         </mat-form-field>
-        <div class="drag-drop-text" *ngIf="isDragging">Suelta el archivo aquí para adjuntar</div>
+        <div class="drag-drop-text" *ngIf="isDragging">
+          <mat-icon>cloud_upload</mat-icon>
+          <p>Suelta las imágenes o archivos aquí para adjuntar</p>
+        </div>
       </div>
-    </mat-card-content>
-    <mat-card-content>
+
       <div class="file-upload">
-        <input type="file" id="fileInput" (change)="onFileSelected($event)" multiple />
-        <label for="fileInput" class="file-input-label">
-          <mat-icon>attach_file</mat-icon> Adjuntar Archivos
+        <input type="file" id="fileInput" (change)="onFileSelected($event)" multiple />        <label for="fileInput" class="file-input-label">
+          <mat-icon>cloud_upload</mat-icon> Seleccionar Archivos
         </label>
       </div>
-      <ul class="attachments-list">
+
+      <ul class="attachments-list" *ngIf="selectedFiles.length > 0">
         <li *ngFor="let file of selectedFiles; let i = index">
-          {{ file.name }} ({{ file.size / 1024 | number : "1.0-2" }} KB)
-          <button mat-icon-button color="warn" (click)="removeAttachment(i)">
+          <div class="file-info">
+            <mat-icon class="file-type-icon">
+              {{ isImage(file.name) ? 'image' : 'description' }}
+            </mat-icon>
+            <span>{{ file.name }}</span>
+            <small>({{ file.size / 1024 | number : "1.0-2" }} KB)</small>
+          </div>
+          <button mat-icon-button color="warn" (click)="removeAttachment(i)" [attr.aria-label]="'Eliminar ' + file.name">
             <mat-icon>delete</mat-icon>
           </button>
         </li>
       </ul>
-    </mat-card-content>
-    <mat-card-actions>
-      <button mat-raised-button color="primary" (click)="sendMessage()">Enviar</button>
+    </mat-card-content>    <mat-card-actions class="message-actions">
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="sendMessage()"
+        class="send-button"
+        [disabled]="isSendingMessage || (!newMessage.trim() && selectedFiles.length === 0)"
+      >
+        <span *ngIf="!isSendingMessage">
+          <mat-icon>send</mat-icon>
+          Enviar Mensaje
+        </span>
+        <mat-spinner *ngIf="isSendingMessage" diameter="20"></mat-spinner>
+      </button>
     </mat-card-actions>
   </mat-card>
+  <!-- Historial de Chat -->
+  <mat-card class="chat-history-card">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>chat</mat-icon>
+        Historial de Chat
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngFor="let message of messages" class="message-wrapper">
+        <div
+          class="message-container"
+          [ngClass]="{
+            'message-user': areNumber(message.user_id, authService.getUserId() || ''),
+            'message-other': !areNumber(message.user_id, authService.getUserId() || '')
+          }"
+        >
+          <div class="message-header">
+            <strong>{{ userNames.get(message.user_id)?.toUpperCase() }}</strong>
+            <small class="message-timestamp">{{ message.created_at | date : "EEEE d MMMM y, h:mm a" }}</small>
+          </div>
+
+          <div class="message-content">
+            <p [innerHTML]="formatMessageWithLineBreaks(message.comment)"></p>
+          </div>
+
+          <!-- Mostrar adjuntos del mensaje/comentario -->
+          <div *ngIf="message.attachments && message.attachments.length > 0" class="message-attachments">
+            <h4><mat-icon>attachment</mat-icon> Archivos Adjuntos ({{ message.attachments.length }})</h4>
+            <div class="attachments-grid">
+              <div *ngFor="let attachment of message.attachments; let i = index" class="attachment-item">
+                <span class="attachment-number">#{{ i + 1 }}</span>
+                <a [href]="getAttachmentUrl(attachment)" target="_blank" rel="noopener noreferrer" class="attachment-link">
+                  <img
+                    *ngIf="isImage(attachment.filename)"
+                    [src]="getAttachmentUrl(attachment)"
+                    alt="{{ attachment.filename }}"
+                    class="thumbnail"
+                    loading="lazy" />
+                  <div *ngIf="!isImage(attachment.filename)" class="file-extension">
+                    {{ getFileExtension(attachment.filename) }}
+                  </div>                </a>
+                <p class="file-name" [title]="attachment.filename">{{ attachment.filename }}</p>
+                <div class="attachment-actions">
+                  <button
+                    mat-icon-button
+                    class="view-btn"
+                    [attr.aria-label]="'Ver ' + attachment.filename"
+                    (click)="viewAttachment(attachment)">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    class="download-btn"
+                    [attr.aria-label]="'Descargar ' + attachment.filename"
+                    (click)="downloadAttachment(attachment)">
+                    <mat-icon>download</mat-icon>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="messages.length === 0" class="no-messages">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <p>No hay mensajes en este ticket aún.</p>
+      </div>
+    </mat-card-content>  </mat-card>
 </div>
 
 <!-- Diálogo de confirmación -->

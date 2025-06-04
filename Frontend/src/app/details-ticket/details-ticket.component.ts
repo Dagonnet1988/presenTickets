@@ -25,6 +25,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { TextFieldModule } from '@angular/cdk/text-field';
 import { TicketService } from '../shared/services/ticket.service';
 import { AuthService } from '../shared/services/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -37,8 +39,7 @@ registerLocaleData(localeEs, 'es');
 
 @Component({
   selector: 'app-details-ticket',
-  standalone: true,
-  imports: [
+  standalone: true,  imports: [
     CommonModule,
     FormsModule,
     MatCardModule,
@@ -47,8 +48,10 @@ registerLocaleData(localeEs, 'es');
     MatButtonModule,
     MatIconModule,
     MatSelectModule,
-    MatDialogModule
-  ],  providers: [
+    MatDialogModule,
+    MatProgressSpinnerModule,
+    TextFieldModule
+  ],providers: [
     { provide: LOCALE_ID, useValue: 'es' }
   ],
   templateUrl: './details-ticket.component.html',  styleUrls: ['./details-ticket.component.css'],
@@ -63,9 +66,9 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   isDragging = false;
   userNames: Map<string, string> = new Map();
   userRole: string = '';
-  technicians: any[] = [];
-  dialogRef!: MatDialogRef<any>;
+  technicians: any[] = [];  dialogRef!: MatDialogRef<any>;
   ticketLevelAttachments: any[] = [];
+  isSendingMessage: boolean = false; // Flag para prevenir double-click
   private subscriptions: Subscription = new Subscription();
 
   constructor(
@@ -120,11 +123,9 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   handleTicketRefresh() {
     const currentTicketId = this.ticket?.id;
     if (currentTicketId) {
-      this.loadTicketDetails(currentTicketId.toString());
-
-      // También recargar comentarios y otra información relacionada
+      this.loadTicketDetails(currentTicketId.toString());      // También recargar comentarios y otra información relacionada
       this.ticketService.getComments(currentTicketId.toString()).subscribe(comments => {
-        this.messages = comments;
+        this.messages = comments.reverse();
         this.loadUserNames();
         this.cdr.detectChanges();
       });
@@ -150,10 +151,11 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
           this.ticket = ticket;
           if (this.ticket.created_at) {
             this.ticket.created_at = new Date(this.ticket.created_at);
-          }
-          // Filtrar solo los adjuntos del ticket (sin comment_id)
+          }          // Filtrar solo los adjuntos del ticket (sin comment_id)
           this.ticketLevelAttachments = (this.ticket.attachments || []).filter((att: any) => !att.comment_id);
-          this.messages = comments;
+
+          // Ordenar mensajes para mostrar los más recientes primero
+          this.messages = comments.reverse();
 
           // Cargar nombres de usuarios una sola vez después de tener todos los datos
           this.loadUserNames();
@@ -248,11 +250,11 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
       error: (error: HttpErrorResponse) => {
-        console.error('Error al actualizar el estado del ticket:', error.message);
+        console.error(`❌ Frontend: Error al actualizar el estado del ticket a "${status}":`, error.message);
         this.cdr.markForCheck();
       },
     });
-  }  updatePriority(priority: string): void {
+  }updatePriority(priority: string): void {
     const ticketId = this.getCurrentTicketId();
     if (!ticketId) {
       console.error('No se pudo obtener el ID del ticket');
@@ -299,24 +301,23 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       },
       });
     }
-
   getPriorityClass(priority: string): string {
     switch (priority) {
       case 'Baja':
-        return 'priority-low';
+        return 'priority-chip priority-low';
       case 'Media':
-        return 'priority-medium';
+        return 'priority-chip priority-medium';
       case 'Alta':
-        return 'priority-high';
+        return 'priority-chip priority-high';
       case 'Urgente':
-        return 'priority-urgent';
+        return 'priority-chip priority-urgent';
       default:
-        return '';
+        return 'priority-chip';
     }
   }
-
   sendMessage(): void {
-    if (this.newMessage.trim() || this.selectedFiles.length > 0) {
+    if ((this.newMessage.trim() || this.selectedFiles.length > 0) && !this.isSendingMessage) {
+      this.isSendingMessage = true; // Prevenir double-click
       const ticketId = this.getCurrentTicketId();
       const userId = this.authService.getUserId();
 
@@ -348,8 +349,14 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
           error: (error) => {
             console.error('Error al enviar el mensaje:', error);
             this.cdr.markForCheck();
+          },
+          complete: () => {
+            this.isSendingMessage = false; // Restablecer flag al completar
+            this.cdr.markForCheck();
           }
         });
+      } else {
+        this.isSendingMessage = false; // Restablecer flag si no hay ticketId
       }
     }
   }
@@ -404,8 +411,8 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         } else if (action === 'reabrir') {
           this.uncloseTicket();
         } else if (action === 'Escalar a Externo') {
-          this.updateStatus('Escalado a externo');
-        } else if (action === 'Escalar a Tier 3 / Gerente de Cuenta') {
+          this.updateStatus('Escalado a externo'); }
+          else if (action === 'Escalar a Tier 3') {
           this.updateStatus('Escalado a Tier 3 / Gerente de Cuenta');
         }
       }
@@ -505,24 +512,23 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     const parts = fileName.split('.');
     return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'SIN EXTENSIÓN';
   }
-
   getStatusClass(status: string): string {
     switch (status) {
       case 'Creado':
-        return 'status-created';
+        return 'status-chip status-created';
       case 'En gestión':
-        return 'status-in-progress';
+        return 'status-chip status-in-progress';
       case 'Esperando respuesta del usuario':
-        return 'status-in-user';
+        return 'status-chip status-in-user';
       case 'Escalado a externo':
-        return 'status-escalated';
+        return 'status-chip status-escalated';
       case 'Escalado a Tier 3 / Gerente de Cuenta':
-        return 'status-tier3';
+        return 'status-chip status-tier3';
       case 'Resuelto':
       case 'Cerrado':
-        return 'status-closed';
+        return 'status-chip status-closed';
       default:
-        return '';
+        return 'status-chip';
     }
   }
 
@@ -558,5 +564,101 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       .join('')
       .toUpperCase()
       .substring(0, 2);
+  }
+
+  // Función para convertir saltos de línea en elementos HTML
+  formatMessageWithLineBreaks(message: string): string {
+    if (!message) return '';
+    return message.replace(/\n/g, '<br>');
+  }
+
+  // Función para descargar archivos adjuntos
+  downloadAttachment(attachment: any): void {
+    const url = this.getDownloadUrl(attachment);
+    window.open(url, '_blank');
+  }
+
+  // Función para manejar el pegado en el textarea
+  onPaste(event: ClipboardEvent): void {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+
+    const items = clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      // Verificar si es una imagen
+      if (item.type.startsWith('image/')) {
+        event.preventDefault(); // Prevenir el pegado normal
+
+        const file = item.getAsFile();
+        if (file) {
+          // Generar un nombre único para la imagen pegada
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const extension = this.getFileExtensionFromMimeType(file.type);
+          const fileName = `pasted-image-${timestamp}.${extension}`;
+
+          // Crear un nuevo archivo con el nombre personalizado
+          const renamedFile = new File([file], fileName, { type: file.type });
+
+          // Agregar a la lista de archivos seleccionados
+          this.selectedFiles.push(renamedFile);
+
+          // Actualizar la vista
+          this.cdr.markForCheck();
+        }
+      }
+    }
+  }
+
+  // Función para obtener la extensión de archivo desde el tipo MIME
+  getFileExtensionFromMimeType(mimeType: string): string {
+    const mimeToExtension: { [key: string]: string } = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/gif': 'gif',
+      'image/bmp': 'bmp',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg'
+    };
+
+    return mimeToExtension[mimeType] || 'png';
+  }
+
+  // Función para manejar el arrastre sobre el textarea
+  onTextareaDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = true;
+  }
+  // Función para manejar cuando se suelta algo en el textarea
+  onTextareaDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging = false;
+
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      // Agregar todos los archivos soltados
+      for (let i = 0; i < files.length; i++) {
+        this.selectedFiles.push(files[i]);
+      }
+      this.cdr.markForCheck();
+    }
+  }
+  // Método para ver un adjunto en una nueva pestaña
+  viewAttachment(attachment: any): void {
+    const url = this.getAttachmentUrl(attachment);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  // Función para limpiar el formulario de nuevo mensaje
+  clearMessage(): void {
+    this.newMessage = '';
+    this.selectedFiles = [];
+    this.cdr.markForCheck();
   }
 }

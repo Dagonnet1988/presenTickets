@@ -37,16 +37,45 @@ function sanitizeFileName(fileName) {
 }
 
 // Crear un nuevo comentario
-router.post('/:ticketId', (req, res) => {
+router.post('/:ticketId', async (req, res) => {
   const { ticketId } = req.params;
+    try {
+    // Configuración de formidable con límites y timeouts
+    const form = formidable({ 
+      multiples: true, 
+      uploadDir: './uploads', 
+      keepExtensions: true,
+      maxFileSize: 50 * 1024 * 1024, // 50MB máximo por archivo
+      maxTotalFileSize: 100 * 1024 * 1024, // 100MB total
+      maxFields: 1000,
+      maxFieldsSize: 20 * 1024 * 1024, // 20MB para campos de texto
+      allowEmptyFiles: false,
+      minFileSize: 1, // Al menos 1 byte
+      hashAlgorithm: false // Desactivar hash para mejor rendimiento
+    });
 
-  const form = formidable({ multiples: true, uploadDir: './uploads', keepExtensions: true });
+    // Agregar timeout personalizado
+    const timeout = setTimeout(() => {
+      res.status(408).json({ message: 'Timeout al procesar el archivo. Intente con archivos más pequeños.' });
+    }, 60000); // 60 segundos timeout
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error('Error al procesar la solicitud:', err);
-      return res.status(400).json({ message: 'Error al procesar la solicitud' });
-    }
+    form.parse(req, async (err, fields, files) => {
+      clearTimeout(timeout); // Cancelar timeout si se completa a tiempo
+        if (err) {
+        // Enviar error específico basado en el tipo
+        if (err.code === 'LIMIT_FILE_SIZE' || err.message.includes('maxFileSize')) {
+          return res.status(413).json({ message: 'El archivo es demasiado grande. Máximo 50MB por archivo.' });
+        } else if (err.code === 'LIMIT_FIELD_COUNT' || err.message.includes('maxFields')) {
+          return res.status(413).json({ message: 'Demasiados campos en la solicitud.' });
+        } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({ message: 'Archivo no esperado en la solicitud.' });
+        } else {
+          return res.status(400).json({ 
+            message: 'Error al procesar la solicitud', 
+            details: err.message 
+          });
+        }
+      }
 
     const message = fields.message?.[0]?.trim() || '';
     const userId = parseInt(fields.userId?.[0], 10);
@@ -58,38 +87,52 @@ router.post('/:ticketId', (req, res) => {
     }
     if (isNaN(userId) || !ticketId || isNaN(parseInt(ticketId, 10))) {
       return res.status(400).json({ message: 'ticketId y userId válidos son obligatorios' });
-    }
-
-    // Procesar archivos adjuntos
-    const attachments = Object.values(files).flat().map(file => {
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      if (fs.existsSync(file.filepath)) {
-        const ext = path.extname(file.originalFilename || '');
-        const baseName = path.basename(file.originalFilename || `file_${Date.now()}`, ext);
-        const sanitizedFileName = sanitizeFileName(baseName);
-        const uniqueFileName = `${sanitizedFileName}_${uuidv4()}${ext}`;
-        const newPath = path.join(uploadDir, uniqueFileName);
-        if (fs.existsSync(newPath)) {
-          fs.unlinkSync(newPath);
-        }
-        try {
-          fs.renameSync(file.filepath, newPath);
-        } catch (error) {
-          console.error('Error al renombrar el archivo:', error.message);
-          throw new Error('No se pudo guardar el archivo');
-        }
-        return {
-          name: file.originalFilename,
-          url: `/uploads/${uniqueFileName}`
-        };
-      } else {
-        throw new Error('El archivo no se cargó correctamente');
-      }
-    });
-
-    const client = await pool.connect();
+    }    // Procesar archivos adjuntos con manejo de errores mejorado
+    let attachments = [];
+    try {      if (Object.keys(files).length > 0) {
+        attachments = Object.values(files).flat().map((file, index) => {
+          
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          
+          if (!fs.existsSync(file.filepath)) {
+            throw new Error(`Archivo temporal no encontrado: ${file.originalFilename}`);
+          }
+          
+          // Validar tamaño del archivo
+          if (file.size > 50 * 1024 * 1024) {
+            throw new Error(`Archivo demasiado grande: ${file.originalFilename} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+          }
+          
+          const ext = path.extname(file.originalFilename || '');
+          const baseName = path.basename(file.originalFilename || `file_${Date.now()}`, ext);
+          const sanitizedFileName = sanitizeFileName(baseName);
+          const uniqueFileName = `${sanitizedFileName}_${uuidv4()}${ext}`;
+          const newPath = path.join(uploadDir, uniqueFileName);
+          
+          // Limpiar archivo existente si existe
+          if (fs.existsSync(newPath)) {
+            fs.unlinkSync(newPath);
+          }
+            try {
+            fs.renameSync(file.filepath, newPath);
+          } catch (error) {
+            throw new Error(`No se pudo guardar el archivo: ${file.originalFilename}`);
+          }
+          
+          return {
+            name: file.originalFilename,
+            url: `/uploads/${uniqueFileName}`,
+            size: file.size
+          };
+        });
+      }    } catch (fileError) {
+      return res.status(400).json({ 
+        message: 'Error al procesar archivos adjuntos', 
+        details: fileError.message 
+      });
+    }    const client = await pool.connect();
     try {
       // Guardar el comentario en la base de datos
       const result = await client.query(
@@ -98,12 +141,13 @@ router.post('/:ticketId', (req, res) => {
       );
       const commentId = result.rows[0].id;
 
+      // Guardar archivos adjuntos
       for (const attachment of attachments) {
         await client.query(
           'INSERT INTO attachments (ticket_id, comment_id, filename, filepath) VALUES ($1, $2, $3, $4)',
           [ticketId, commentId, attachment.name, attachment.url]
         );
-      }      // Obtener roles y datos del ticket
+      }// Obtener roles y datos del ticket
       const ticketResult = await client.query('SELECT assigned_to, user_id, title, status FROM tickets WHERE id = $1', [ticketId]);
       const assignedTo = ticketResult.rows[0]?.assigned_to;
       const ticketUserId = ticketResult.rows[0]?.user_id;
@@ -154,14 +198,34 @@ router.post('/:ticketId', (req, res) => {
           });
         }
       }
-      res.status(201).json(result.rows[0]);
-    } catch (err) {
-      console.error('Error al crear el comentario:', err);
-      res.status(500).json({ message: 'Error al crear el comentario' });
-    } finally {
+      res.status(201).json(result.rows[0]);    } catch (err) {
+      // Limpiar archivos subidos en caso de error de base de datos
+      for (const attachment of attachments) {
+        try {
+          const filePath = path.join(uploadDir, path.basename(attachment.url));
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (cleanupError) {
+          // Error de limpieza no crítico
+        }
+      }
+      
+      res.status(500).json({ 
+        message: 'Error al crear el comentario', 
+        details: process.env.NODE_ENV === 'development' ? err.message : 'Error interno del servidor'
+      });    } finally {
       client.release();
     }
   });
+    } catch (globalError) {
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        message: 'Error interno del servidor', 
+        details: process.env.NODE_ENV === 'development' ? globalError.message : 'Error inesperado'
+      });
+    }
+  }
 });
 
 // Obtener comentarios de un ticket (con adjuntos)

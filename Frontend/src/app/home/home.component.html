@@ -1,95 +1,48 @@
 <!--
   PresenTickets - Sistema de Gestión de Tickets de Soporte
   Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
-  
+
   Este archivo es parte de PresenTickets, un sistema de gestión de tickets
   desarrollado como iniciativa personal por Diego Sánchez.
-  
-  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en 
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.  Este software es propiedad intelectual de Diego Sánchez y su uso en
   Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
-  
+
   Está prohibida la redistribución, modificación o uso no autorizado
   de este código sin el consentimiento expreso por escrito del autor.
 -->
 
 <!-- El layout ahora lo maneja MainLayoutComponent, así que solo deja el contenido principal aquí -->
-<div class="pagination-controls">
-  <button mat-stroked-button color="primary" (click)="changePage(currentPage - 1)" [disabled]="currentPage === 1" class="pagination-nav-button">
-    <mat-icon>chevron_left</mat-icon> Anterior
-  </button>
-  <div class="page-numbers">
-  <ng-container *ngIf="totalPages <= 7">
-    <button
-      mat-mini-fab
-      *ngFor="let page of [].constructor(totalPages); let i = index"
-      (click)="changePage(i + 1)"
-      [color]="currentPage === i + 1 ? 'primary' : ''"
-      [class.active]="currentPage === i + 1"
-      class="page-number-button"
-    >
-      {{ i + 1 }}
-    </button>
-  </ng-container>
-  <ng-container *ngIf="totalPages > 7">
-    <!-- First page -->
-    <button
-      mat-mini-fab
-      (click)="changePage(1)"
-      [color]="currentPage === 1 ? 'primary' : ''"
-      [class.active]="currentPage === 1"
-      class="page-number-button"
-    >
-      1
-    </button>
-
-    <!-- Ellipsis if needed -->
-    <span *ngIf="currentPage > 4" class="ellipsis">...</span>
-
-    <!-- Pages around current -->
-    <button
-      mat-mini-fab
-      *ngFor="let page of getPaginationRange()"
-      (click)="changePage(page)"
-      [color]="currentPage === page ? 'primary' : ''"
-      [class.active]="currentPage === page"
-      class="page-number-button"
-    >
-      {{ page }}
-    </button>
-
-    <!-- Ellipsis if needed -->
-    <span *ngIf="currentPage < totalPages - 3" class="ellipsis">...</span>
-
-    <!-- Last page -->
-    <button
-      mat-mini-fab
-      (click)="changePage(totalPages)"
-      [color]="currentPage === totalPages ? 'primary' : ''"
-      [class.active]="currentPage === totalPages"
-      class="page-number-button"
-    >
-      {{ totalPages }}
-    </button>
-  </ng-container>
-  </div>
-  <button mat-stroked-button color="primary" (click)="changePage(currentPage + 1)" [disabled]="currentPage === totalPages" class="pagination-nav-button">
-    Siguiente <mat-icon>chevron_right</mat-icon>
-  </button>
-</div>
 <div class="home-container">
-    <div class="tickets-section">
-      <!-- Barra de Búsqueda -->
-    <div class="search-bar">
-      <input
-      type="text"
-      placeholder="Buscar tickets por título o número de ticket..."
-      [(ngModel)]="searchQuery"
-      (input)="onSearchChange()"
-      />
-      </div>
-      <br>
-      <h1>MIS TICKETS</h1>
-      <!-- Lista de Tickets -->
+  <!-- Header moderno -->
+  <div class="dashboard-header">
+    <div class="header-title">
+      <h1>
+        <mat-icon>confirmation_number</mat-icon>
+        MIS TICKETS
+      </h1>
+    </div>
+  </div>
+
+  <!-- Indicador de período actual -->
+  <div class="metrics-header">
+    <h2>Listado de Tickets</h2>
+
+  </div>  <!-- Barra de Búsqueda moderna -->
+  <div class="search-section">
+    <mat-form-field appearance="outline" class="search-field">
+      <mat-label>Buscar tickets por título o número...</mat-label>
+      <input matInput
+             [(ngModel)]="searchQuery"
+             (input)="onSearchChange()"
+             placeholder="Ej: Ticket #123 o problema de impresión">
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+  </div>
+
+  <div class="content-wrapper">
+    <!-- Sección principal de tickets -->
+    <div class="tickets-section">      <!-- Lista de Tickets moderna -->
       <div class="ticket-list">
         <div
           class="ticket-item"
@@ -97,23 +50,123 @@
           [ngClass]="{'unassigned': !ticket.assigned_to && userRole !== 'user'}"
           (click)="viewTicketDetails(ticket.id)"
         >
-          <h3>Ticket #{{ ticket.id }}: {{ ticket.title }}</h3>
-          <p class="created-at">
-            Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}
-          </p>
-          <span *ngIf="userRole !== 'user'" class="created-by"><strong>Creado por: {{ getUserName(ticket.user_id).toUpperCase() }}</strong></span>
-          <span class="area"><strong>Área: {{ ticket.area }}</strong></span>
-          <span *ngIf="userRole !== 'user'" class="priority" [ngClass]="getPriorityClass(ticket.priority)">
-            Prioridad: {{ ticket.priority }}
+          <div class="ticket-header">
+            <h3>
+              <mat-icon class="ticket-icon">confirmation_number</mat-icon>
+              Ticket #{{ ticket.id }}: {{ ticket.title }}
+            </h3>
+            <span class="status" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+          </div>
+
+          <div class="ticket-meta">
+            <p class="created-at">
+              <mat-icon>schedule</mat-icon>
+              Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}
+            </p>
+            <span *ngIf="userRole !== 'user'" class="created-by">
+              <mat-icon>person</mat-icon>
+              <strong>{{ getUserName(ticket.user_id) }}</strong>
+            </span>
+          </div>
+
+          <div class="ticket-details">
+            <span class="area">
+              <mat-icon>business</mat-icon>
+              <strong>{{ ticket.area }}</strong>
+            </span>
+            <span *ngIf="userRole !== 'user'" class="priority" [ngClass]="getPriorityClass(ticket.priority)">
+              <mat-icon>priority_high</mat-icon>
+              {{ ticket.priority }}
+            </span>
+            <span class="assigned-to">
+              <mat-icon>assignment_ind</mat-icon>
+              {{ getUserName(ticket.assigned_to) }}
+            </span>
+          </div>
+
+          <span *ngIf="ticket.status === 'Cerrado' || ticket.status === 'Resuelto'" class="closure-info">
+            <mat-icon>check_circle</mat-icon>
+            <strong>{{ ticket.status }} el {{ ticket.closed_at | date : 'EEEE d MMMM y, \'a las\' h:mm a' }}</strong>
           </span>
-          <span class="assigned-to">Asignado a: {{ getUserName(ticket.assigned_to).toUpperCase() }}</span>
-          <span class="status" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
-          <span *ngIf="ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"><strong> {{ticket.status}} el {{ ticket.closed_at | date : 'EEEE d MMMM y, \'a las\' h:mm a' }}</strong></span>
         </div>
+
         <!-- Mensaje cuando no hay tickets -->
         <div *ngIf="paginatedTickets.length === 0" class="no-tickets">
-          <p>No se encontraron tickets con los filtros aplicados.</p>
+          <mat-icon>inbox</mat-icon>
+          <h3>No se encontraron tickets</h3>
+          <p>No hay tickets que coincidan con los filtros aplicados.</p>
         </div>
+      </div>
+
+      <!-- Paginación moderna -->
+      <div class="pagination-controls" *ngIf="totalPages > 1">
+        <button mat-stroked-button
+                (click)="changePage(currentPage - 1)"
+                [disabled]="currentPage === 1"
+                class="pagination-nav-button">
+          <mat-icon>chevron_left</mat-icon>
+          Anterior
+        </button>
+
+        <div class="page-numbers">
+          <ng-container *ngIf="totalPages <= 7">
+            <button
+              mat-mini-fab
+              *ngFor="let page of [].constructor(totalPages); let i = index"
+              (click)="changePage(i + 1)"
+              [color]="currentPage === i + 1 ? 'primary' : ''"
+              [class.active]="currentPage === i + 1"
+              class="page-number-button"
+            >
+              {{ i + 1 }}
+            </button>
+          </ng-container>
+
+          <ng-container *ngIf="totalPages > 7">
+            <button
+              mat-mini-fab
+              (click)="changePage(1)"
+              [color]="currentPage === 1 ? 'primary' : ''"
+              [class.active]="currentPage === 1"
+              class="page-number-button"
+            >
+              1
+            </button>
+
+            <span *ngIf="currentPage > 4" class="ellipsis">...</span>
+
+            <button
+              mat-mini-fab
+              *ngFor="let page of getPaginationRange()"
+              (click)="changePage(page)"
+              [color]="currentPage === page ? 'primary' : ''"
+              [class.active]="currentPage === page"
+              class="page-number-button"
+            >
+              {{ page }}
+            </button>
+
+            <span *ngIf="currentPage < totalPages - 3" class="ellipsis">...</span>
+
+            <button
+              mat-mini-fab
+              (click)="changePage(totalPages)"
+              [color]="currentPage === totalPages ? 'primary' : ''"
+              [class.active]="currentPage === totalPages"
+              class="page-number-button"
+            >
+              {{ totalPages }}
+            </button>
+          </ng-container>
+        </div>
+
+        <button mat-stroked-button
+                (click)="changePage(currentPage + 1)"
+                [disabled]="currentPage === totalPages"
+                class="pagination-nav-button">
+          Siguiente
+          <mat-icon>chevron_right</mat-icon>
+        </button>
       </div>
     </div>
     <!-- Sección de Filtros -->
@@ -175,7 +228,7 @@
       </form>
       <!-- Botón para Resetear Filtros -->
       <div class="filter-actions">
-        <button mat-raised-button color="warn" (click)="resetFilters()">Resetear Filtros</button>
+        <button mat-raised-button color="primary" (click)="resetFilters()">Resetear Filtros</button>
       </div>
       <!-- Botones de conteo de tickets por estado -->
       <div class="status-counts" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 24px 0 18px 0;">

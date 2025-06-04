@@ -13,12 +13,22 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-export const environment = {
-  production: true,
-  auth: 'http://192.162.2.5:3000/api/auth',
-  user: 'http://192.162.2.5:3000/api/users',
-  ticket: 'http://192.162.2.5:3000/api/tickets',
-  comment: 'http://192.162.2.5:3000/api/comments',
-  backendUrl: 'http://192.162.2.5:3000',
-  appVersion: '1.0.5'
+import { inject } from '@angular/core';
+import { HttpInterceptorFn } from '@angular/common/http';
+
+export const tokenInterceptor: HttpInterceptorFn = (req, next) => {
+  // Obtener token del localStorage
+  const token = localStorage.getItem('token');
+
+  // Si existe token y la petición no es a la ruta de login, añadir Authorization header
+  if (token && !req.url.includes('/auth/login')) {
+    const authReq = req.clone({
+      setHeaders: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return next(authReq);
+  }
+
+  return next(req);
 };

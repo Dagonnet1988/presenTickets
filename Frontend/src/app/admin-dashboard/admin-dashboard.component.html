@@ -1,0 +1,362 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.
+  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+<div class="admin-dashboard-container" *ngIf="hasAdminAccess()">
+  <div class="dashboard-header">
+    <div class="header-title">
+      <h1>
+        <mat-icon>dashboard</mat-icon>
+        Dashboard Administrativo
+      </h1>
+      <p class="subtitle">Métricas y estadísticas del sistema PresenTickets</p>
+    </div>
+
+    <div class="header-actions">
+      <button mat-raised-button color="primary" (click)="refreshAllData()">
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros de fecha -->
+  <mat-card class="filters-card">
+    <mat-card-header>
+      <mat-card-title>Filtros</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="dateFilterForm" class="filters-form">
+        <div class="date-inputs">
+          <mat-form-field appearance="outline">
+            <mat-label>Fecha inicio</mat-label>
+            <input matInput [matDatepicker]="startPicker" formControlName="startDate">
+            <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
+            <mat-datepicker #startPicker></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Fecha fin</mat-label>
+            <input matInput [matDatepicker]="endPicker" formControlName="endDate">
+            <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
+            <mat-datepicker #endPicker></mat-datepicker>
+          </mat-form-field>          <mat-form-field appearance="outline">
+            <mat-label>Período</mat-label>
+            <mat-select formControlName="period">
+              <mat-option value="daily">Diario</mat-option>
+              <mat-option value="weekly">Semanal</mat-option>
+              <mat-option value="monthly">Mensual</mat-option>
+            </mat-select>
+          </mat-form-field>          <!-- Botones de períodos rápidos -->
+          <div class="quick-period-buttons">
+            <button mat-button type="button" (click)="setToday()"
+                    [class.active]="isCurrentPeriod('today')" class="period-btn">
+              <mat-icon>today</mat-icon>
+              Hoy
+            </button>
+            <button mat-button type="button" (click)="setThisWeek()"
+                    [class.active]="isCurrentPeriod('week')" class="period-btn">
+              <mat-icon>date_range</mat-icon>
+              Esta Semana
+            </button>
+            <button mat-button type="button" (click)="setThisMonth()"
+                    [class.active]="isCurrentPeriod('month')" class="period-btn">
+              <mat-icon>calendar_month</mat-icon>
+              Este Mes
+            </button>
+          </div>
+
+          <button mat-button type="button" (click)="clearDateFilters()" class="clear-btn">
+            <mat-icon>refresh</mat-icon>
+            Semana Actual
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+  <!-- Métricas generales -->
+  <div class="metrics-header">
+    <h2>Métricas del Dashboard</h2>
+    <div class="current-period-indicator">
+      <mat-icon>schedule</mat-icon>
+      <span>{{ getCurrentPeriodDescription() }}</span>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <mat-card class="metric-card total-tickets">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>confirmation_number</mat-icon>
+        <mat-card-title>Total de Tickets</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.totalTickets }}
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="metric-card open-tickets">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>schedule</mat-icon>
+        <mat-card-title>Tickets Abiertos</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.openTickets }}
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="metric-card closed-tickets">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>task_alt</mat-icon>
+        <mat-card-title>Tickets Cerrados</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.closedTickets }}
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="metric-card avg-response">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>reply</mat-icon>
+        <mat-card-title>Tiempo Promedio de Respuesta</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.avgResponseTime }}
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="metric-card avg-resolution">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>done_all</mat-icon>
+        <mat-card-title>Tiempo Promedio de Resolución</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.avgResolutionTime }}
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="metric-card sla-compliance">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>verified</mat-icon>
+        <mat-card-title>Cumplimiento SLA</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="metric-value" *ngIf="!loading.dashboard && dashboardMetrics">
+          {{ dashboardMetrics.slaComplianceRate }}%
+        </div>
+        <mat-spinner diameter="40" *ngIf="loading.dashboard"></mat-spinner>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Tabs para diferentes vistas -->
+  <mat-tab-group class="dashboard-tabs">
+    <!-- Tab de Estados -->
+    <mat-tab label="Tickets por Estado">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>Distribución por Estados</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div *ngIf="loading.status" class="loading-container">
+              <mat-spinner></mat-spinner>
+            </div>
+            <div *ngIf="!loading.status && ticketsByStatus.length > 0" class="status-list">
+              <div
+                *ngFor="let status of ticketsByStatus"
+                class="status-item"
+                [style.border-left-color]="getStatusColor(status.status)"
+              >
+                <div class="status-info">
+                  <span class="status-name">{{ status.status }}</span>
+                  <span class="status-count">{{ status.count }} tickets</span>
+                </div>
+                <div class="status-percentage">
+                  {{ getResolutionPercentage(status) }}%
+                </div>
+              </div>
+            </div>
+            <div *ngIf="!loading.status && ticketsByStatus.length === 0" class="no-data">
+              No hay datos disponibles
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab de Performance -->
+    <mat-tab label="Performance de Técnicos">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>Rendimiento por Técnico</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div *ngIf="loading.performance" class="loading-container">
+              <mat-spinner></mat-spinner>
+            </div>
+            <table mat-table [dataSource]="techPerformance" *ngIf="!loading.performance && techPerformance.length > 0" class="performance-table">
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef>Técnico</th>
+                <td mat-cell *matCellDef="let tech">{{ tech.name || tech.username }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="total_tickets">
+                <th mat-header-cell *matHeaderCellDef>Total Tickets</th>
+                <td mat-cell *matCellDef="let tech">{{ tech.total_tickets }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="closed_tickets">
+                <th mat-header-cell *matHeaderCellDef>Tickets Cerrados</th>
+                <td mat-cell *matCellDef="let tech">{{ tech.closed_tickets }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="closure_rate">
+                <th mat-header-cell *matHeaderCellDef>Tasa de Cierre</th>
+                <td mat-cell *matCellDef="let tech">
+                  <mat-chip [style.background-color]="tech.closure_rate >= 80 ? '#4CAF50' : tech.closure_rate >= 60 ? '#FF9800' : '#F44336'">
+                    {{ tech.closure_rate }}%
+                  </mat-chip>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="avg_resolution_hours">
+                <th mat-header-cell *matHeaderCellDef>Tiempo Promedio (horas)</th>
+                <td mat-cell *matCellDef="let tech">{{ tech.avg_resolution_hours | number:'1.1-1' }}</td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="performanceColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: performanceColumns;"></tr>
+            </table>
+            <div *ngIf="!loading.performance && techPerformance.length === 0" class="no-data">
+              No hay datos de performance disponibles
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab de Actividad Reciente -->
+    <mat-tab label="Actividad Reciente">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>Últimas Actividades</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div *ngIf="loading.activity" class="loading-container">
+              <mat-spinner></mat-spinner>
+            </div>
+            <div *ngIf="!loading.activity && recentActivity.length > 0" class="activity-list">
+              <div *ngFor="let activity of recentActivity" class="activity-item">
+                <div class="activity-icon">
+                  <mat-icon *ngIf="activity.activity_type === 'ticket_created'">add_circle</mat-icon>
+                  <mat-icon *ngIf="activity.activity_type === 'comment_added'">chat</mat-icon>
+                </div>
+                <div class="activity-details">
+                  <div class="activity-title">
+                    <span class="activity-type">{{ formatActivityType(activity.activity_type) }}</span>
+                    <span class="ticket-title">{{ activity.title }}</span>
+                  </div>
+                  <div class="activity-meta">
+                    <span class="user-name">{{ activity.user_name }}</span>
+                    <span class="activity-date">{{ formatDate(activity.activity_date) }}</span>
+                    <mat-chip
+                      [style.background-color]="getStatusColor(activity.status)"
+                      class="status-chip"
+                    >
+                      {{ activity.status }}
+                    </mat-chip>
+                    <mat-chip
+                      [style.background-color]="getPriorityColor(activity.priority)"
+                      class="priority-chip"
+                    >
+                      {{ activity.priority }}
+                    </mat-chip>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div *ngIf="!loading.activity && recentActivity.length === 0" class="no-data">
+              No hay actividad reciente
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab de Tendencias -->
+    <mat-tab label="Tendencias">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>Tendencias Temporales</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div *ngIf="loading.trends" class="loading-container">
+              <mat-spinner></mat-spinner>
+            </div>
+            <div *ngIf="!loading.trends && timeTrends.length > 0" class="trends-list">
+              <div *ngFor="let trend of timeTrends" class="trend-item">
+                <div class="trend-period">{{ trend.period }}</div>
+                <div class="trend-metrics">
+                  <div class="trend-metric created">
+                    <span class="metric-label">Creados:</span>
+                    <span class="metric-value">{{ trend.tickets_created }}</span>
+                  </div>
+                  <div class="trend-metric closed">
+                    <span class="metric-label">Cerrados:</span>
+                    <span class="metric-value">{{ trend.tickets_closed }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div *ngIf="!loading.trends && timeTrends.length === 0" class="no-data">
+              No hay datos de tendencias disponibles
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>
+
+<!-- Mensaje de acceso denegado -->
+<div *ngIf="!hasAdminAccess()" class="access-denied">
+  <mat-card>
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="warn">block</mat-icon>
+      <mat-card-title>Acceso Denegado</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>No tienes permisos para acceder al dashboard administrativo.</p>
+      <p>Se requiere rol de técnico o administrador.</p>
+    </mat-card-content>
+  </mat-card>
+</div>
