@@ -20,6 +20,7 @@ import { io, Socket } from 'socket.io-client';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { RefreshTicketsService } from './refresh-tickets.service';
+import { PushNotificationService } from './push-notification.service';
 
 export interface TicketNotification {
   id?: number;
@@ -40,7 +41,8 @@ export class NotificationService {
     private ngZone: NgZone,
     private authService: AuthService,
     private http: HttpClient,
-    private refreshTicketsService: RefreshTicketsService
+    private refreshTicketsService: RefreshTicketsService,
+    private pushNotificationService: PushNotificationService
   ) {
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
@@ -203,6 +205,39 @@ export class NotificationService {
       const current = this.notificationsSubject.value.filter(n => !n.read);
       this.notificationsSubject.next(current);
     });
+  }
+
+  // Marcar como leídas las notificaciones de un ticket específico
+  markTicketNotificationsAsRead(ticketId: string) {
+    const current = this.notificationsSubject.value;
+    const ticketNotifications = current.filter(n =>
+      n.data?.ticketId?.toString() === ticketId.toString() && !n.read
+    );
+
+    if (ticketNotifications.length === 0) {
+      return; // No hay notificaciones sin leer para este ticket
+    }
+
+    // Marcar cada notificación como leída en el backend
+    ticketNotifications.forEach(notification => {
+      if (notification.id) {
+        this.http.post(`${environment.backendUrl}/api/notifications/read/${notification.id}`, {}, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        }).subscribe({
+          next: () => {
+          },
+          error: (err) => {
+            console.error(`❌ Error al marcar notificación ${notification.id}:`, err);
+          }
+        });
+      }
+    });
+
+    // Actualizar el estado local inmediatamente para mejor UX
+    const updatedNotifications = current.filter(n =>
+      !(n.data?.ticketId?.toString() === ticketId.toString())
+    );
+    this.notificationsSubject.next(updatedNotifications);
   }
 
   clear() {

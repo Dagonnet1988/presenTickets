@@ -26,6 +26,7 @@ import ticketRoutes from './routes/tickets.js';
 import userRoutes from './routes/users.js';
 import commentRoutes from './routes/comments.js';
 import notificationRoutes from './routes/notifications.js';
+import pushRoutes from './routes/push.js';
 import analyticsRoutes from './routes/analytics.js';
 import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
@@ -263,6 +264,7 @@ app.use('/api/tickets', authMiddleware, ticketRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/comments', authMiddleware, commentRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
+app.use('/api/push', pushRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
 // Rutas públicas
 app.use('/api/auth', authRoutes);

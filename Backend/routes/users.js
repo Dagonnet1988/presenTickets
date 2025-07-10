@@ -19,8 +19,16 @@ import { pool } from '../server.js';
 
 const router = express.Router();
 
+// Middleware para verificar rol de administrador
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Acceso denegado. Se requieren permisos de administrador.' });
+  }
+  next();
+}
+
 // Crear un nuevo usuario (solo para administradores)
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { username, password, role, firstname, lastname } = req.body;
   let { email, phone } = req.body;
 
@@ -59,7 +67,7 @@ router.post('/', async (req, res) => {
 });
 
 // Obtener todos los usuarios (solo para administradores)
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query(
@@ -74,8 +82,24 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Obtener un usuario por ID
-router.get('/:id', async (req, res) => {
+// Obtener lista de técnicos (para asignación de tickets)
+router.get('/technicians', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      "SELECT id, firstname, lastname FROM users WHERE role = 'tech' AND status = true"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error al obtener técnicos:', err);
+    res.status(500).json({ message: 'Error al obtener la lista de técnicos' });
+  } finally {
+    client.release();
+  }
+});
+
+// Obtener información básica de un usuario (solo nombre para mostrar en tickets)
+router.get('/basic/:id', async (req, res) => {
   const { id } = req.params;
 
   if (isNaN(id)) {
@@ -85,8 +109,47 @@ router.get('/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query(
-      'SELECT id, username, role, firstname, lastname, email, phone, created_at FROM users WHERE id = $1',
+      'SELECT id, firstname, lastname FROM users WHERE id = $1',
       [parseInt(id)]
+    );
+
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+  } catch (err) {
+    console.error('Error al obtener información básica del usuario:', err);
+    res.status(500).json({ message: 'Error al obtener el usuario' });
+  } finally {
+    client.release();
+  }
+});
+
+// Obtener un usuario por ID (permitir acceso si es el mismo usuario o admin)
+router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  const requestingUserId = req.user.id;
+  const requestingUserRole = req.user.role;
+
+  if (isNaN(id)) {
+    return res.status(400).json({ message: 'ID de usuario inválido' });
+  }
+
+  // Convertir ambos a números para comparación consistente
+  const requestedId = parseInt(id);
+  const userId = parseInt(requestingUserId);
+
+  // Permitir acceso si es el mismo usuario o es admin
+  if (requestedId !== userId && requestingUserRole !== 'admin') {
+    return res.status(403).json({ message: 'Acceso denegado. Solo puedes ver tu propio perfil.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT id, username, role, firstname, lastname, email, phone, created_at FROM users WHERE id = $1',
+      [requestedId]
     );
 
     if (result.rows.length > 0) {
@@ -103,7 +166,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Actualizar un usuario (solo para administradores)
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { username, password, role, firstname, lastname, email, phone, status } = req.body;
 

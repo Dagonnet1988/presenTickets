@@ -18,13 +18,13 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 
 export const tokenInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(AuthService);
-
-  // Verificar si el usuario está logueado y el token es válido
-  if (authService.isLoggedIn() && !req.url.includes('/auth/login')) {
+  // Solo agregar token si no es una request de login
+  if (!req.url.includes('/auth/login')) {
     const token = localStorage.getItem('token');
 
     if (token) {
+      // Verificar si el token existe sin validar la expiración aquí
+      // La validación de expiración se hará en el backend
       const authReq = req.clone({
         setHeaders: {
           Authorization: `Bearer ${token}`

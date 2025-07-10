@@ -210,7 +210,7 @@ export class HomeComponent implements OnInit {
     const userIds = [...new Set(this.tickets.map(ticket => ticket.assigned_to).concat(this.tickets.map(ticket => ticket.user_id)))];
     userIds.forEach(userId => {
       if (userId && !this.userNames[userId]) {
-        this.userService.getUser(userId).subscribe(user => {
+        this.userService.getUserBasic(userId).subscribe(user => {
           const username = user?.firstname || 'No Asignado';
           this.userNames[userId] = username; // Actualizar el objeto
           this.cdr.detectChanges(); // Forzar la detección de cambios
@@ -220,10 +220,10 @@ export class HomeComponent implements OnInit {
   }
 
   loadTechNames(): void {
-    this.userService.getUsers().subscribe(users => {
-      users.filter(user => user.role === 'tech').forEach(user => {
-        const username = user?.firstname;
-        this.techNames[user.id] = username; // Actualizar el objeto
+    this.userService.getTechnicians().subscribe(technicians => {
+      technicians.forEach(tech => {
+        const username = tech?.firstname;
+        this.techNames[tech.id] = username; // Actualizar el objeto
       });
       this.cdr.detectChanges(); // Forzar la detección de cambios
     });

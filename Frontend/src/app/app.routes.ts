@@ -35,6 +35,8 @@ import { ProfileComponent } from './profile/profile.component';
 import { CreateTicketComponent } from './create-ticket/create-ticket.component';
 import { DetailsTicketComponent } from './details-ticket/details-ticket.component';
 import { AuthGuard } from './shared/guards/auth.guard';
+import { AdminGuard } from './shared/guards/admin.guard';
+import { TechOrAdminGuard } from './shared/guards/tech-or-admin.guard';
 import { CreateUserComponent } from './create-user/create-user.component';
 import { ManageUsersComponent } from './manage-users/manage-users.component';
 import { EditUserComponent } from './edit-user/edit-user.component';
@@ -42,6 +44,7 @@ import { LoginGuard } from './shared/guards/login.guard';
 import { MainLayoutComponent } from './shared/components/main-layout.component';
 import { AboutComponent } from './about/about.component';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
+import { PushSettingsComponent } from './push-settings/push-settings.component';
 
 export const routes: Routes = [
   {
@@ -52,10 +55,10 @@ export const routes: Routes = [
       { path: 'profile', component: ProfileComponent },
       { path: 'create-ticket', component: CreateTicketComponent },
       { path: 'ticket/:id', component: DetailsTicketComponent },
-      { path: 'admin-dashboard', component: AdminDashboardComponent },
-      { path: 'create-user', component: CreateUserComponent },
-      { path: 'manage-users', component: ManageUsersComponent },
-      { path: 'edit-user/:id', component: EditUserComponent },
+      { path: 'admin-dashboard', component: AdminDashboardComponent, canActivate: [TechOrAdminGuard] },
+      { path: 'create-user', component: CreateUserComponent, canActivate: [AdminGuard] },      { path: 'manage-users', component: ManageUsersComponent, canActivate: [AdminGuard] },
+      { path: 'edit-user/:id', component: EditUserComponent, canActivate: [AdminGuard] },
+      { path: 'push-settings', component: PushSettingsComponent },
       { path: 'about', component: AboutComponent },
     ]
   },

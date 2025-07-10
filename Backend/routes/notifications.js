@@ -16,6 +16,7 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { authMiddleware } from './auth.js';
+import { sendPushNotification } from './push.js';
 
 const router = express.Router();
 
@@ -85,6 +86,22 @@ export async function createNotification({ user_id, type, message, ticket_id }) 
     'INSERT INTO notifications (user_id, type, message, ticket_id) VALUES ($1, $2, $3, $4)',
     [user_id, type, message, ticket_id]
   );
+
+  // Enviar notificación push al usuario
+  try {
+    const pushNotification = {
+      title: 'PresenTickets',
+      body: message,
+      tag: `ticket-${ticket_id}-${Date.now()}`, // Tag único para cada notificación
+      url: `/ticket/${ticket_id}`,
+      ticketId: ticket_id
+    };
+    
+    await sendPushNotification(user_id, pushNotification);
+  } catch (error) {
+    console.error('Error enviando notificación push:', error);
+    // No fallar la operación principal si las notificaciones push fallan
+  }
 }
 
 export default router;

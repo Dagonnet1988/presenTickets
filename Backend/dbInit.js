@@ -236,6 +236,32 @@ const checkAndCreateTables = async () => {
       }
     }
 
+    // Validar y crear la tabla "push_subscriptions"
+    const pushSubscriptionsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'push_subscriptions'
+      );
+    `);
+
+    if (!pushSubscriptionsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'push_subscriptions'...");
+      await client.query(`
+        CREATE TABLE push_subscriptions (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          endpoint TEXT NOT NULL,
+          p256dh_key TEXT NOT NULL,
+          auth_key TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, endpoint)
+        );
+      `);
+    } else {
+      console.log("✅ La tabla 'push_subscriptions' ya existe.");
+    }
+
     console.log("✅ Validación y creación de tablas completada.");
   } catch (error) {
     console.error("❌ Error al validar la base de datos:", error);

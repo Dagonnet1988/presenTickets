@@ -361,10 +361,57 @@ router.patch("/:id", async (req, res) => {
                 },
                 [user_id]
               );
+            }
+          }
+          // Si es "En revisión" - notificar al técnico asignado
+          else if (status === "En revisión") {
+            if (assigned_to) {
+              recipients.push(assigned_to);
 
-            } else {
-              console.log(
-                `❌ No se pudo enviar notificación: usuario no encontrado para ticket #${id}`
+              // Crear notificación en la base de datos
+              await createNotification({
+                user_id: assigned_to,
+                type: notificationType,
+                message: notificationMessage,
+                ticket_id: id,
+              });
+
+              // Emitir notificación en tiempo real
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                },
+                [assigned_to]
+              );
+            }
+          }
+          // Si es "En proceso" - notificar al técnico asignado
+          else if (status === "En proceso") {
+            if (assigned_to) {
+              recipients.push(assigned_to);
+
+              // Crear notificación en la base de datos
+              await createNotification({
+                user_id: assigned_to,
+                type: notificationType,
+                message: notificationMessage,
+                ticket_id: id,
+              });
+
+              // Emitir notificación en tiempo real
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                },
+                [assigned_to]
               );
             }
           }
@@ -392,11 +439,9 @@ router.patch("/:id", async (req, res) => {
                 },
                 [assigned_to]
               );
-            } else {
-              console.log(
-                `No se pudo enviar notificación: técnico no asignado para ticket #${id}`
-              );
-            }          } // Si es "Esperando respuesta del usuario" - verificar si es una reapertura
+            }
+          }
+          // Si es "Esperando respuesta del usuario" - verificar si es una reapertura
           else if (status === "Esperando respuesta del usuario") {
             // Si hay un técnico asignado y el ticket estaba cerrado o resuelto, es una reapertura
             if (assigned_to && (prevStatus === "Resuelto" || prevStatus === "Cerrado")) {
@@ -442,12 +487,10 @@ router.patch("/:id", async (req, res) => {
               }
             }
           } else {
-            console.log(`Estado ${status} no requiere notificación específica`);
+            // Estado que no requiere notificación específica
           }
         } else {
-          console.log(
-            `No se encontró el ticket #${id} para enviar notificaciones`
-          );
+          // No se encontró el ticket para enviar notificaciones
         }
       } catch (notifyErr) {
         console.error(

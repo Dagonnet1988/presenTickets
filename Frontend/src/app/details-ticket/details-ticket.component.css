@@ -30,6 +30,8 @@
   min-height: calc(100vh - 80px);
   padding-top: var(--spacing-unit);
   padding-bottom: var(--spacing-unit);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .header-section {
@@ -278,6 +280,14 @@ mat-card:hover {
   font-weight: 600;
 }
 
+.ticket-description p {
+  line-height: 1.6;
+  color: #333;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .ticket-metadata {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -312,12 +322,15 @@ mat-card:hover {
 
 /* Mejoras para el formulario de nuevo mensaje */
 .new-message-card {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
   box-shadow: var(--card-shadow);
   border-radius: var(--card-border-radius);
   border: 1px solid #e0e0e0;
   background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
   transition: all 0.3s ease;
+  overflow: visible; /* Asegurar que el contenido no se corte */
+  position: relative;
+  z-index: 1;
 }
 
 .new-message-card:hover {
@@ -331,6 +344,8 @@ mat-card:hover {
   padding: 16px 24px;
   border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
   margin: -24px -24px 0 -24px;
+  position: relative;
+  z-index: 2;
 }
 
 .new-message-card .mat-card-title {
@@ -341,6 +356,12 @@ mat-card:hover {
   font-weight: 600;
 }
 
+.new-message-card .mat-mdc-card-content {
+  padding: 24px !important;
+  position: relative;
+  z-index: 2;
+}
+
 .new-message-area {
   position: relative;
   margin-bottom: 20px;
@@ -349,47 +370,95 @@ mat-card:hover {
 .new-message-area.dragging {
   background: rgba(33, 150, 243, 0.05);
   border: 2px dashed #2196f3;
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
 }
 
 .message-actions {
-  background: #f8f9fa;
+  background: linear-gradient(145deg, #f8f9fa 0%, #f0f2f5 100%);
   border-radius: 0 0 var(--card-border-radius) var(--card-border-radius);
-  margin: 0 -24px -24px -24px;
-  padding: 16px 24px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: flex-start;
+  margin: 20px -24px -24px -24px !important;
+  padding: 24px !important;
+  display: flex !important;
+  gap: 16px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-top: 1px solid #e0e0e0;
+  min-height: 80px !important; /* Aumentar altura mínima */
+  position: relative;
+  z-index: 3;
+  box-sizing: border-box;
+  overflow: visible !important;
 }
 
 .send-button {
   background: var(--primary-gradient) !important;
   color: white !important;
-  border-radius: 24px !important;
-  padding: 12px 24px !important;
+  border-radius: 32px !important;
+  padding: 16px 32px !important;
   font-weight: 600 !important;
-  min-width: 140px !important;
+  min-width: 180px !important;
+  height: 56px !important;
   transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.5px !important;
+  text-transform: none !important;
+  box-shadow: 0 6px 16px rgba(25, 118, 210, 0.25) !important;
+  position: relative;
+  z-index: 4;
+  white-space: nowrap;
+  flex-shrink: 0 !important;
+  line-height: 1 !important; /* Mejorar alineación vertical del texto */
 }
 
-.send-button:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 6px 20px rgba(25, 118, 210, 0.3) !important;
+/* Estilos específicos para el ícono y texto del botón enviar */
+.send-button mat-icon {
+  font-size: 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
-.clear-button {
-  border-radius: 24px !important;
-  padding: 12px 20px !important;
-  color: #666 !important;
-  border: 1px solid #ddd !important;
-  transition: all 0.3s ease !important;
+.send-button span {
+  display: flex !important;
+  align-items: center !important;
+  font-size: 1rem !important;
+  line-height: 1 !important;
 }
 
-.clear-button:hover {
-  background: #f5f5f5 !important;
-  border-color: #999 !important;
+.send-button:hover:not(:disabled) {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px rgba(25, 118, 210, 0.4) !important;
+}
+
+.send-button:disabled {
+  background: #ccc !important;
+  color: #888 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Estilos mejorados para el área de texto */
+.message-textarea {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.message-textarea .mat-mdc-text-field-wrapper {
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.message-textarea:focus-within .mat-mdc-text-field-wrapper {
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
 }
 
 /* Mejoras para el historial de chat */
@@ -472,11 +541,14 @@ mat-card:hover {
 .message-content {
   line-height: 1.6;
   color: #333;
+  white-space: pre-wrap; /* Preservar espacios en blanco y saltos de línea */
 }
 
 .message-content p {
   margin: 0;
   word-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap; /* Preservar espacios en blanco y saltos de línea */
 }
 
 .no-messages {
@@ -493,33 +565,28 @@ mat-card:hover {
   margin-bottom: 16px;
 }
 
-/* Mejoras responsivas adicionales */
-@media (max-width: 768px) {
-  .ticket-metadata {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+/* Estilos específicos para archivos adjuntos en mensajes */
+.message-attachments {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
 
-  .metadata-item {
-    padding: 10px;
-  }
+.message-attachments h4 {
+  margin: 0 0 12px 0;
+  color: #666;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  .message-user,
-  .message-other {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-
-  .message-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .send-button,
-  .clear-button {
-    width: 100% !important;
-    margin-bottom: 8px;
-  }
+.message-attachments .mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Estilos para miniaturas de archivos adjuntos */
@@ -622,7 +689,8 @@ mat-card:hover {
   margin: 0 0 8px 0;
   word-break: break-word;
   max-width: 120px;
-  line-height: 1.2;  overflow: hidden;
+  line-height: 1.2;
+  overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -631,7 +699,7 @@ mat-card:hover {
 
 .attachment-actions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -642,52 +710,35 @@ mat-card:hover {
 }
 
 .view-btn, .download-btn {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  font-size: 16px !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  font-size: 18px !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+  border: none !important;
 }
 
 .view-btn {
-  background: rgba(25, 118, 210, 0.1) !important;
-  color: #1976d2 !important;
+  background: #2196f3 !important;
+  color: white !important;
 }
 
 .view-btn:hover {
-  background: rgba(25, 118, 210, 0.2) !important;
+  background: #1976d2 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4) !important;
 }
 
 .download-btn {
-  background: rgba(76, 175, 80, 0.1) !important;
-  color: #4caf50 !important;
+  background: #4caf50 !important;
+  color: white !important;
 }
 
 .download-btn:hover {
-  background: rgba(76, 175, 80, 0.2) !important;
-}
-
-/* Estilos específicos para archivos adjuntos en mensajes */
-.message-attachments {
-  margin-top: 16px;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.message-attachments h4 {
-  margin: 0 0 12px 0;
-  color: #666;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.message-attachments .mat-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
+  background: #388e3c !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4) !important;
 }
 
 /* Mejoras responsivas para miniaturas */
@@ -719,6 +770,12 @@ mat-card:hover {
     height: 20px;
     font-size: 0.7rem;
   }
+
+  .view-btn, .download-btn {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -742,144 +799,59 @@ mat-card:hover {
     font-size: 0.7rem;
     max-width: 80px;
   }
+
+  .view-btn, .download-btn {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
+  }
 }
 
-/* ===== ESTILOS DE ESTADO DEL TICKET ===== */
-.status-created {
-  background-color: #e3f2fd !important;
-  color: #1976d2 !important;
-  border: 1px solid #bbdefb;
-}
-
-.status-assigned {
-  background-color: #fff3e0 !important;
-  color: #f57c00 !important;
-  border: 1px solid #ffcc02;
-}
-
-.status-progress {
-  background-color: #fff8e1 !important;
-  color: #ff8f00 !important;
-  border: 1px solid #ffecb3;
-}
-
-.status-resolved {
-  background-color: #e8f5e8 !important;
-  color: #388e3c !important;
-  border: 1px solid #c8e6c9;
-}
-
-.status-closed {
-  background-color: #f3e5f5 !important;
-  color: #7b1fa2 !important;
-  border: 1px solid #e1bee7;
-}
-
-.status-external {
-  background-color: #fce4ec !important;
-  color: #c2185b !important;
-  border: 1px solid #f8bbd9;
-}
-
-.status-tier3 {
-  background-color: #ffebee !important;
-  color: #d32f2f !important;
-  border: 1px solid #ffcdd2;
-}
-
-.status-reopened {
-  background-color: #e0f2f1 !important;
-  color: #00796b !important;
-  border: 1px solid #b2dfdb;
-}
-
-/* Estilos generales para badges de estado */
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: inline-block;
-  min-width: 80px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-.status-badge:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* ===== MEJORAS PARA EL ÁREA DE NUEVO MENSAJE ===== */
-.message-textarea {
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
-.message-textarea .mat-mdc-form-field-flex {
-  width: 100% !important;
-}
-
-.message-textarea textarea {
-  width: 100% !important;
-  max-width: 100% !important;
-  resize: vertical !important;
-  min-height: 120px !important;
-  font-family: inherit;
-}
-
-.message-textarea .mat-mdc-text-field-wrapper {
-  width: 100% !important;
-}
-
-/* Mejorar el estilo del botón de selección de archivos */
-.file-input-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #2196f3 0%, #21cbf3 100%);
-  color: white;
+/* Lista de archivos adjuntos (para formulario nuevo mensaje) */
+.attachments-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  max-height: 200px;
+  overflow-y: auto;
   border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
+}
+
+.attachments-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e0e0e0;
   transition: all 0.3s ease;
-  border: none;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
 }
 
-.file-input-label:hover {
-  background: linear-gradient(135deg, #1976d2 0%, #1ba3d1 100%);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
-  transform: translateY(-1px);
+.attachments-list li:hover {
+  background: #f0f2f5;
+  border-color: #d0d0d0;
+  transform: translateX(4px);
 }
 
-.file-input-label mat-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-}
-
-/* Ajustar el área de nuevo mensaje para que use todo el espacio */
-.new-message-area {
-  width: 100%;
-  position: relative;
-}
-
-.new-message-card .mat-mdc-card-content {
-  padding: 24px;
-}
-
-.message-actions {
-  justify-content: flex-end;
-  padding: 16px 24px;
+.file-info {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
-.send-button {
-  min-width: 140px;
-  height: 44px;
-  font-weight: 500;
+.file-info span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-type-icon {
+  color: #666;
+  font-size: 20px;
+  flex-shrink: 0;
 }

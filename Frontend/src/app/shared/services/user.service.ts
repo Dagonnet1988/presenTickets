@@ -43,8 +43,18 @@ export class UserService {
     return this.http.get<any>(`${this.apiUrlUsers}/${userId}`, { headers: this.getAuthHeaders() });
   }
 
+  // Obtener información básica de un usuario (solo nombre)
+  getUserBasic(userId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrlUsers}/basic/${userId}`, { headers: this.getAuthHeaders() });
+  }
+
   getUsers(): Observable<any[]> {
     return this.http.get<any[]>(this.apiUrlUsers, { headers: this.getAuthHeaders() });
+  }
+
+  // Obtener lista de técnicos disponibles para asignación
+  getTechnicians(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrlUsers}/technicians`, { headers: this.getAuthHeaders() });
   }
 
   updateUser(userId: string, user: any): Observable<any> {

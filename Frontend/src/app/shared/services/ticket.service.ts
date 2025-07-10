@@ -55,7 +55,6 @@ export class TicketService {
     return this.http.post<any>(`${this.apiUrlComments}/${ticketId}`, formData);
   }
   updateTicketStatus(ticketId: string, status: string, actorRole: string): Observable<any> {
-    console.log(`🌐 TicketService: Enviando PATCH a /tickets/${ticketId}`, { status, actorRole });
     return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, { status, actorRole }, { headers: this.getAuthHeaders() });
   }
 

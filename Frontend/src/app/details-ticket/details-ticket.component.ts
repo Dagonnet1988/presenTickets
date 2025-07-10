@@ -31,6 +31,7 @@ import { TicketService } from '../shared/services/ticket.service';
 import { AuthService } from '../shared/services/auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UserService } from '../shared/services/user.service';
+import { NotificationService } from '../shared/services/notification.service';
 import { environment } from '../../environments/environment';
 import localeEs from '@angular/common/locales/es';
 import { forkJoin, map, catchError, of, finalize, Subscription, switchMap, tap } from 'rxjs';
@@ -78,7 +79,8 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     public authService: AuthService,
     public userService: UserService,
     private cdr: ChangeDetectorRef,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private notificationService: NotificationService
   ) {}  // Referencia a la función enlazada para poder eliminarla correctamente
   private boundRefreshHandler: any;
 
@@ -160,6 +162,9 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
           // Cargar nombres de usuarios una sola vez después de tener todos los datos
           this.loadUserNames();
 
+          // Marcar las notificaciones de este ticket como vistas
+          this.notificationService.markTicketNotificationsAsRead(id);
+
           // Una única detección de cambios al final
           this.cdr.markForCheck();
         },
@@ -171,9 +176,9 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   }
   loadTechnicians(): void {
     this.subscriptions.add(
-      this.userService.getUsers().subscribe({
-        next: (users) => {
-          this.technicians = users.filter(user => user.role === 'tech');
+      this.userService.getTechnicians().subscribe({
+        next: (technicians) => {
+          this.technicians = technicians;
           this.cdr.markForCheck(); // Notificar al detector de cambios
         },
         error: (err) => {
@@ -210,7 +215,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         uniqueUserIds
           .filter(userId => userId && !this.userNames.has(userId))
           .map(userId =>
-            this.userService.getUser(userId).pipe(
+            this.userService.getUserBasic(userId).pipe(
               map(user => ({
                 userId,
                 username: user ? `${user.firstname}` : 'Usuario Desconocido'
@@ -569,7 +574,21 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   // Función para convertir saltos de línea en elementos HTML
   formatMessageWithLineBreaks(message: string): string {
     if (!message) return '';
-    return message.replace(/\n/g, '<br>');
+
+    // Escapar caracteres HTML peligrosos primero
+    let sanitized = message
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    // Convertir diferentes tipos de saltos de línea a <br>
+    return sanitized
+      .replace(/\r\n/g, '<br>')  // Windows
+      .replace(/\r/g, '<br>')    // Mac clásico
+      .replace(/\n/g, '<br>')    // Unix/Linux
+      .replace(/  /g, ' &nbsp;'); // Preservar espacios dobles
   }
 
   // Función para descargar archivos adjuntos

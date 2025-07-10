@@ -149,7 +149,7 @@
     <mat-card-content>
       <div class="ticket-description">
         <h3>Descripción</h3>
-        <p>{{ ticket.description }}</p>
+        <p [innerHTML]="formatMessageWithLineBreaks(ticket.description)"></p>
       </div>
 
       <div class="ticket-metadata">

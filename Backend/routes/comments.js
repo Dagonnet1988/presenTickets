@@ -147,53 +147,74 @@ router.post('/:ticketId', async (req, res) => {
           'INSERT INTO attachments (ticket_id, comment_id, filename, filepath) VALUES ($1, $2, $3, $4)',
           [ticketId, commentId, attachment.name, attachment.url]
         );
-      }// Obtener roles y datos del ticket
+      }      // Obtener datos del ticket y usuario que envía el comentario
       const ticketResult = await client.query('SELECT assigned_to, user_id, title, status FROM tickets WHERE id = $1', [ticketId]);
       const assignedTo = ticketResult.rows[0]?.assigned_to;
       const ticketUserId = ticketResult.rows[0]?.user_id;
       const ticketTitle = ticketResult.rows[0]?.title || '';
       const currentStatus = ticketResult.rows[0]?.status;
-      const userResult = await client.query('SELECT role FROM users WHERE id = $1', [userId]);      const userRole = userResult.rows[0].role;
       
-        // --- Lógica de notificaciones por comentario ---
+      const userResult = await client.query('SELECT role, firstname, username FROM users WHERE id = $1', [userId]);
+      const userRole = userResult.rows[0]?.role;
+      const username = userResult.rows[0]?.firstname || userResult.rows[0]?.username || 'Usuario';
+      
+      // --- LÓGICA SIMPLIFICADA: SIEMPRE NOTIFICAR CUANDO HAY COMENTARIOS ---
       let recipients = [];
-      let notificationType = null;
+      let notificationType = 'nuevo_comentario';
+      let shouldUpdateStatus = false;
+      let newStatus = null;
+
+      // Determinar destinatarios según el rol del que comenta
       if (userRole === 'admin') {
-        if (assignedTo) recipients.push(assignedTo);
-        if (ticketUserId) recipients.push(ticketUserId);
-        notificationType = 'admin_comentario'
-        } else if (userRole === 'tech') {
-          if (ticketUserId) recipients.push(ticketUserId);
-          notificationType = 'comentario_tech';
-          await client.query(
-            'UPDATE tickets SET status = $1 WHERE id = $2',
-            ['Esperando respuesta del usuario', ticketId]
-          );
-        } else if (userRole === 'user') {
-          if (currentStatus === 'Creado' || currentStatus === 'Esperando respuesta del usuario') {
-            await client.query(
-              'UPDATE tickets SET status = $1 WHERE id = $2',
-              ['En gestión', ticketId]
-            );
-            recipients.push(assignedTo);
-            notificationType = 'comentario_user';
-            } else if (currentStatus === 'Escalado a externo' || currentStatus === 'Escalado a Tier 3 / Gerente de Cuenta') {
-              recipients.push(assignedTo);
-              notificationType = 'comentario_user';
-            }
-        } if (notificationType && recipients.length > 0) {
+        // Admin comenta: notificar a técnico asignado y usuario creador
+        if (assignedTo && assignedTo !== userId) recipients.push(assignedTo);
+        if (ticketUserId && ticketUserId !== userId) recipients.push(ticketUserId);
+        notificationType = 'comentario_admin';
+      } else if (userRole === 'tech') {
+        // Técnico comenta: notificar al usuario creador y cambiar estado
+        if (ticketUserId && ticketUserId !== userId) recipients.push(ticketUserId);
+        notificationType = 'comentario_tech';
+        shouldUpdateStatus = true;
+        newStatus = 'Esperando respuesta del usuario';
+      } else if (userRole === 'user') {
+        // Usuario comenta: notificar al técnico asignado y cambiar estado si es necesario
+        if (assignedTo && assignedTo !== userId) recipients.push(assignedTo);
+        notificationType = 'comentario_user';
+        
+        // Cambiar estado solo si el ticket está en ciertos estados
+        if (currentStatus === 'Creado' || currentStatus === 'Esperando respuesta del usuario') {
+          shouldUpdateStatus = true;
+          newStatus = 'En gestión';
+        }
+      }
+
+      // Actualizar estado del ticket si es necesario
+      if (shouldUpdateStatus && newStatus) {
+        await client.query(
+          'UPDATE tickets SET status = $1 WHERE id = $2',
+          [newStatus, ticketId]
+        );
+      }
+
+      // SIEMPRE enviar notificaciones si hay destinatarios
+      if (recipients.length > 0) {
+        // Notificación en tiempo real (campana)
         emitTicketNotification(notificationType, {
           ticketId,
           commentId,
           userId,
+          username,
           title: ticketTitle,
+          message: message || '[Archivo adjunto]',
           createdAt: new Date()
         }, recipients);
-        for (const uid of recipients) {
+
+        // Notificación persistente + push notification
+        for (const recipientId of recipients) {
           await createNotification({
-            user_id: uid,
+            user_id: recipientId,
             type: notificationType,
-            message: `${ticketTitle} - Nuevo mensaje`,
+            message: `${ticketTitle} - Nuevo comentario de ${username}`,
             ticket_id: ticketId
           });
         }

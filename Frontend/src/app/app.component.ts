@@ -31,7 +31,9 @@ import { AuthService } from './shared/services/auth.service';
 export class AppComponent {
   title = 'Frontend';
 
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService
+  ) {}
 
   isLoggedIn(): boolean {
     return this.authService.isLoggedIn();

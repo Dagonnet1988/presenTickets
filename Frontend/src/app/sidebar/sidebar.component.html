@@ -93,9 +93,7 @@
     >
       <mat-icon class="nav-icon">dashboard</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Dashboard</span>
-    </a>
-
-    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
+    </a>    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
     <a
       mat-list-item
       routerLink="/profile"
@@ -106,6 +104,17 @@
     >
       <mat-icon class="nav-icon">account_circle</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Editar Perfil</span>
+    </a>    <!-- Enlace para "Configuración de Notificaciones" (todos los usuarios) -->
+    <a
+      mat-list-item
+      routerLink="/push-settings"
+      routerLinkActive="active-link"
+      [routerLinkActiveOptions]="{ exact: true }"
+      aria-label="Configuración de Notificaciones"
+      class="nav-item"
+    >
+      <mat-icon class="nav-icon">notifications_active</mat-icon>
+      <span class="nav-text" *ngIf="!isCollapsed">Notificaciones</span>
     </a>
 
     <!-- Enlace para "Acerca de" (todos los usuarios) -->

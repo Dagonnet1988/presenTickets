@@ -60,79 +60,54 @@ export class AuthService {
   }
   // Verificar si el usuario está autenticado
   isLoggedIn(): boolean {
-    if (this.isLocalStorageAvailable()) {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return false;
-      }
-
-      try {
-        // Decodificar el JWT para verificar su expiración
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const currentTime = Math.floor(Date.now() / 1000); // Tiempo actual en segundos
-
-        // Verificar si el token ha expirado
-        if (payload.exp && payload.exp < currentTime) {
-          console.log('Token expirado, removiendo del localStorage');
-          localStorage.removeItem('token');
-          return false;
-        }
-
-        return true;
-      } catch (e) {
-        console.error('Error al decodificar el token:', e);
-        localStorage.removeItem('token'); // Remover token malformado
-        return false;
-      }
+    if (!this.isLocalStorageAvailable()) {
+      return false;
     }
-    return false;
-  }// Obtener el userId del usuario autenticado (from token if needed)
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      return false;
+    }
+
+    if (this.isTokenValid(token)) {
+      return true;
+    } else {
+      console.log('Token expirado o inválido, removiendo del localStorage');
+      localStorage.removeItem('token');
+      return false;
+    }
+  }  // Obtener el userId del usuario autenticado
   getUserId(): string | null {
-    if (this.isLocalStorageAvailable()) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        // Optionally decode JWT to get userId
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          return payload.id || payload.userId || null;
-        } catch (e) {
-          console.error('Error decoding token:', e);
-          return null;
-        }
-      }
-    }
-    return null;
+    return this.getTokenClaim('id') || this.getTokenClaim('userId');
   }
 
   // Obtener el nombre del usuario autenticado
   getUserName(): string | null {
-    if (this.isLocalStorageAvailable()) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          return payload.username || null;
-        } catch (e) {
-          return null;
-        }
-      }
-    }
-    return null;
+    return this.getTokenClaim('username');
   }
 
   getUserRole(): string | null {
-    if (this.isLocalStorageAvailable()) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          return payload.role || null;
-        } catch (e) {
-          return null;
-        }
-      }
+    return this.getTokenClaim('role');
+  }
+
+  // Método auxiliar para extraer claims del token
+  private getTokenClaim(claim: string): string | null {
+    if (!this.isLocalStorageAvailable()) {
+      return null;
     }
-    return null;
+
+    const token = localStorage.getItem('token');
+    if (!token || !this.isTokenValid(token)) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload[claim] || null;
+    } catch (e) {
+      console.error('Error al extraer claim del token:', e);
+      return null;
+    }
   }
 
   // Cerrar sesión
@@ -147,8 +122,15 @@ export class AuthService {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const currentTime = Math.floor(Date.now() / 1000);
+
+      // Solo logs en modo debug si es necesario
+      if (payload.exp && (payload.exp - currentTime) < 300) { // Solo log si quedan menos de 5 minutos
+        console.log('⚠️ Token cerca de expirar. Tiempo restante:', payload.exp - currentTime, 'segundos');
+      }
+
       return payload.exp && payload.exp > currentTime;
     } catch (e) {
+      console.error('Error validating token:', e);
       return false;
     }
   }
@@ -190,6 +172,29 @@ export class AuthService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Método temporal para debug - eliminar en producción
+  debugToken(): void {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        console.log('🔍 DEBUG TOKEN:');
+        console.log('Payload:', payload);
+        console.log('Expira en timestamp:', payload.exp);
+        console.log('Expira en fecha:', new Date(payload.exp * 1000));
+        console.log('Hora actual timestamp:', currentTime);
+        console.log('Hora actual fecha:', new Date());
+        console.log('Diferencia (segundos):', payload.exp - currentTime);
+        console.log('Es válido:', payload.exp > currentTime);
+      } catch (e) {
+        console.error('Error decodificando token:', e);
+      }
+    } else {
+      console.log('No hay token en localStorage');
     }
   }
 }

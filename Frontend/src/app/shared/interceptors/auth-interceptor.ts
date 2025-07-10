@@ -32,9 +32,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Si es error 401 (No autorizado) o 403 (Prohibido) y no se está manejando ya
-      if ((error.status === 401 || error.status === 403) && !isHandlingSessionExpired) {
-        console.log('Token expirado o inválido - Código:', error.status);
+      // Solo procesar errores de token expirado/inválido, no errores de permisos específicos
+      const isTokenError = error.status === 401 &&
+                          (error.error?.message?.includes('Token') ||
+                           error.error?.message?.includes('no proporcionado') ||
+                           error.error?.message?.includes('inválido') ||
+                           error.error?.message?.includes('expirado'));
+
+      if (isTokenError && !isHandlingSessionExpired && !req.url.includes('/auth/login')) {
+        console.log('🚨 Token expirado/inválido detectado:', error.error?.message);
 
         // Marcar que se está manejando la expiración de sesión
         isHandlingSessionExpired = true;
@@ -59,6 +65,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             isHandlingSessionExpired = false;
           }, 1000);
         });
+      } else if (error.status === 403) {
+        // Los errores 403 son de permisos, no de sesión expirada
+        console.log('⚠️ Error de permisos (403):', error.error?.message);
       }
 
       return throwError(() => error);
