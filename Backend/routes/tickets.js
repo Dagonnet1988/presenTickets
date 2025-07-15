@@ -247,7 +247,7 @@ router.post("/", (req, res) => {
 // Actualizar un ticket
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
-  const { priority, assigned_to, status, name, actorRole } = req.body;
+  const { priority, assigned_to, status, name, external_ticket_id, actorRole } = req.body;
 
   // Validar que el ID sea un número entero
   if (isNaN(parseInt(id, 10))) {
@@ -292,6 +292,13 @@ router.patch("/:id", async (req, res) => {
     index++;
   }
 
+  // Agregar soporte para actualizar el ID de ticket externo
+  if (external_ticket_id !== undefined) {
+    updates.push(`external_ticket_id = $${index}`);
+    values.push(external_ticket_id || null); // Permitir valores null o vacíos
+    index++;
+  }
+
   // Verificar si el estado es 'Cerrado' o 'Resuelto' y actualizar el campo 'closed_at'
   if (status === "Cerrado" || status === "Resuelto") {
     updates.push(`closed_at = $${index}`);
@@ -314,7 +321,57 @@ router.patch("/:id", async (req, res) => {
   values.push(parseInt(id, 10));
   const client = await pool.connect();
   try {
-    await client.query(query, values);    // Si hay cambio de estado, obtener datos necesarios para las notificaciones
+    await client.query(query, values);
+
+    // Si hay cambio de ID externo, emitir evento para actualización en tiempo real
+    if (external_ticket_id !== undefined) {
+      try {
+        const ticketDataQuery = `
+          SELECT 
+            t.id, t.title, t.priority, t.status, t.external_ticket_id, t.user_id, t.assigned_to
+          FROM tickets t 
+          WHERE t.id = $1
+        `;
+        
+        const ticketResult = await client.query(ticketDataQuery, [id]);
+        
+        if (ticketResult.rows.length > 0) {
+          const ticketData = ticketResult.rows[0];
+          
+          // Obtener usuarios que deben recibir la actualización en tiempo real (sin notificaciones push)
+          const usersQuery = `
+            SELECT DISTINCT u.id 
+            FROM users u 
+            WHERE 
+              u.id = $1 OR  -- Creador del ticket
+              u.id = $2 OR  -- Usuario asignado
+              u.role = 'admin'  -- Administradores
+          `;
+          
+          const usersResult = await client.query(usersQuery, [ticketData.user_id, ticketData.assigned_to]);
+          
+          // Obtener los IDs de los usuarios que deben recibir la actualización
+          const userIds = usersResult.rows.map(user => user.id);
+          
+          emitTicketNotification(
+            'id_externo_actualizado',
+            {
+              ticketId: parseInt(id),
+              title: ticketData.title,
+              createdAt: new Date(),
+              message: `ID Externo actualizado en ticket "${ticketData.title}"`,
+              external_ticket_id: external_ticket_id
+            },
+            userIds
+          );
+        }
+      } catch (notificationError) {
+        console.error('Error enviando actualización en tiempo real para ID externo:', notificationError);
+        // No fallar la actualización principal por error en la emisión del evento
+      }
+    }
+
+    // Si hay cambio de estado, obtener datos necesarios para las notificaciones
     if (status) {
       
       try {

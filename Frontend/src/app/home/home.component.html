@@ -51,11 +51,22 @@
           (click)="viewTicketDetails(ticket.id)"
         >
           <div class="ticket-header">
-            <h3>
-              <mat-icon class="ticket-icon">confirmation_number</mat-icon>
-              Ticket #{{ ticket.id }}: {{ ticket.title }}
-            </h3>
-            <span class="status" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+            <div class="ticket-title-row">
+              <h3>
+                <mat-icon class="ticket-icon">confirmation_number</mat-icon>
+                <span class="ticket-title-text">
+                  Ticket #{{ ticket.id }}: {{ ticket.title }}
+                </span>
+              </h3>
+              <span class="status status-badge" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
+            </div>
+
+            <div class="ticket-badges" *ngIf="ticket.external_ticket_id">
+              <span class="external-ticket-id">
+                <mat-icon>link</mat-icon>
+                ID Externo: {{ ticket.external_ticket_id }}
+              </span>
+            </div>
           </div>
 
           <div class="ticket-meta">

@@ -15,172 +15,283 @@
 
 <div class="details-ticket-container fade-in-up" *ngIf="ticket">
 
-  <!-- Header Section -->
+  <!-- Header Section - Optimizado y compacto -->
   <div class="header-section">
-    <div class="back-navigation">
-      <button mat-raised-button class="back-button" (click)="goBack()">
-        <mat-icon>arrow_back</mat-icon>
-        Regresar
-      </button>
-      <h1 class="page-title">Detalles del Ticket</h1>
-    </div>
-
-    <div class="actions-container">
-      <button
-        mat-raised-button
-        color="warn"
-        class="action-button"
-        (click)="confirmAction('cerrar')"
-        *ngIf="
-          ticket.status !== 'Cerrado' &&
-          ticket.status !== 'Resuelto' &&
-          userRole === 'user'
-        "
-      >
-        <mat-icon>close</mat-icon>
-        Cerrar Ticket
-      </button>      <button
-        mat-raised-button
-        color="accent"
-        class="action-button"
-        (click)="confirmAction('Escalar a Externo')"
-        *ngIf="
-          ticket.status !== 'Cerrado' &&
-          ticket.status !== 'Resuelto' &&
-          ticket.status !== 'Escalado a externo' &&
-          userRole !== 'user'
-        "
-      >
-        <mat-icon>trending_up</mat-icon>
-        Escalar a Externo
-      </button>
-
-      <button
-        mat-raised-button
-        color="warn"
-        class="action-button"
-        (click)="confirmAction('Escalar a Tier 3')"
-        *ngIf="
-          ticket.status !== 'Cerrado' &&
-          ticket.status !== 'Resuelto' &&
-          ticket.status !== 'Escalado a Tier 3 / Gerente de Cuenta' &&
-          userRole !== 'user'
-        "
-      >
-        <mat-icon>supervisor_account</mat-icon>
-        Escalar a Tier 3
-      </button>
-
-      <button
-        mat-raised-button
-        color="primary"
-        class="action-button"
-        (click)="confirmAction('resolver')"
-        *ngIf="
-          ticket.status !== 'Cerrado' &&
-          ticket.status !== 'Resuelto' &&
-          userRole !== 'user'
-        "
-      >
-        <mat-icon>check_circle</mat-icon>
-        Resolver Ticket
-      </button>
-
-      <button
-        *ngIf="userRole !== 'user' && ticket.status === 'Cerrado' || ticket.status === 'Resuelto'"
-        mat-raised-button
-        color="primary"
-        class="action-button"
-        (click)="confirmAction('reabrir')"
-      >
-        <mat-icon>refresh</mat-icon>
-        Reabrir Ticket
-      </button>
-
-
-    <div class="ticket-controls">
-      <div class="control-field" *ngIf="userRole !== 'user'">
-        <mat-form-field appearance="outline">
-          <mat-label>Prioridad</mat-label>
-          <mat-select
-            [(ngModel)]="ticket.priority"
-            (selectionChange)="updatePriority($event.value)"
-            [disabled]="ticket.priority && userRole !== 'admin'"
-          >
-            <mat-option value="Baja">BAJA</mat-option>
-            <mat-option value="Media">MEDIA</mat-option>
-            <mat-option value="Alta">ALTA</mat-option>
-            <mat-option value="Urgente">URGENTE</mat-option>
-          </mat-select>
-        </mat-form-field>
+    <!-- Primera fila: Navegación y título -->
+    <div class="header-row-main">
+      <div class="back-navigation">
+        <button mat-raised-button class="back-button" (click)="goBack()">
+          <mat-icon>arrow_back</mat-icon>
+          Regresar
+        </button>
+        <h1 class="page-title">Detalles del Ticket</h1>
       </div>
 
-      <div class="control-field">
-        <mat-form-field appearance="outline">
-          <mat-label>Asignado a</mat-label>
-          <mat-select
-            [(ngModel)]="ticket.assigned_to"
-            (selectionChange)="assignTechnician($event.value)"
-            [disabled]="userRole !== 'admin' && ticket.assigned_to || userRole === 'user'"
+      <!-- Contenedor flexible para botones de acción y controles -->
+      <div class="actions-and-controls-container">
+        <!-- Actions Container - Compacto -->
+        <div class="actions-container">
+          <button
+            mat-raised-button
+            color="warn"
+            class="action-button"
+            (click)="confirmAction('cerrar')"
+            *ngIf="
+              ticket?.status !== 'Cerrado' &&
+              ticket?.status !== 'Resuelto' &&
+              userRole === 'user'
+            "
           >
-            <mat-option *ngFor="let tech of technicians" [value]="tech.id">
-              {{ tech.firstname }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
+            <mat-icon>close</mat-icon>
+            Cerrar Ticket
+          </button>
+
+          <button
+            mat-raised-button
+            color="accent"
+            class="action-button"
+            (click)="confirmAction('Escalar a Externo')"
+            *ngIf="
+              ticket?.status !== 'Cerrado' &&
+              ticket?.status !== 'Resuelto' &&
+              ticket?.status !== 'Escalado a externo' &&
+              userRole !== 'user'
+            "
+          >
+            <mat-icon>trending_up</mat-icon>
+            Escalar a Externo
+          </button>
+
+          <button
+            mat-raised-button
+            color="warn"
+            class="action-button"
+            (click)="confirmAction('Escalar a Tier 3')"
+            *ngIf="
+              ticket?.status !== 'Cerrado' &&
+              ticket?.status !== 'Resuelto' &&
+              ticket?.status !== 'Escalado a Tier 3 / Gerente de Cuenta' &&
+              userRole !== 'user'
+            "
+          >
+            <mat-icon>supervisor_account</mat-icon>
+            Escalar a Tier 3
+          </button>
+
+          <button
+            mat-raised-button
+            color="primary"
+            class="action-button"
+            (click)="confirmAction('resolver')"
+            *ngIf="
+              ticket?.status !== 'Cerrado' &&
+              ticket?.status !== 'Resuelto' &&
+              userRole !== 'user'
+            "
+          >
+            <mat-icon>check_circle</mat-icon>
+            Resolver Ticket
+          </button>
+
+          <button
+            *ngIf="userRole !== 'user' && (ticket?.status === 'Cerrado' || ticket?.status === 'Resuelto')"
+            mat-raised-button
+            color="primary"
+            class="action-button"
+            (click)="confirmAction('reabrir')"
+          >
+            <mat-icon>refresh</mat-icon>
+            Reabrir Ticket
+          </button>
+        </div>
+
+        <!-- Controles compactos en la misma línea (responsivo) -->
+        <div class="controls-horizontal-container">
+          <!-- ID Ticket Externo - Compacto -->
+          <div class="control-item external-ticket" *ngIf="(userRole !== 'user') || ticket?.external_ticket_id">
+            <div class="control-label">
+              <mat-icon>link</mat-icon>
+              <span>ID Externo:</span>
+            </div>
+            <div class="control-content">
+              <!-- Vista de solo lectura para usuarios -->
+              <span *ngIf="userRole === 'user' && ticket?.external_ticket_id" class="control-value">
+                {{ ticket.external_ticket_id }}
+              </span>
+              <!-- Vista editable para admin/tech -->
+              <div *ngIf="userRole !== 'user'" class="control-edit-container">
+                <span class="control-value" *ngIf="ticket?.external_ticket_id; else noIdTemplate">
+                  {{ ticket.external_ticket_id }}
+                </span>
+                <ng-template #noIdTemplate>
+                  <span class="control-placeholder">No asignado</span>
+                </ng-template>
+                <button mat-icon-button
+                        color="primary"
+                        class="edit-btn"
+                        (click)="openExternalTicketDialog()"
+                        matTooltip="Editar ID de ticket externo">
+                  <mat-icon>edit</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Prioridad - Compacto -->
+          <div class="control-item priority" *ngIf="userRole !== 'user'">
+            <div class="control-label">
+              <mat-icon>priority_high</mat-icon>
+              <span>Prioridad:</span>
+            </div>
+            <div class="control-content">
+              <div class="control-edit-container">
+                <span *ngIf="ticket?.priority; else noPriorityTemplate" [ngClass]="getPriorityClass(ticket.priority)" class="control-value">
+                  {{ ticket.priority }}
+                </span>
+                <ng-template #noPriorityTemplate>
+                  <span class="control-placeholder">No asignada</span>
+                </ng-template>
+                <button mat-icon-button
+                        color="primary"
+                        class="edit-btn"
+                        (click)="editPriority()"
+                        matTooltip="Editar prioridad"
+                        [disabled]="ticket?.priority && userRole !== 'admin'">
+                  <mat-icon>edit</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Asignado a - Compacto -->
+          <div class="control-item assignment">
+            <div class="control-label">
+              <mat-icon>person</mat-icon>
+              <span>Asignado a:</span>
+            </div>
+            <!-- Vista de solo lectura para usuarios -->
+            <div class="control-content">
+              <span *ngIf="userRole === 'user' && ticket?.assigned_to" class="control-value">
+                {{ getAssignedTechnicianName(ticket.assigned_to) }}
+              </span>
+              <span *ngIf="userRole === 'user' && !ticket?.assigned_to" class="control-placeholder">
+                No asignado
+              </span>
+              <div *ngIf="userRole !== 'user'" class="control-edit-container">
+                <span *ngIf="ticket?.assigned_to; else noAssignedTemplate" class="control-value assigned-value">
+                  {{ getAssignedTechnicianName(ticket.assigned_to) }}
+                </span>
+                <ng-template #noAssignedTemplate>
+                  <span class="control-placeholder">No asignado</span>
+                </ng-template>
+                <button mat-icon-button
+                        color="primary"
+                        class="edit-btn"
+                        (click)="editAssignment()"
+                        matTooltip="Editar asignación"
+                        [disabled]="(userRole !== 'admin' && ticket?.assigned_to) || userRole === 'user'">
+                  <mat-icon>edit</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    </div>
-  </div>  <!-- Ticket Information Card -->
+  </div>
+
+  <!-- Ticket Information Card - Diseño moderno y responsivo -->
   <mat-card class="ticket-info-card">
     <mat-card-header>
       <div class="ticket-header-content">
-        <div class="ticket-badge">
-          <span [ngClass]="getPriorityClass(ticket.priority)">{{ ticket.priority }}</span>
+        <div class="ticket-title-section">
+          <mat-card-title>
+            <span class="ticket-number">#{{ ticket?.id }}</span>
+            <span class="ticket-title">{{ ticket?.title }}</span>
+          </mat-card-title>
+          <mat-card-subtitle>
+            <span>Creado el {{ ticket?.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</span>
+          </mat-card-subtitle>
         </div>
-        <mat-card-title>Ticket #{{ ticket.id }}: {{ ticket.title }}</mat-card-title>
-        <mat-card-subtitle>
-          <mat-icon class="info-icon">schedule</mat-icon>
-          Creado el {{ ticket.created_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}
-        </mat-card-subtitle>
+        <div class="ticket-status-badge">
+          <span class="status-chip-large" [ngClass]="getStatusClass(ticket?.status)">
+            {{ ticket?.status }}
+          </span>
+        </div>
       </div>
     </mat-card-header>
 
     <mat-card-content>
+      <!-- Descripción del ticket -->
       <div class="ticket-description">
-        <h3>Descripción</h3>
-        <p [innerHTML]="formatMessageWithLineBreaks(ticket.description)"></p>
+        <div class="section-header">
+          <mat-icon>description</mat-icon>
+          <h3>Descripción</h3>
+        </div>
+        <div class="description-content">
+          <p [innerHTML]="formatMessageWithLineBreaks(ticket?.description)"></p>
+        </div>
       </div>
 
-      <div class="ticket-metadata">
-        <div class="metadata-item">
-          <mat-icon>category</mat-icon>
-          <span><strong>Categoría:</strong> {{ ticket.category }}</span>
+      <!-- Información del ticket en grid responsivo -->
+      <div class="ticket-info-grid">
+        <div class="info-card category">
+          <div class="info-icon">
+            <mat-icon>category</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">Categoría</span>
+            <span class="info-value">{{ ticket?.category }}</span>
+          </div>
         </div>
 
-        <div class="metadata-item">
-          <mat-icon>business</mat-icon>
-          <span><strong>Área:</strong> {{ ticket.area }}</span>
+        <div class="info-card area">
+          <div class="info-icon">
+            <mat-icon>business</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">Área</span>
+            <span class="info-value">{{ ticket?.area }}</span>
+          </div>
         </div>
 
-        <div class="metadata-item" *ngIf="userRole !== 'user'">
-          <mat-icon>person</mat-icon>
-          <span><strong>Creado Por:</strong> {{ getUserName(ticket.user_id).toUpperCase() }}</span>
+        <div class="info-card creator" *ngIf="userRole !== 'user'">
+          <div class="info-icon">
+            <mat-icon>person</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">Creado Por</span>
+            <span class="info-value">{{ getUserName(ticket?.user_id) }}</span>
+          </div>
         </div>
 
-        <div class="metadata-item">
-          <mat-icon>info</mat-icon>
-          <span><strong>Estado:</strong>
-            <span class="status-chip" [ngClass]="getStatusClass(ticket.status)">{{ ticket.status }}</span>
-          </span>
+        <div class="info-card assigned" *ngIf="ticket?.assigned_to">
+          <div class="info-icon">
+            <mat-icon>engineering</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">Técnico Asignado</span>
+            <span class="info-value">{{ getAssignedTechnicianName(ticket.assigned_to) }}</span>
+          </div>
         </div>
 
-        <div class="metadata-item" *ngIf="ticket?.closed_at">
-          <mat-icon>event</mat-icon>
-          <span><strong>{{ ticket.status }} el:</strong> {{ ticket.closed_at | date : "EEEE d MMMM y, 'a las' h:mm a" }}</span>
+        <div class="info-card dates" *ngIf="ticket?.status === 'Cerrado' || ticket?.status === 'Resuelto'">
+          <div class="info-icon">
+            <mat-icon>event</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">{{ ticket?.status }} el</span>
+            <span class="info-value">{{ ticket?.closed_at | date : "d MMM y, h:mm a" }}</span>
+          </div>
         </div>
-      </div><div *ngIf="ticketLevelAttachments.length > 0">
-        <h3>Archivos Adjuntos:</h3>
+      </div>
+
+      <!-- Archivos adjuntos del ticket -->
+      <div *ngIf="ticketLevelAttachments.length > 0" class="ticket-attachments-section">
+        <div class="section-header">
+          <mat-icon>attachment</mat-icon>
+          <h3>Archivos Adjuntos ({{ ticketLevelAttachments.length }})</h3>
+        </div>
         <div class="attachments-grid">
           <div *ngFor="let attachment of ticketLevelAttachments; let i = index" class="attachment-item">
             <span class="attachment-number">#{{ i + 1 }}</span>
@@ -188,7 +299,8 @@
               <img *ngIf="isImage(attachment.filename)" [src]="getAttachmentUrl(attachment)" alt="{{ attachment.filename }}" class="thumbnail" loading="lazy" />
               <div *ngIf="!isImage(attachment.filename)" class="file-extension">
                 {{ getFileExtension(attachment.filename) }}
-              </div>            </a>
+              </div>
+            </a>
             <p class="file-name" [title]="attachment.filename">{{ attachment.filename }}</p>
             <div class="attachment-actions">
               <button
@@ -208,11 +320,12 @@
             </div>
           </div>
         </div>
-      </div>    </mat-card-content>
+      </div>
+    </mat-card-content>
   </mat-card>
 
-  <!-- Nuevo Mensaje - Movido antes del historial de chat -->
-  <mat-card *ngIf="ticket.status !== 'Cerrado' && ticket.status !== 'Resuelto'" class="new-message-card">
+  <!-- Nuevo Mensaje -->
+  <mat-card *ngIf="ticket?.status !== 'Cerrado' && ticket?.status !== 'Resuelto'" class="new-message-card">
     <mat-card-header>
       <mat-card-title>
         <mat-icon>edit</mat-icon>
@@ -353,8 +466,8 @@
         <mat-icon>chat_bubble_outline</mat-icon>
         <p>No hay mensajes en este ticket aún.</p>
       </div>
-    </mat-card-content>  </mat-card>
-</div>
+    </mat-card-content>
+  </mat-card>
 
 <!-- Diálogo de confirmación -->
 <ng-template #confirmDialog let-data>
@@ -363,5 +476,91 @@
   <div mat-dialog-actions>
     <button mat-button (click)="dialogRef.close(false)">Cancelar</button>
     <button mat-button (click)="dialogRef.close(true)">Confirmar</button>
+  </div>
+</ng-template>
+
+<!-- Diálogo para editar ID de ticket externo -->
+<ng-template #externalTicketDialog>
+  <h1 mat-dialog-title>
+    <mat-icon>link</mat-icon>
+    Editar ID de Ticket Externo
+  </h1>
+  <div mat-dialog-content>
+    <mat-form-field appearance="outline" style="width: 100%; margin-top: 10px;">
+      <mat-label>ID del ticket en sistema externo</mat-label>
+      <input matInput
+             [(ngModel)]="externalTicketId"
+             placeholder="Ej: EXT-2025-001234"
+             maxlength="100">
+      <mat-icon matSuffix>edit</mat-icon>
+      <mat-hint>Opcional: ID del ticket en el sistema externo</mat-hint>
+    </mat-form-field>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-button (click)="closeExternalTicketDialog()">Cancelar</button>
+    <button mat-raised-button
+            color="primary"
+            (click)="saveExternalTicketId()"
+            [disabled]="!hasExternalTicketChanged()">
+      <mat-icon>save</mat-icon>
+      Guardar
+    </button>
+  </div>
+</ng-template>
+
+<!-- Diálogo para editar prioridad -->
+<ng-template #priorityDialog>
+  <h1 mat-dialog-title>
+    <mat-icon>priority_high</mat-icon>
+    Editar Prioridad
+  </h1>
+  <div mat-dialog-content>
+    <mat-form-field appearance="outline" style="width: 100%; margin-top: 10px;">
+      <mat-label>Prioridad</mat-label>
+      <mat-select [(ngModel)]="selectedPriority">
+        <mat-option value="Baja">BAJA</mat-option>
+        <mat-option value="Media">MEDIA</mat-option>
+        <mat-option value="Alta">ALTA</mat-option>
+        <mat-option value="Urgente">URGENTE</mat-option>
+      </mat-select>
+      <mat-hint>Selecciona la prioridad del ticket</mat-hint>
+    </mat-form-field>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-button (click)="closePriorityDialog()">Cancelar</button>
+    <button mat-raised-button
+            color="primary"
+            (click)="savePriority()">
+      <mat-icon>save</mat-icon>
+      Guardar
+    </button>
+  </div>
+</ng-template>
+
+<!-- Diálogo para editar asignación -->
+<ng-template #assignmentDialog>
+  <h1 mat-dialog-title>
+    <mat-icon>person</mat-icon>
+    Editar Asignación
+  </h1>
+  <div mat-dialog-content>
+    <mat-form-field appearance="outline" style="width: 100%; margin-top: 10px;">
+      <mat-label>Asignado a</mat-label>
+      <mat-select [(ngModel)]="selectedAssignedTo">
+        <mat-option *ngFor="let tech of technicians" [value]="tech.id.toString()">
+          {{ tech.firstname }}
+        </mat-option>
+      </mat-select>
+      <mat-hint>Selecciona el técnico asignado</mat-hint>
+    </mat-form-field>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-button (click)="closeAssignmentDialog()">Cancelar</button>
+    <button mat-raised-button
+            color="primary"
+            (click)="saveAssignment()">
+      <mat-icon>save</mat-icon>
+      Guardar
+    </button>
   </div>
 </ng-template>

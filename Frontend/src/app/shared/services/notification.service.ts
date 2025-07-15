@@ -58,7 +58,8 @@ export class NotificationService {
 
         // Verificar si la notificación es para el ticket actualmente visible
         const currentTicketId = this.getCurrentTicketIdFromUrl();
-        const isForCurrentTicket = notification.data?.ticketId === currentTicketId;
+        const isForCurrentTicket = currentTicketId && notification.data?.ticketId &&
+                                  parseInt(currentTicketId) === parseInt(notification.data.ticketId);
 
         // Asegurar que tenemos el formato correcto de los datos
         const processedNotification = {
@@ -84,6 +85,7 @@ export class NotificationService {
                                    notification.type === 'cambio_estado' ||
                                    notification.type === 'ticket_reabierto' ||
                                    notification.type === 'ticket_asignado' ||
+                                   notification.type === 'id_externo_actualizado' ||
                                    notification.type === 'nuevo_ticket';
 
         if (requiresHomeRefresh) {

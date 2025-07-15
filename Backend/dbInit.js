@@ -128,11 +128,23 @@ const checkAndCreateTables = async () => {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           priority VARCHAR(100),
           assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
-          closed_at TIMESTAMP
+          closed_at TIMESTAMP,
+          external_ticket_id VARCHAR(100)
         );
       `);
     } else {
-      console.log("✅ La tabla 'tickets' ya existe.");
+      console.log("✅ La tabla 'tickets' ya existe. Verificando columnas...");
+      // Verificar y agregar columna external_ticket_id si no existe
+      const externalTicketIdColumn = await client.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'tickets' AND column_name = 'external_ticket_id'`
+      );
+      if (externalTicketIdColumn.rows.length === 0) {
+        console.log("➕ Agregando columna 'external_ticket_id' a la tabla 'tickets'");
+        await client.query(`ALTER TABLE tickets ADD COLUMN external_ticket_id VARCHAR(100)`);
+      } else {
+        console.log("✅ La columna 'external_ticket_id' ya existe en la tabla 'tickets'.");
+      }
     }
 
     // Validar y crear la tabla "comments"

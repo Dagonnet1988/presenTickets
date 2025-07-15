@@ -69,4 +69,9 @@ export class TicketService {
   updateTicketName(ticketId: string, name: string): Observable<any> {
     return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, { name }, { headers: this.getAuthHeaders() });
   }
+
+  // Método genérico para actualizar cualquier campo del ticket
+  updateTicket(ticketId: string, data: any): Observable<any> {
+    return this.http.patch<any>(`${this.apiUrl}/${ticketId}`, data, { headers: this.getAuthHeaders() });
+  }
 }

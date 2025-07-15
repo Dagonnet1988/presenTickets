@@ -26,6 +26,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { TextFieldModule } from '@angular/cdk/text-field';
 import { TicketService } from '../shared/services/ticket.service';
 import { AuthService } from '../shared/services/auth.service';
@@ -51,15 +52,19 @@ registerLocaleData(localeEs, 'es');
     MatSelectModule,
     MatDialogModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
     TextFieldModule
   ],providers: [
     { provide: LOCALE_ID, useValue: 'es' }
   ],
   templateUrl: './details-ticket.component.html',  styleUrls: ['./details-ticket.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.Default // Cambiado de OnPush a Default para mejor detección automática
 })
 export class DetailsTicketComponent implements OnInit, OnDestroy {
   @ViewChild('confirmDialog') confirmDialog!: TemplateRef<any>;
+  @ViewChild('externalTicketDialog') externalTicketDialog!: TemplateRef<any>;
+  @ViewChild('priorityDialog') priorityDialog!: TemplateRef<any>;
+  @ViewChild('assignmentDialog') assignmentDialog!: TemplateRef<any>;
   ticket: any;
   messages: any[] = [];
   newMessage: string = '';
@@ -67,9 +72,16 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   isDragging = false;
   userNames: Map<string, string> = new Map();
   userRole: string = '';
-  technicians: any[] = [];  dialogRef!: MatDialogRef<any>;
+  technicians: any[] = [];
+  dialogRef!: MatDialogRef<any>;
   ticketLevelAttachments: any[] = [];
   isSendingMessage: boolean = false; // Flag para prevenir double-click
+  externalTicketId: string = ''; // Campo para el ID de ticket externo
+  private externalTicketDialogRef: MatDialogRef<any> | null = null;
+  private priorityDialogRef: MatDialogRef<any> | null = null;
+  private assignmentDialogRef: MatDialogRef<any> | null = null;
+  selectedPriority: string = '';
+  selectedAssignedTo: string = '';
   private subscriptions: Subscription = new Subscription();
 
   constructor(
@@ -107,16 +119,13 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.loadTechnicians();
 
     // Crear una referencia enlazada a la función para poder eliminarla después
-    this.boundRefreshHandler = this.handleTicketRefresh.bind(this);
-
-    // Agregar listener para el evento de recarga desde notificaciones del mismo ticket
+    this.boundRefreshHandler = this.handleTicketRefresh.bind(this);    // Agregar listener para el evento de recarga desde notificaciones del mismo ticket
     window.addEventListener('refresh-ticket-details', this.boundRefreshHandler);
   }
 
   ngOnDestroy(): void {
     // Limpiar suscripciones para evitar fugas de memoria
     this.subscriptions.unsubscribe();
-
   // Eliminar el listener del evento de recarga usando la referencia guardada
     window.removeEventListener('refresh-ticket-details', this.boundRefreshHandler);
   }
@@ -133,6 +142,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       });
     }
   }
+
   // Modificar loadTicketDetails para aceptar ticketId como argumento
   loadTicketDetails(ticketId?: string): void {
     const id = ticketId || this.route.snapshot.paramMap.get('id');
@@ -153,7 +163,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
           this.ticket = ticket;
           if (this.ticket.created_at) {
             this.ticket.created_at = new Date(this.ticket.created_at);
-          }          // Filtrar solo los adjuntos del ticket (sin comment_id)
+          }
+
+          // Inicializar el campo de ID externo
+          this.externalTicketId = this.ticket.external_ticket_id || '';
+
+          // Filtrar solo los adjuntos del ticket (sin comment_id)
           this.ticketLevelAttachments = (this.ticket.attachments || []).filter((att: any) => !att.comment_id);
 
           // Ordenar mensajes para mostrar los más recientes primero
@@ -259,7 +274,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       },
     });
-  }updatePriority(priority: string): void {
+  }  updatePriority(priority: string): void {
     const ticketId = this.getCurrentTicketId();
     if (!ticketId) {
       console.error('No se pudo obtener el ID del ticket');
@@ -267,22 +282,19 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     }
 
     this.ticketService.updateTicketPriority(ticketId, priority).subscribe({
-      next: () => {
+      next: (response) => {
         // Actualizar prioridad localmente
-        this.ticket.priority = priority;
+        if (this.ticket) {
+          this.ticket.priority = priority;
+        }
 
-        // Recargar datos completos
-        this.loadTicketDetails(ticketId);
-
-        // Notificar la vista del cambio
-        this.cdr.markForCheck();
+        console.log('Prioridad actualizada correctamente:', response);
       },
       error: (error: HttpErrorResponse) => {
         console.error('Error al actualizar la prioridad del ticket:', error.message);
-        this.cdr.markForCheck();
       },
     });
-  }  assignTechnician(assigned_to: number): void {
+  }assignTechnician(assigned_to: number): void {
     const ticketId = this.getCurrentTicketId();
     if (!ticketId) {
       console.error('No se pudo obtener el ID del ticket');
@@ -290,22 +302,141 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     }
 
     this.ticketService.updateTicketTechnician(ticketId, assigned_to).subscribe({
-      next: () => {
-        // Actualizar localmente
-        this.ticket.assigned_to = assigned_to;
+      next: (response) => {
+        // Actualizar localmente el ticket
+        if (this.ticket) {
+          this.ticket.assigned_to = assigned_to;
+        }
 
-        // Recargar datos para obtener toda la información actualizada
-        this.loadTicketDetails(ticketId);
-
-        // Notificar a la vista
-        this.cdr.markForCheck();
+        console.log('Técnico asignado correctamente:', response);
       },
       error: (error: HttpErrorResponse) => {
         console.error('Error al asignar el técnico al ticket:', error.message);
+      }
+    });
+  }
+
+  // Método para actualizar el ID de ticket externo
+  updateExternalTicketId(): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    // Solo actualizar si el valor cambió
+    const currentValue = this.ticket.external_ticket_id || '';
+    const newValue = this.externalTicketId.trim();
+
+    if (currentValue === newValue) {
+      return; // No hay cambios
+    }
+
+    // Actualizar en el backend
+    this.ticketService.updateTicket(ticketId, { external_ticket_id: newValue || null }).subscribe({
+      next: () => {
+        // Actualizar localmente
+        this.ticket.external_ticket_id = newValue || null;
         this.cdr.markForCheck();
       },
-      });
+      error: (error: HttpErrorResponse) => {
+        console.error('Error al actualizar ID de ticket externo:', error.message);
+        // Revertir el campo en caso de error
+        this.externalTicketId = currentValue;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  // Método para verificar si el ID externo ha cambiado
+  // Métodos para el modal de ID de ticket externo
+  openExternalTicketDialog(): void {
+    // Inicializar el valor del campo con el valor actual del ticket
+    this.externalTicketId = this.ticket?.external_ticket_id || '';
+
+    // Abrir el modal
+    this.externalTicketDialogRef = this.dialog.open(this.externalTicketDialog, {
+      width: '400px',
+      maxWidth: '95vw',
+      disableClose: false,
+      autoFocus: true,
+      restoreFocus: true
+    });
+
+    // Manejar el resultado del modal
+    this.externalTicketDialogRef.afterClosed().subscribe(result => {
+      this.externalTicketDialogRef = null;
+      // Si el usuario cancela, no hacer nada
+      // El guardado se maneja en saveExternalTicketId()
+    });
+  }
+
+  closeExternalTicketDialog(): void {
+    if (this.externalTicketDialogRef) {
+      this.externalTicketDialogRef.close();
     }
+  }
+
+  saveExternalTicketId(): void {
+    if (!this.hasExternalTicketChanged()) {
+      this.closeExternalTicketDialog();
+      return;
+    }
+
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    const newValue = this.externalTicketId?.trim() || '';
+
+    // Preparar los datos para enviar
+    const updateData = {
+      external_ticket_id: newValue || null
+    };
+
+    // Enviar la actualización
+    this.ticketService.updateTicket(ticketId, updateData).subscribe({
+      next: (response) => {
+        // Actualizar el ticket local con el nuevo valor ANTES de cerrar el diálogo
+        if (this.ticket) {
+          this.ticket.external_ticket_id = newValue || null;
+        }
+
+        // Cerrar el modal ANTES de las actualizaciones
+        this.closeExternalTicketDialog();
+
+        // Mostrar notificación de éxito
+        console.log(
+          newValue ? 'ID de ticket externo actualizado correctamente' : 'ID de ticket externo eliminado correctamente'
+        );
+
+        // Recargar datos para asegurar consistencia y actualización en vivo
+        this.loadTicketDetails(ticketId);
+
+        // Disparar evento de recarga general para notificar a todos los usuarios
+        const refreshEvent = new CustomEvent('refresh-ticket-details', {
+          detail: {
+            ticketId: ticketId,
+            updatedBy: this.authService.getUserId(),
+            changeType: 'external_id_update'
+          }
+        });
+        window.dispatchEvent(refreshEvent);
+      },
+      error: (error) => {
+        console.error('Error al actualizar el ID de ticket externo:', error);
+      }
+    });
+  }
+
+  hasExternalTicketChanged(): boolean {
+    const currentValue = this.ticket?.external_ticket_id || '';
+    const newValue = this.externalTicketId?.trim() || '';
+    return currentValue !== newValue;
+  }
+
   getPriorityClass(priority: string): string {
     switch (priority) {
       case 'Baja':
@@ -323,6 +454,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   sendMessage(): void {
     if ((this.newMessage.trim() || this.selectedFiles.length > 0) && !this.isSendingMessage) {
       this.isSendingMessage = true; // Prevenir double-click
+
       const ticketId = this.getCurrentTicketId();
       const userId = this.authService.getUserId();
 
@@ -335,7 +467,9 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
 
         this.selectedFiles.forEach(file => {
           formData.append('attachments', file, file.name);
-        });        this.ticketService.sendMessage(ticketId, formData).subscribe({
+        });
+
+        this.ticketService.sendMessage(ticketId, formData).subscribe({
           next: (comment) => {
             this.newMessage = '';
             this.selectedFiles = [];
@@ -348,16 +482,15 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
               this.ticket.status = 'Esperando respuesta del usuario';
             }
 
+            // Desactivar spinner ANTES de recargar
+            this.isSendingMessage = false;
+
             // Recargar detalles del ticket para asegurar sincronización con la BD
             this.loadTicketDetails(ticketId);
           },
           error: (error) => {
             console.error('Error al enviar el mensaje:', error);
-            this.cdr.markForCheck();
-          },
-          complete: () => {
-            this.isSendingMessage = false; // Restablecer flag al completar
-            this.cdr.markForCheck();
+            this.isSendingMessage = false; // Desactivar spinner en error
           }
         });
       } else {
@@ -679,5 +812,85 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.newMessage = '';
     this.selectedFiles = [];
     this.cdr.markForCheck();
+  }
+
+  // Métodos para editar prioridad
+  editPriority(): void {
+    if (this.ticket?.priority && this.userRole !== 'admin') {
+      return; // No permitir editar si ya tiene prioridad y no es admin
+    }
+
+    this.selectedPriority = this.ticket?.priority || '';
+
+    this.priorityDialogRef = this.dialog.open(this.priorityDialog, {
+      width: '350px',
+      maxWidth: '95vw',
+      disableClose: false,
+      autoFocus: true,
+      restoreFocus: true
+    });
+
+    this.priorityDialogRef.afterClosed().subscribe(result => {
+      this.priorityDialogRef = null;
+    });
+  }
+
+  closePriorityDialog(): void {
+    if (this.priorityDialogRef) {
+      this.priorityDialogRef.close();
+    }
+  }
+
+  savePriority(): void {
+    if (this.selectedPriority === (this.ticket?.priority || '')) {
+      this.closePriorityDialog();
+      return;
+    }
+
+    this.updatePriority(this.selectedPriority);
+    this.closePriorityDialog();
+  }
+
+  // Métodos para editar asignación
+  editAssignment(): void {
+    if ((this.userRole !== 'admin' && this.ticket?.assigned_to) || this.userRole === 'user') {
+      return; // No permitir editar según las reglas de negocio
+    }
+
+    this.selectedAssignedTo = this.ticket?.assigned_to?.toString() || '';
+
+    this.assignmentDialogRef = this.dialog.open(this.assignmentDialog, {
+      width: '350px',
+      maxWidth: '95vw',
+      disableClose: false,
+      autoFocus: true,
+      restoreFocus: true
+    });
+
+    this.assignmentDialogRef.afterClosed().subscribe(result => {
+      this.assignmentDialogRef = null;
+    });
+  }
+
+  closeAssignmentDialog(): void {
+    if (this.assignmentDialogRef) {
+      this.assignmentDialogRef.close();
+    }
+  }
+
+  saveAssignment(): void {
+    if (this.selectedAssignedTo === (this.ticket?.assigned_to?.toString() || '')) {
+      this.closeAssignmentDialog();
+      return;
+    }
+
+    this.assignTechnician(parseInt(this.selectedAssignedTo));
+    this.closeAssignmentDialog();
+  }
+
+  // Método helper para obtener el nombre del técnico asignado
+  getAssignedTechnicianName(techId: number): string {
+    const technician = this.technicians.find(tech => tech.id === techId);
+    return technician ? technician.firstname : 'Desconocido';
   }
 }
