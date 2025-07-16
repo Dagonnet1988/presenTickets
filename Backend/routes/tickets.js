@@ -14,7 +14,7 @@
  */
 
 import express from "express";
-import { pool, emitTicketNotification } from "../server.js";
+import { pool, emitTicketNotification, io } from "../server.js";
 import formidable from "formidable";
 import path from "path";
 import fs from "fs";
@@ -323,12 +323,26 @@ router.patch("/:id", async (req, res) => {
   try {
     await client.query(query, values);
 
-    // Si hay cambio de ID externo, emitir evento para actualización en tiempo real
+    // Emitir evento de actualización de ticket a todos los usuarios conectados
+    const updatedFields = {};
+    if (priority) updatedFields.priority = priority;
+    if (status) updatedFields.status = status;
+    if (assigned_to) updatedFields.assigned_to = assigned_to;
+    if (name) updatedFields.title = name;
+    if (external_ticket_id !== undefined) updatedFields.external_ticket_id = external_ticket_id;
+    
+    io.emit('ticket-updated', {
+      ticketId: parseInt(id),
+      updatedFields: updatedFields
+    });
+
+    // Si hay cambio de ID externo, obtener datos para las notificaciones
     if (external_ticket_id !== undefined) {
       try {
         const ticketDataQuery = `
           SELECT 
-            t.id, t.title, t.priority, t.status, t.external_ticket_id, t.user_id, t.assigned_to
+            t.id, t.title, t.priority, t.status, t.external_ticket_id,
+            t.user_id
           FROM tickets t 
           WHERE t.id = $1
         `;
@@ -338,19 +352,37 @@ router.patch("/:id", async (req, res) => {
         if (ticketResult.rows.length > 0) {
           const ticketData = ticketResult.rows[0];
           
-          // Obtener usuarios que deben recibir la actualización en tiempo real (sin notificaciones push)
+          // Obtener usuarios que deben ser notificados
           const usersQuery = `
             SELECT DISTINCT u.id 
             FROM users u 
             WHERE 
               u.id = $1 OR  -- Creador del ticket
-              u.id = $2 OR  -- Usuario asignado
               u.role = 'admin'  -- Administradores
           `;
           
-          const usersResult = await client.query(usersQuery, [ticketData.user_id, ticketData.assigned_to]);
+          const usersResult = await client.query(usersQuery, [ticketData.user_id]);
           
-          // Obtener los IDs de los usuarios que deben recibir la actualización
+          // Definir el mensaje una vez
+          const mensaje = `ID Externo actualizado en ticket "${ticketData.title}"`;
+          
+          // Guardar notificación en la base de datos
+          for (const user of usersResult.rows) {
+            const insertNotificationQuery = `
+              INSERT INTO notifications (user_id, ticket_id, type, message, created_at)
+              VALUES ($1, $2, $3, $4, NOW())
+            `;
+            
+            await client.query(insertNotificationQuery, [
+              user.id,
+              id,
+              'id_externo_actualizado',
+              mensaje
+            ]);
+          }
+          
+          // Emitir evento de socket para actualizaciones en tiempo real
+          // Obtener los IDs de los usuarios que deben recibir la notificación
           const userIds = usersResult.rows.map(user => user.id);
           
           emitTicketNotification(
@@ -359,15 +391,22 @@ router.patch("/:id", async (req, res) => {
               ticketId: parseInt(id),
               title: ticketData.title,
               createdAt: new Date(),
-              message: `ID Externo actualizado en ticket "${ticketData.title}"`,
+              message: mensaje,
               external_ticket_id: external_ticket_id
             },
             userIds
           );
+          
+          // Emitir evento específico para actualización de ticket a todos los usuarios conectados
+          io.emit('ticket-updated', {
+            ticketId: parseInt(id),
+            updatedFields: { external_ticket_id: external_ticket_id },
+            ticketData: ticketData
+          });
         }
       } catch (notificationError) {
-        console.error('Error enviando actualización en tiempo real para ID externo:', notificationError);
-        // No fallar la actualización principal por error en la emisión del evento
+        console.error('Error enviando notificaciones para ID externo:', notificationError);
+        // No fallar la actualización principal por error en notificaciones
       }
     }
 

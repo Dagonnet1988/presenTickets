@@ -342,6 +342,9 @@ io.on('connection', (socket) => {
   });
 });
 
+// Exportar la instancia de io para usar en las rutas
+export { io };
+
 // Emitir notificación solo a destinatarios
 export function emitTicketNotification(type, data, recipients = []) {
   recipients.forEach(userId => {

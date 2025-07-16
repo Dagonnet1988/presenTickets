@@ -24,6 +24,14 @@ const router = express.Router();
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
+    
+    // Primero marcar automáticamente como leídas las notificaciones de ID externo
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE user_id = $1 AND type = $2 AND is_read = false',
+      [userId, 'id_externo_actualizado']
+    );
+    
+    // Luego obtener las notificaciones no leídas (que ya no incluirán las de ID externo)
     const result = await pool.query(
       'SELECT * FROM notifications WHERE user_id = $1 AND is_read = false ORDER BY created_at DESC',
       [userId]

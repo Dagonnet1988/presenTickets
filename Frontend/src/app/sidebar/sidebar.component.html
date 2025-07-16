@@ -81,8 +81,22 @@
       <span class="nav-text" *ngIf="!isCollapsed">Gestionar Usuarios</span>
     </a>
 
-    <!-- Enlace para "Dashboard Administrativo" (solo para administradores y técnicos) -->
+    <!-- Enlace para "Dashboard Ejecutivo" (solo para administradores y técnicos) -->
     <a
+      mat-list-item
+      *ngIf="userRole === 'admin' || userRole === 'tech'"
+      routerLink="/dashboard"
+      routerLinkActive="active-link"
+      [routerLinkActiveOptions]="{ exact: true }"
+      aria-label="Dashboard Ejecutivo"
+      class="nav-item"
+    >
+      <mat-icon class="nav-icon">analytics</mat-icon>
+      <span class="nav-text" *ngIf="!isCollapsed">Dashboard Ejecutivo</span>
+    </a>
+
+    <!-- Enlace para "Dashboard Administrativo" (solo para administradores y técnicos) -->
+ <!--    <a
       mat-list-item
       *ngIf="userRole === 'admin' || userRole === 'tech'"
       routerLink="/admin-dashboard"
@@ -93,7 +107,9 @@
     >
       <mat-icon class="nav-icon">dashboard</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Dashboard</span>
-    </a>    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
+    </a>   -->
+
+    <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
     <a
       mat-list-item
       routerLink="/profile"

@@ -45,6 +45,7 @@ import { MainLayoutComponent } from './shared/components/main-layout.component';
 import { AboutComponent } from './about/about.component';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 import { PushSettingsComponent } from './push-settings/push-settings.component';
+import { DashboardComponent } from './dashboard/dashboard.component';
 
 export const routes: Routes = [
   {
@@ -52,6 +53,7 @@ export const routes: Routes = [
     component: MainLayoutComponent,
     canActivate: [AuthGuard],
     children: [      { path: '', component: HomeComponent, pathMatch: 'full'},
+      { path: 'dashboard', component: DashboardComponent, canActivate: [TechOrAdminGuard] },
       { path: 'profile', component: ProfileComponent },
       { path: 'create-ticket', component: CreateTicketComponent },
       { path: 'ticket/:id', component: DetailsTicketComponent },

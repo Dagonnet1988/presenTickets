@@ -52,14 +52,63 @@ export class NotificationService {
     if (userId) {
       this.socket.emit('register', String(userId));
       this.fetchUnreadNotifications(); // <-- Cargar notificaciones persistentes al iniciar
-    }    this.socket.on('ticket-notification', (notification: TicketNotification) => {
+    }
+
+    // Listener para actualizaciones de tickets en tiempo real
+    this.socket.on('ticket-updated', (data: any) => {
+      this.ngZone.run(() => {
+        // Refrescar la lista de tickets en el home
+        this.refreshTicketsService.triggerRefresh();
+
+        // Si estamos viendo el ticket que se actualizó, refrescar los detalles
+        const currentTicketId = this.getCurrentTicketIdFromUrl();
+        if (currentTicketId === data.ticketId) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
+          }, 100);
+        }
+      });
+    });
+
+    this.socket.on('ticket-notification', (notification: TicketNotification) => {
       this.ngZone.run(() => {
         const current = this.notificationsSubject.value;
 
         // Verificar si la notificación es para el ticket actualmente visible
         const currentTicketId = this.getCurrentTicketIdFromUrl();
-        const isForCurrentTicket = currentTicketId && notification.data?.ticketId &&
-                                  parseInt(currentTicketId) === parseInt(notification.data.ticketId);
+        const isForCurrentTicket = notification.data?.ticketId === currentTicketId;
+
+        // Marcar automáticamente como leídas las notificaciones de ID externo
+        // y NO agregarlas a la lista visible
+        if (notification.type === 'id_externo_actualizado') {
+          // Marcar como leída inmediatamente si tiene ID
+          if (notification.id) {
+            this.markSingleNotificationAsRead(notification.id.toString()).subscribe({
+              next: () => {
+                console.log('✅ Notificación de ID externo marcada como leída automáticamente');
+              },
+              error: (error: any) => {
+                console.error('Error al marcar notificación de ID externo como leída:', error);
+              }
+            });
+          }
+
+          // Si es para el ticket actual, refrescar detalles
+          if (isForCurrentTicket) {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
+            }, 100);
+          }
+
+          // *** NUEVA FUNCIONALIDAD: Refresh automático del home ***
+          // Refrescar lista de tickets con un pequeño delay para asegurar que el backend terminó de procesar
+          setTimeout(() => {
+            this.refreshTicketsService.triggerRefresh();
+          }, 300);
+
+          // NO agregar a las notificaciones visibles - salir temprano
+          return;
+        }
 
         // Asegurar que tenemos el formato correcto de los datos
         const processedNotification = {
@@ -78,14 +127,15 @@ export class NotificationService {
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
           }, 100);
-        }        // *** NUEVA FUNCIONALIDAD: Refresh automático del home ***
+        }
+
+        // *** NUEVA FUNCIONALIDAD: Refresh automático del home ***
         // Si es una notificación que requiere actualización del home, refrescar la lista de tickets
         const requiresHomeRefresh = notification.type?.includes('comentario') ||
                                    notification.type?.includes('admin_comentario') ||
                                    notification.type === 'cambio_estado' ||
                                    notification.type === 'ticket_reabierto' ||
                                    notification.type === 'ticket_asignado' ||
-                                   notification.type === 'id_externo_actualizado' ||
                                    notification.type === 'nuevo_ticket';
 
         if (requiresHomeRefresh) {
@@ -105,10 +155,10 @@ export class NotificationService {
   }
 
   // Obtiene el ID del ticket de la URL actual, si estamos en una página de ticket
-  private getCurrentTicketIdFromUrl(): string | null {
+  private getCurrentTicketIdFromUrl(): number | null {
     // Intentar extraer el ID del ticket de la URL actual
     const urlMatch = window.location.pathname.match(/\/ticket\/(\d+)/);
-    return urlMatch ? urlMatch[1] : null;
+    return urlMatch ? parseInt(urlMatch[1], 10) : null;
   }
 
   // Devuelve el array actual de notificaciones
@@ -121,8 +171,11 @@ export class NotificationService {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     }).subscribe(
       (notifications) => {
+        // Filtrar las notificaciones de ID externo antes de mapear
+        const filteredNotifications = notifications.filter(n => n.type !== 'id_externo_actualizado');
+
         // Mapear a formato TicketNotification
-        const mapped = notifications.map(n => ({
+        const mapped = filteredNotifications.map(n => ({
           type: n.type,
           data: { ticketId: n.ticket_id },
           read: n.is_read,
@@ -143,7 +196,10 @@ export class NotificationService {
     // Devolvemos la promesa para posible manejo asíncrono
     return this.http.get<any[]>(`${environment.backendUrl}/api/notifications`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-    }).toPromise();
+    }).toPromise().then(notifications => {
+      // Filtrar las notificaciones de ID externo también en la promesa
+      return notifications ? notifications.filter(n => n.type !== 'id_externo_actualizado') : [];
+    });
   }
 
   markAsRead(notification: TicketNotification, callback?: () => void) {
@@ -244,5 +300,12 @@ export class NotificationService {
 
   clear() {
     this.notificationsSubject.next([]);
+  }
+
+  // Marcar una notificación individual como leída
+  markSingleNotificationAsRead(notificationId: string) {
+    return this.http.post(`${environment.backendUrl}/api/notifications/read/${notificationId}`, {}, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    });
   }
 }

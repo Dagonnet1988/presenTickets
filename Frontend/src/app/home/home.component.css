@@ -313,7 +313,7 @@
   color: var(--text-color);
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0; /* Permite que el texto se corte correctamente */
   word-wrap: break-word;
@@ -322,17 +322,31 @@
   -webkit-font-smoothing: antialiased;
 }
 
+.ticket-title-text {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+.ticket-icon {
+  color: var(--primary-color);
+  font-size: 18px !important;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
 .ticket-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   margin-top: 8px;
-}
-
-.ticket-icon {
-  color: var(--primary-color);
-  font-size: 18px !important;
 }
 
 .external-ticket-id {
