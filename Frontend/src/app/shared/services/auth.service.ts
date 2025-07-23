@@ -13,22 +13,7 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-/**
- * PresenTickets - Sistema de Gestión de Tickets de Soporte
- * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
- *
- * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
- * desarrollado como iniciativa personal por Diego Sánchez.
- *
- * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Sánchez y su uso en
- * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
- *
- * Está prohibida la redistribución, modificación o uso no autorizado
- * de este código sin el consentimiento expreso por escrito del autor.
- */
-
-import { Injectable } from '@angular/core';
+import { Injectable, isDevMode } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
@@ -72,7 +57,9 @@ export class AuthService {
     if (this.isTokenValid(token)) {
       return true;
     } else {
-      console.log('Token expirado o inválido, removiendo del localStorage');
+      if (isDevMode()) {
+        console.log('Token expirado o inválido, removiendo del localStorage');
+      }
       localStorage.removeItem('token');
       return false;
     }
@@ -124,7 +111,7 @@ export class AuthService {
       const currentTime = Math.floor(Date.now() / 1000);
 
       // Solo logs en modo debug si es necesario
-      if (payload.exp && (payload.exp - currentTime) < 300) { // Solo log si quedan menos de 5 minutos
+      if (isDevMode() && payload.exp && (payload.exp - currentTime) < 300) { // Solo log si quedan menos de 5 minutos
         console.log('⚠️ Token cerca de expirar. Tiempo restante:', payload.exp - currentTime, 'segundos');
       }
 
@@ -182,12 +169,13 @@ export class AuthService {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         const currentTime = Math.floor(Date.now() / 1000);
-        console.log('🔍 DEBUG TOKEN:');
-        console.log('Payload:', payload);
-        console.log('Expira en timestamp:', payload.exp);
-        console.log('Expira en fecha:', new Date(payload.exp * 1000));
-        console.log('Hora actual timestamp:', currentTime);
-        console.log('Hora actual fecha:', new Date());
+
+        // DEBUG: Solo en desarrollo
+        if (isDevMode()) {
+          console.log('🔍 DEBUG TOKEN:');
+          console.log('Payload:', payload);
+          console.log('Expira en:', new Date(payload.exp * 1000));
+        }
         console.log('Diferencia (segundos):', payload.exp - currentTime);
         console.log('Es válido:', payload.exp > currentTime);
       } catch (e) {

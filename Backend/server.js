@@ -28,6 +28,8 @@ import commentRoutes from './routes/comments.js';
 import notificationRoutes from './routes/notifications.js';
 import pushRoutes from './routes/push.js';
 import analyticsRoutes from './routes/analytics.js';
+import whatsappRoutes from './routes/whatsapp.js';
+import whatsappService from './services/whatsappService.js';
 import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -266,6 +268,7 @@ app.use('/api/comments', authMiddleware, commentRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 // Rutas públicas
 app.use('/api/auth', authRoutes);
 
@@ -395,6 +398,17 @@ cron.schedule('0 2 * * *', async () => {
 checkAndCreateTables().then(() => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
+    
+    // Configurar Socket.IO para WhatsApp
+    whatsappService.setSocketIO(io);
+    
+    // Inicializar servicio de WhatsApp después de que el servidor esté listo
+    setTimeout(() => {
+      console.log('🔄 Iniciando servicio de WhatsApp...');
+      whatsappService.initialize().catch(err => {
+        console.error('❌ Error al inicializar WhatsApp:', err);
+      });
+    }, 2000);
   });
 });
 

@@ -9,7 +9,7 @@
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
  */
 
-import { Injectable } from '@angular/core';
+import { Injectable, isDevMode } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -256,7 +256,9 @@ export class PushNotificationService {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       }).toPromise();
 
-      console.log('✅ Subscription removed from server');
+      if (isDevMode()) {
+        console.log('✅ Subscription removed from server');
+      }
     } catch (error) {
       console.error('❌ Failed to remove subscription from server:', error);
     }
@@ -321,7 +323,9 @@ export class PushNotificationService {
 
       // Si ya está denegado, no insistir
       if (currentPermission === 'denied') {
-        console.log('ℹ️ Notificaciones push denegadas por el usuario');
+        if (isDevMode()) {
+          console.log('ℹ️ Notificaciones push denegadas por el usuario');
+        }
         return false;
       }
 
@@ -340,7 +344,9 @@ export class PushNotificationService {
       return false;
     } catch (error) {
       // Fallar silenciosamente en modo automático
-      console.log('ℹ️ No se pudieron activar las notificaciones push automáticamente');
+      if (isDevMode()) {
+        console.log('ℹ️ No se pudieron activar las notificaciones push automáticamente');
+      }
       return false;
     }
   }
@@ -367,13 +373,17 @@ export class PushNotificationService {
 
       if (success) {
         this.isEnabledSubject.next(true);
-        console.log('✅ Notificaciones push activadas automáticamente');
+        if (isDevMode()) {
+          console.log('✅ Notificaciones push activadas automáticamente');
+        }
         return true;
       }
 
       return false;
     } catch (error) {
-      console.log('ℹ️ Error en suscripción automática:', error);
+      if (isDevMode()) {
+        console.log('ℹ️ Error en suscripción automática:', error);
+      }
       return false;
     }
   }

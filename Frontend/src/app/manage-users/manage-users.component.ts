@@ -56,6 +56,7 @@ export class ManageUsersComponent implements OnInit {
   dialogRef!: MatDialogRef<any>;
 
   users$!: Observable<any[]>;
+  allUsers: any[] = []; // Almacenar todos los usuarios para filtros
   displayedColumns: string[] = ['username', 'name', 'lastname', 'role', 'actions'];
   searchQuery: string = '';
   selectedRole: string = 'all';
@@ -75,51 +76,53 @@ export class ManageUsersComponent implements OnInit {
     this.users$ = this.userService.users$;
 
     this.users$.subscribe(users => {
+      // Solo procesar si efectivamente hay usuarios cargados
       if (users && users.length > 0) {
-        this.dataSource.data = users.filter(user => user.role !== 'admin'); // Excluir administradores
-        this.dataSource.paginator = this.paginator; // Conectar el paginador
+        // Guardar todos los usuarios para filtros posteriores
+        this.allUsers = users.filter(user => user.role !== 'admin'); // Excluir administradores
         this.applyFilters(); // Aplicar filtros iniciales
-      } else {
-        console.warn('No se encontraron usuarios.');
+        this.dataSource.paginator = this.paginator; // Conectar el paginador
       }
+      // Remover el console.warn para evitar mensajes innecesarios
+      // El estado inicial puede ser vacío mientras se cargan los datos
     });
   }
 
   applyFilters(): void {
-    this.users$.subscribe(users => {
-      const filteredUsers = users.filter(user => {
-        // Asegurarse de que los campos no sean null
-        const username = user.username ? user.username.toLowerCase() : '';
-        const firstname = user.firstname ? user.firstname.toLowerCase() : '';
-        const lastname = user.lastname ? user.lastname.toLowerCase() : '';
+    if (!this.allUsers) return; // No hacer nada si no hay usuarios cargados
 
-        const searchMatches =
-          username.includes(this.searchQuery.toLowerCase()) ||
-          firstname.includes(this.searchQuery.toLowerCase()) ||
-          lastname.includes(this.searchQuery.toLowerCase());
+    const filteredUsers = this.allUsers.filter(user => {
+      // Asegurarse de que los campos no sean null
+      const username = user.username ? user.username.toLowerCase() : '';
+      const firstname = user.firstname ? user.firstname.toLowerCase() : '';
+      const lastname = user.lastname ? user.lastname.toLowerCase() : '';
 
-        const roleMatches =
-          this.selectedRole === 'all' || user.role === this.selectedRole;
+      const searchMatches =
+        username.includes(this.searchQuery.toLowerCase()) ||
+        firstname.includes(this.searchQuery.toLowerCase()) ||
+        lastname.includes(this.searchQuery.toLowerCase());
 
-        const statusMatches =
-          this.showSuspended ? user.status === false : user.status !== false;
+      const roleMatches =
+        this.selectedRole === 'all' || user.role === this.selectedRole;
 
-        return searchMatches && roleMatches && statusMatches;
-      });
+      const statusMatches =
+        this.showSuspended ? user.status === false : user.status !== false;
 
-      const sortedUsers = filteredUsers.sort((a, b) => {
-        if (this.sortBy === 'username') {
-          return a.username.localeCompare(b.username);
-        } else if (this.sortBy === 'firstname') {
-          return a.firstname.localeCompare(b.firstname);
-        } else if (this.sortBy === 'role') {
-          return a.role.localeCompare(b.role);
-        }
-        return 0;
-      });
-
-      this.dataSource.data = sortedUsers;
+      return searchMatches && roleMatches && statusMatches;
     });
+
+    const sortedUsers = filteredUsers.sort((a, b) => {
+      if (this.sortBy === 'username') {
+        return a.username.localeCompare(b.username);
+      } else if (this.sortBy === 'firstname') {
+        return a.firstname.localeCompare(b.firstname);
+      } else if (this.sortBy === 'role') {
+        return a.role.localeCompare(b.role);
+      }
+      return 0;
+    });
+
+    this.dataSource.data = sortedUsers;
   }
 
   onSearchQueryChange(query: string): void {

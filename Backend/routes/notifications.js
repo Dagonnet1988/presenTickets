@@ -17,6 +17,7 @@ import express from 'express';
 import { pool } from '../server.js';
 import { authMiddleware } from './auth.js';
 import { sendPushNotification } from './push.js';
+import { sendWhatsAppNotification } from './whatsapp.js';
 
 const router = express.Router();
 
@@ -109,6 +110,14 @@ export async function createNotification({ user_id, type, message, ticket_id }) 
   } catch (error) {
     console.error('Error enviando notificación push:', error);
     // No fallar la operación principal si las notificaciones push fallan
+  }
+
+  // Enviar notificación WhatsApp al usuario
+  try {
+    await sendWhatsAppNotification(user_id, ticket_id, message, type);
+  } catch (error) {
+    console.error('Error enviando notificación WhatsApp:', error);
+    // No fallar la operación principal si las notificaciones WhatsApp fallan
   }
 }
 

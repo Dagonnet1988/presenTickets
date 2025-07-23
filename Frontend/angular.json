@@ -42,7 +42,9 @@
               "engine.io-parser",
               "component-emitter",
               "debug",
-              "ms"
+              "ms",
+              "file-saver",
+              "xlsx"
             ]
           },          "configurations": {
             "production": {
@@ -53,7 +55,9 @@
                 "engine.io-parser",
                 "component-emitter",
                 "debug",
-                "ms"
+                "ms",
+                "file-saver",
+                "xlsx"
               ],
               "budgets": [
                 {

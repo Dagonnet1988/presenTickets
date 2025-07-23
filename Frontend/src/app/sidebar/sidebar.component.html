@@ -133,6 +133,20 @@
       <span class="nav-text" *ngIf="!isCollapsed">Notificaciones</span>
     </a>
 
+    <!-- Enlace para "Administración WhatsApp" (solo para administradores) -->
+    <a
+      mat-list-item
+      *ngIf="userRole === 'admin'"
+      routerLink="/whatsapp-admin"
+      routerLinkActive="active-link"
+      [routerLinkActiveOptions]="{ exact: true }"
+      aria-label="Administración WhatsApp"
+      class="nav-item"
+    >
+      <mat-icon class="nav-icon">forum</mat-icon>
+      <span class="nav-text" *ngIf="!isCollapsed">WhatsApp</span>
+    </a>
+
     <!-- Enlace para "Acerca de" (todos los usuarios) -->
     <a
       mat-list-item

@@ -15,16 +15,17 @@
 
 .auth-container {
   display: flex;
-  justify-content: flex-start;
-  align-items: center;
+  justify-content: center;
+  align-items: flex-start;
   min-height: 100vh;
-  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6)), url('/assets/images/fondo10.jpg');
+  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6)), url('/assets/images/clinica.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   position: relative;
   overflow: hidden;
-  padding-left: 15%;
+  padding-top: 8vh;
+  padding-bottom: 5vh;
 }
 
 .auth-container::before {
@@ -198,7 +199,8 @@ mat-form-field {
 /* Media queries para diseño responsive */
 @media (max-width: 768px) {
   .auth-container {
-    padding-left: 10%;
+    padding-top: 5vh;
+    padding-bottom: 3vh;
   }
 
   mat-card {
@@ -210,11 +212,12 @@ mat-form-field {
 @media (max-width: 480px) {
   .auth-container {
     justify-content: center;
-    padding-left: 0;
+    padding-top: 4vh;
+    padding-bottom: 2vh;
   }
 
   mat-card {
-    width: 100%;
+    width: 95%;
     padding: 16px;
     margin: 0 10px;
   }

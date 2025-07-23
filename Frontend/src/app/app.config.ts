@@ -28,12 +28,16 @@ import { tokenInterceptor } from './shared/interceptors/token.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     { provide: MatPaginatorIntl, useClass: CustomPaginatorIntl },
-    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideZoneChangeDetection({
+      eventCoalescing: true,
+      runCoalescing: true
+    }),
     provideRouter(routes),
     provideClientHydration(withEventReplay()),
     importProvidersFrom(
       BrowserAnimationsModule
-    ),    provideHttpClient(
+    ),
+    provideHttpClient(
       withFetch(),
       withInterceptors([tokenInterceptor, authInterceptor])
     )

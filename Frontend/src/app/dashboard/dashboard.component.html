@@ -253,8 +253,8 @@
         <mat-card-content>
           <div class="priority-distribution">
             <div *ngFor="let priority of ticketsByPriority" class="priority-item">
-              <div class="priority-label" [class]="'priority-' + priority.priority.toLowerCase()">
-                {{ priority.priority }}
+              <div class="priority-label" [class]="'priority-' + (priority.priority || 'unknown').toLowerCase()">
+                {{ priority.priority || 'Sin Prioridad' }}
               </div>
               <div class="priority-bar">
                 <mat-progress-bar

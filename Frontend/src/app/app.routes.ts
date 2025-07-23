@@ -46,6 +46,7 @@ import { AboutComponent } from './about/about.component';
 import { AdminDashboardComponent } from './admin-dashboard/admin-dashboard.component';
 import { PushSettingsComponent } from './push-settings/push-settings.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
+import { WhatsAppAdminComponent } from './whatsapp-admin/whatsapp-admin.component';
 
 export const routes: Routes = [
   {
@@ -61,6 +62,7 @@ export const routes: Routes = [
       { path: 'create-user', component: CreateUserComponent, canActivate: [AdminGuard] },      { path: 'manage-users', component: ManageUsersComponent, canActivate: [AdminGuard] },
       { path: 'edit-user/:id', component: EditUserComponent, canActivate: [AdminGuard] },
       { path: 'push-settings', component: PushSettingsComponent },
+      { path: 'whatsapp-admin', component: WhatsAppAdminComponent, canActivate: [AdminGuard] },
       { path: 'about', component: AboutComponent },
     ]
   },

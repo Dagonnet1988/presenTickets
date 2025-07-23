@@ -1,0 +1,881 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.
+  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+<div class="whatsapp-admin-container">
+  <h2>
+    <mat-icon>whatsapp</mat-icon>
+    Administración de WhatsApp
+  </h2>
+
+  <!-- Tabs de navegación -->
+  <mat-tab-group>
+    <!-- Tab 1: Estado de Conexión -->
+    <mat-tab label="Estado de Conexión">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>signal_wifi_4_bar</mat-icon>
+              Estado de Conexión WhatsApp
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="connection-status">
+              <div class="status-item">
+                <mat-icon
+                  [class.connected]="connectionStatus.isConnected"
+                  [class.disconnected]="!connectionStatus.isConnected"
+                  [textContent]="
+                    connectionStatus.isConnected ? 'check_circle' : 'cancel'
+                  "
+                >
+                </mat-icon>
+                <span
+                  [textContent]="
+                    'Estado: ' +
+                    (connectionStatus.isConnected
+                      ? 'Conectado'
+                      : 'Desconectado')
+                  "
+                ></span>
+              </div>
+
+              <div class="status-item">
+                <mat-icon
+                  [class.connected]="connectionStatus.hasSocket"
+                  [class.disconnected]="!connectionStatus.hasSocket"
+                  [textContent]="
+                    connectionStatus.hasSocket ? 'check_circle' : 'cancel'
+                  "
+                >
+                </mat-icon>
+                <span
+                  [textContent]="
+                    'Socket: ' +
+                    (connectionStatus.hasSocket ? 'Activo' : 'Inactivo')
+                  "
+                ></span>
+              </div>
+
+              <div class="status-item" *ngIf="connectionStatus.timestamp">
+                <mat-icon>access_time</mat-icon>
+                <span>Última actualización: Hace un momento</span>
+              </div>
+            </div>
+
+            <!-- Código QR -->
+            <div class="qr-container" *ngIf="qrCode">
+              <h3>Escanea el código QR con WhatsApp:</h3>
+              <div class="qr-code">
+                <img [src]="getQRCodeUrl(qrCode)" alt="Código QR WhatsApp" />
+              </div>
+              <p>Abre WhatsApp en tu teléfono y escanea este código QR</p>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="connectWhatsApp()"
+              [disabled]="loading.connect || connectionStatus.isConnected"
+            >
+              <mat-icon>power_settings_new</mat-icon>
+              <span
+                [textContent]="loading.connect ? 'Conectando...' : 'Conectar'"
+              ></span>
+            </button>
+
+            <button
+              mat-raised-button
+              color="warn"
+              (click)="disconnectWhatsApp()"
+              [disabled]="loading.disconnect || !connectionStatus.isConnected"
+            >
+              <mat-icon>power_off</mat-icon>
+              <span
+                [textContent]="
+                  loading.disconnect ? 'Desconectando...' : 'Desconectar'
+                "
+              ></span>
+            </button>
+
+            <button
+              mat-button
+              (click)="loadConnectionStatus()"
+              [disabled]="loading.status"
+            >
+              <mat-icon>refresh</mat-icon>
+              Actualizar Estado
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 2: Mensaje de Prueba -->
+    <mat-tab label="Mensaje de Prueba">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>message</mat-icon>
+              Enviar Mensaje de Prueba
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="test-message-form">
+              <mat-form-field appearance="outline">
+                <mat-label>Número de teléfono</mat-label>
+                <input
+                  matInput
+                  [(ngModel)]="testMessage.phoneNumber"
+                  placeholder="Ej: +573001234567"
+                  type="tel"
+                />
+                <mat-icon matSuffix>phone</mat-icon>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Mensaje</mat-label>
+                <textarea
+                  matInput
+                  [(ngModel)]="testMessage.message"
+                  placeholder="Escriba su mensaje de prueba..."
+                  rows="4"
+                ></textarea>
+                <mat-icon matSuffix>textsms</mat-icon>
+              </mat-form-field>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="sendTestMessage()"
+              [disabled]="loading.testMessage || !connectionStatus.isConnected"
+            >
+              <mat-icon>send</mat-icon>
+              <span
+                [textContent]="
+                  loading.testMessage ? 'Enviando...' : 'Enviar Mensaje'
+                "
+              ></span>
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 3: Configuración Global del Sistema -->
+    <mat-tab label="Configuración Global">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>admin_panel_settings</mat-icon>
+              Configuración Global de WhatsApp
+            </mat-card-title>
+            <mat-card-subtitle>
+              Configuraciones que se aplican a todo el sistema
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="system-settings" *ngIf="!loading.systemSettings">
+              <!-- Configuraciones Generales del Sistema -->
+              <h4><mat-icon>settings</mat-icon>Configuraciones Generales</h4>
+
+              <div class="setting-item">
+                <mat-slide-toggle
+                  [(ngModel)]="systemSettings.whatsapp_enabled_globally"
+                >
+                  <mat-icon
+                    [textContent]="
+                      systemSettings.whatsapp_enabled_globally
+                        ? 'notifications_active'
+                        : 'notifications_off'
+                    "
+                  ></mat-icon>
+                  Habilitar WhatsApp para todo el sistema
+                </mat-slide-toggle>
+                <p class="setting-description">
+                  Permite o deshabilita todas las notificaciones WhatsApp del
+                  sistema
+                </p>
+              </div>
+
+              <!-- Tipos de Notificaciones -->
+              <mat-divider class="setting-divider"></mat-divider>
+              <h4><mat-icon>notifications</mat-icon>Tipos de Notificaciones</h4>
+
+              <div class="setting-item">
+                <mat-slide-toggle
+                  [(ngModel)]="systemSettings.enable_new_ticket_notifications"
+                >
+                  <mat-icon
+                    [textContent]="
+                      systemSettings.enable_new_ticket_notifications
+                        ? 'add_circle'
+                        : 'add_circle_outline'
+                    "
+                  ></mat-icon>
+                  Notificaciones para nuevos tickets
+                </mat-slide-toggle>
+                <p class="setting-description">
+                  Enviar notificación WhatsApp cuando se crea un nuevo ticket
+                </p>
+              </div>
+
+              <div class="setting-item">
+                <mat-slide-toggle
+                  [(ngModel)]="systemSettings.enable_assignment_notifications"
+                >
+                  <mat-icon
+                    [textContent]="
+                      systemSettings.enable_assignment_notifications
+                        ? 'person'
+                        : 'person_outline'
+                    "
+                  ></mat-icon>
+                  Notificaciones para asignaciones de tickets
+                </mat-slide-toggle>
+                <p class="setting-description">
+                  Enviar notificación WhatsApp cuando se asigna un ticket a un
+                  técnico
+                </p>
+              </div>
+
+              <div class="setting-item">
+                <mat-slide-toggle
+                  [(ngModel)]="
+                    systemSettings.enable_status_change_notifications
+                  "
+                >
+                  <mat-icon
+                    [textContent]="
+                      systemSettings.enable_status_change_notifications
+                        ? 'update'
+                        : 'update_disabled'
+                    "
+                  ></mat-icon>
+                  Notificaciones para cambios de estado
+                </mat-slide-toggle>
+                <p class="setting-description">
+                  Enviar notificación WhatsApp cuando cambia el estado de un
+                  ticket
+                </p>
+              </div>
+
+              <div class="setting-item">
+                <mat-slide-toggle
+                  [(ngModel)]="systemSettings.enable_comment_notifications"
+                >
+                  <mat-icon
+                    [textContent]="
+                      systemSettings.enable_comment_notifications
+                        ? 'comment'
+                        : 'comment_outline'
+                    "
+                  ></mat-icon>
+                  Notificaciones para comentarios
+                </mat-slide-toggle>
+                <p class="setting-description">
+                  Enviar notificación WhatsApp cuando se agrega un comentario a
+                  un ticket
+                </p>
+              </div>
+
+              <mat-divider class="setting-divider"></mat-divider>
+              <div class="setting-note">
+                <mat-icon>info</mat-icon>
+                <p><strong>Nota:</strong> Esta configuración global se aplica como configuración base para el sistema.
+                Las plantillas de mensajes y configuraciones avanzadas se implementarán en una futura versión.</p>
+              </div>
+
+            </div>
+
+            <div class="loading-container" *ngIf="loading.systemSettings">
+              <mat-spinner></mat-spinner>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="saveSystemSettings()"
+              [disabled]="loading.systemSettings"
+            >
+              <mat-icon>save</mat-icon>
+              Guardar Configuración Global
+            </button>
+            <button
+              mat-button
+              (click)="resetSystemSettings()"
+              [disabled]="loading.systemSettings"
+            >
+              <mat-icon>restore</mat-icon>
+              Restaurar Valores por Defecto
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 4: Plantillas de Mensajes -->
+    <mat-tab label="Plantillas">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>message</mat-icon>
+              Plantillas de Mensajes WhatsApp
+            </mat-card-title>
+            <mat-card-subtitle>
+              Personaliza los mensajes enviados para cada tipo de notificación
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="templates-section" *ngIf="!loading.templates">
+
+              <!-- Información de variables disponibles -->
+              <div class="template-info-card">
+                <mat-icon>info</mat-icon>
+                <div>
+                  <strong>Variables disponibles:</strong>
+                  <div class="variables-grid">
+                    <p><code>{{ '{' }}userName{{ '}' }}</code> - Nombre del usuario</p>
+                    <p><code>{{ '{' }}ticketId{{ '}' }}</code> - Número del ticket</p>
+                    <p><code>{{ '{' }}subject{{ '}' }}</code> - Asunto/Título del ticket</p>
+                    <p><code>{{ '{' }}newStatus{{ '}' }}</code> - Nuevo estado del ticket</p>
+                    <p><code>{{ '{' }}timestamp{{ '}' }}</code> - Fecha y hora actual</p>
+                    <p><code>{{ '{' }}comment{{ '}' }}</code> - Contenido del comentario</p>
+                  </div>
+                </div>
+              </div>
+
+              <mat-divider class="template-divider"></mat-divider>
+
+              <!-- Plantilla para nuevos tickets -->
+              <div class="template-item">
+                <h4>
+                  <mat-icon>add_circle</mat-icon>
+                  Nuevo Ticket
+                </h4>
+                <p class="template-description">
+                  Mensaje enviado cuando se crea un nuevo ticket en el sistema
+                </p>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Plantilla para nuevos tickets</mat-label>
+                  <textarea
+                    matInput
+                    rows="6"
+                    [(ngModel)]="templates.new_ticket"
+                    placeholder="Escriba la plantilla para nuevos tickets..."
+                  ></textarea>
+                  <mat-icon matSuffix>add_circle</mat-icon>
+                  <mat-hint>Se enviará automáticamente cuando se cree un ticket</mat-hint>
+                </mat-form-field>
+              </div>
+
+              <!-- Plantilla para asignación de tickets -->
+              <div class="template-item">
+                <h4>
+                  <mat-icon>person</mat-icon>
+                  Asignación de Ticket
+                </h4>
+                <p class="template-description">
+                  Mensaje enviado cuando se asigna un ticket a un técnico
+                </p>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Plantilla para asignación</mat-label>
+                  <textarea
+                    matInput
+                    rows="6"
+                    [(ngModel)]="templates.ticket_assigned"
+                    placeholder="Escriba la plantilla para asignación..."
+                  ></textarea>
+                  <mat-icon matSuffix>person</mat-icon>
+                  <mat-hint>Solo se envía si está habilitado en configuración global</mat-hint>
+                </mat-form-field>
+              </div>
+
+              <!-- Plantilla para cambio de estado -->
+              <div class="template-item">
+                <h4>
+                  <mat-icon>update</mat-icon>
+                  Cambio de Estado
+                </h4>
+                <p class="template-description">
+                  Mensaje enviado cuando cambia el estado de un ticket
+                </p>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Plantilla para cambio de estado</mat-label>
+                  <textarea
+                    matInput
+                    rows="6"
+                    [(ngModel)]="templates.status_change"
+                    placeholder="Escriba la plantilla para cambio de estado..."
+                  ></textarea>
+                  <mat-icon matSuffix>update</mat-icon>
+                  <mat-hint>Se enviará cuando cambie: Abierto, En Progreso, Resuelto, Cerrado</mat-hint>
+                </mat-form-field>
+              </div>
+
+              <!-- Plantilla para comentarios -->
+              <div class="template-item">
+                <h4>
+                  <mat-icon>comment</mat-icon>
+                  Nuevo Comentario
+                </h4>
+                <p class="template-description">
+                  Mensaje enviado cuando se agrega un comentario a un ticket
+                </p>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Plantilla para comentarios</mat-label>
+                  <textarea
+                    matInput
+                    rows="6"
+                    [(ngModel)]="templates.comment"
+                    placeholder="Escriba la plantilla para comentarios..."
+                  ></textarea>
+                  <mat-icon matSuffix>comment</mat-icon>
+                  <mat-hint>Se enviará cuando se agregue un comentario al ticket</mat-hint>
+                </mat-form-field>
+              </div>
+
+            </div>
+
+            <div class="loading-container" *ngIf="loading.templates">
+              <mat-spinner></mat-spinner>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="saveTemplates()"
+              [disabled]="loading.templates"
+            >
+              <mat-icon>save</mat-icon>
+              Guardar Plantillas
+            </button>
+            <button
+              mat-button
+              (click)="resetTemplates()"
+              [disabled]="loading.templates"
+            >
+              <mat-icon>restore</mat-icon>
+              Restaurar Plantillas por Defecto
+            </button>
+            <button
+              mat-button
+              (click)="loadTemplates()"
+              [disabled]="loading.templates"
+            >
+              <mat-icon>refresh</mat-icon>
+              Recargar Plantillas
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 5: Estadísticas -->
+    <mat-tab label="Estadísticas">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>analytics</mat-icon>
+              Estadísticas de Notificaciones
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="stats-grid" *ngIf="stats.length > 0">
+              <div class="stat-card" *ngFor="let stat of stats">
+                <div class="stat-header">
+                  <mat-icon [matBadge]="stat.count" matBadgeColor="primary" aria-hidden="false">
+                    <ng-container [ngSwitch]="stat.status">
+                      <span *ngSwitchCase="'sent'">check_circle</span>
+                      <span *ngSwitchDefault>error</span>
+                    </ng-container>
+                  </mat-icon>
+                  <span>
+                    <ng-container [ngSwitch]="stat.status">
+                      <span *ngSwitchCase="'sent'">Enviados</span>
+                      <span *ngSwitchDefault>Fallidos</span>
+                    </ng-container>
+                  </span>
+                </div>
+                <div class="stat-count" [textContent]="stat.count"></div>
+                <div class="stat-date">Fecha</div>
+              </div>
+            </div>
+
+            <div class="no-stats" *ngIf="stats.length === 0">
+              <mat-icon>info</mat-icon>
+              <p>No hay estadísticas disponibles</p>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button (click)="loadStats()" [disabled]="loading.stats">
+              <mat-icon>refresh</mat-icon>
+              Actualizar Estadísticas
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 6: Historial de Notificaciones -->
+    <mat-tab label="Historial">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>history</mat-icon>
+              Historial de Notificaciones WhatsApp
+            </mat-card-title>
+            <mat-card-subtitle>
+              Historial completo de todos los mensajes enviados por WhatsApp
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <!-- Filtros -->
+            <div class="history-filters" *ngIf="notifications.length > 0">
+              <mat-form-field appearance="outline">
+                <mat-label>Filtrar por estado</mat-label>
+                <mat-select
+                  [(ngModel)]="historyFilter.status"
+                  (selectionChange)="applyHistoryFilter()"
+                >
+                  <mat-option value="">Todos</mat-option>
+                  <mat-option value="sent">Enviados</mat-option>
+                  <mat-option value="failed">Fallidos</mat-option>
+                  <mat-option value="pending">Pendientes</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Filtrar por tipo</mat-label>
+                <mat-select
+                  [(ngModel)]="historyFilter.type"
+                  (selectionChange)="applyHistoryFilter()"
+                >
+                  <mat-option value="">Todos</mat-option>
+                  <mat-option value="new_ticket">Nuevo Ticket</mat-option>
+                  <mat-option value="ticket_assigned">Asignación</mat-option>
+                  <mat-option value="status_change">Cambio Estado</mat-option>
+                  <mat-option value="comment">Comentario</mat-option>
+                  <mat-option value="test_message">Mensaje Prueba</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Buscar usuario</mat-label>
+                <input
+                  matInput
+                  [(ngModel)]="historyFilter.user"
+                  (input)="applyHistoryFilter()"
+                  placeholder="Nombre de usuario"
+                />
+                <mat-icon matSuffix>search</mat-icon>
+              </mat-form-field>
+
+              <button
+                mat-icon-button
+                (click)="clearHistoryFilters()"
+                matTooltip="Limpiar filtros"
+              >
+                <mat-icon>clear</mat-icon>
+              </button>
+            </div>
+
+            <div
+              class="notifications-list"
+              *ngIf="filteredNotifications.length > 0"
+            >
+              <mat-table
+                [dataSource]="filteredNotifications"
+                class="notifications-table"
+              >
+                <!-- Columna Usuario -->
+                <ng-container matColumnDef="user">
+                  <mat-header-cell *matHeaderCellDef>Usuario</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="user-info">
+                      <mat-icon class="user-icon">person</mat-icon>
+                      <span
+                        [textContent]="
+                          notification.user_name || 'Usuario desconocido'
+                        "
+                      ></span>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Ticket -->
+                <ng-container matColumnDef="ticket">
+                  <mat-header-cell *matHeaderCellDef>Ticket</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="ticket-info">
+                      <mat-icon class="ticket-icon"
+                        >confirmation_number</mat-icon
+                      >
+                      <span [textContent]="'#' + notification.ticket_id"></span>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Mensaje (preview) -->
+                <ng-container matColumnDef="message">
+                  <mat-header-cell *matHeaderCellDef>Mensaje</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="message-preview">
+                      <span
+                        [textContent]="getMessagePreview(notification.message)"
+                      ></span>
+                      <button
+                        mat-icon-button
+                        color="primary"
+                        (click)="viewMessageDetails(notification)"
+                        matTooltip="Ver mensaje completo"
+                      >
+                        <mat-icon>visibility</mat-icon>
+                      </button>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Tipo -->
+                <ng-container matColumnDef="type">
+                  <mat-header-cell *matHeaderCellDef>Tipo</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="type-info">
+                      <mat-icon
+                        [textContent]="getTypeIcon(notification)"
+                        [class]="getTypeClass(notification)">
+                      </mat-icon>
+                      <span
+                        [textContent]="getTypeText(notification)"
+                        class="type-text">
+                      </span>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Estado -->
+                <ng-container matColumnDef="status">
+                  <mat-header-cell *matHeaderCellDef>Estado</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <mat-chip-set>
+                      <mat-chip [class]="getStatusClass(notification.status)">
+                        <mat-icon
+                          [textContent]="getStatusIcon(notification.status)"
+                        ></mat-icon>
+                        <span
+                          [textContent]="getStatusText(notification.status)"
+                        ></span>
+                      </mat-chip>
+                    </mat-chip-set>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Fecha -->
+                <ng-container matColumnDef="date">
+                  <mat-header-cell *matHeaderCellDef>Fecha</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="date-info">
+                      <mat-icon>schedule</mat-icon>
+                      <span
+                        [textContent]="formatDate(notification.created_at)"
+                      ></span>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <mat-header-row
+                  *matHeaderRowDef="historyColumns"
+                ></mat-header-row>
+                <mat-row
+                  *matRowDef="let row; columns: historyColumns"
+                ></mat-row>
+              </mat-table>
+
+              <!-- Paginador -->
+              <mat-paginator
+                [pageSizeOptions]="[5, 10, 20, 50]"
+                [pageSize]="10"
+                showFirstLastButtons
+              >
+              </mat-paginator>
+            </div>
+
+            <div
+              class="empty-state"
+              *ngIf="
+                filteredNotifications.length === 0 && !loading.notifications
+              "
+            >
+              <mat-icon class="empty-icon">notification_important</mat-icon>
+              <h3>No hay notificaciones</h3>
+              <p
+                [textContent]="
+                  notifications.length === 0
+                    ? 'Aún no se han enviado notificaciones WhatsApp'
+                    : 'No hay notificaciones que coincidan con los filtros'
+                "
+              ></p>
+            </div>
+
+            <div class="loading-container" *ngIf="loading.notifications">
+              <mat-spinner></mat-spinner>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="loadNotificationHistory()"
+              [disabled]="loading.notifications"
+            >
+              <mat-icon>refresh</mat-icon>
+              <span
+                [textContent]="
+                  loading.notifications ? 'Cargando...' : 'Actualizar Historial'
+                "
+              ></span>
+            </button>
+
+            <button
+              mat-button
+              (click)="exportHistory()"
+              [disabled]="notifications.length === 0"
+            >
+              <mat-icon>download</mat-icon>
+              Exportar a Excel
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+
+  <!-- Botón flotante para recargar todo -->
+  <button
+    mat-fab
+    class="refresh-fab"
+    color="primary"
+    (click)="refreshAll()"
+    title="Actualizar todo"
+  >
+    <mat-icon>refresh</mat-icon>
+  </button>
+</div>
+
+<!-- Modal para ver mensaje completo -->
+<div
+  class="message-modal"
+  *ngIf="selectedMessage"
+  (click)="closeMessageModal()"
+>
+  <div class="message-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>
+        <mat-icon>message</mat-icon>
+        Mensaje Completo
+      </h2>
+      <button mat-icon-button (click)="closeMessageModal()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="message-info">
+        <div class="info-row">
+          <mat-icon>person</mat-icon>
+          <span class="label">Usuario:</span>
+          <span class="value" [textContent]="selectedMessage.user_name"></span>
+        </div>
+
+        <div class="info-row">
+          <mat-icon>confirmation_number</mat-icon>
+          <span class="label">Ticket:</span>
+          <span
+            class="value"
+            [textContent]="'#' + selectedMessage.ticket_id"
+          ></span>
+        </div>
+
+        <div class="info-row">
+          <mat-icon>schedule</mat-icon>
+          <span class="label">Fecha:</span>
+          <span
+            class="value"
+            [textContent]="formatDate(selectedMessage.created_at)"
+          ></span>
+        </div>
+
+        <div class="info-row">
+          <mat-icon
+            [textContent]="getTypeIcon(selectedMessage)"
+            [class]="getTypeClass(selectedMessage)"
+          ></mat-icon>
+          <span class="label">Tipo:</span>
+          <span
+            class="value"
+            [textContent]="getTypeText(selectedMessage)"
+          ></span>
+        </div>
+
+        <div class="info-row">
+          <mat-icon
+            [textContent]="getStatusIcon(selectedMessage.status)"
+          ></mat-icon>
+          <span class="label">Estado:</span>
+          <span
+            class="value"
+            [textContent]="getStatusText(selectedMessage.status)"
+          ></span>
+        </div>
+      </div>
+
+      <mat-divider></mat-divider>
+
+      <div class="message-text">
+        <h4><mat-icon>message</mat-icon>Mensaje:</h4>
+        <div class="message-body" [textContent]="selectedMessage.message"></div>
+      </div>
+
+      <div class="error-info" *ngIf="selectedMessage.error_message">
+        <h4><mat-icon>error</mat-icon>Error:</h4>
+        <div
+          class="error-body"
+          [textContent]="selectedMessage.error_message"
+        ></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button mat-button (click)="copyMessage()">
+        <mat-icon>content_copy</mat-icon>
+        Copiar Mensaje
+      </button>
+      <button mat-raised-button color="primary" (click)="closeMessageModal()">
+        <mat-icon>close</mat-icon>
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>

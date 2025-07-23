@@ -274,6 +274,113 @@ const checkAndCreateTables = async () => {
       console.log("✅ La tabla 'push_subscriptions' ya existe.");
     }
 
+    // Validar y crear la tabla "whatsapp_notifications"
+    const whatsappNotificationsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'whatsapp_notifications'
+      );
+    `);
+
+    if (!whatsappNotificationsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'whatsapp_notifications'...");
+      await client.query(`
+        CREATE TABLE whatsapp_notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+          message TEXT NOT NULL,
+          status VARCHAR(20) DEFAULT 'pending',
+          error_message TEXT,
+          phone_number VARCHAR(20),
+          sent_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } else {
+      console.log("✅ La tabla 'whatsapp_notifications' ya existe.");
+    }
+
+    // Validar y crear la tabla "user_preferences_settings"
+    const userPreferencesTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'user_preferences_settings'
+      );
+    `);
+
+    if (!userPreferencesTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'user_preferences_settings'...");
+      await client.query(`
+        CREATE TABLE user_preferences_settings (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+          whatsapp_enabled BOOLEAN DEFAULT true,
+          whatsapp_ticket_created BOOLEAN DEFAULT true,
+          whatsapp_ticket_assigned BOOLEAN DEFAULT true,
+          whatsapp_ticket_status BOOLEAN DEFAULT true,
+          whatsapp_comments BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } else {
+      console.log("✅ La tabla 'user_preferences_settings' ya existe.");
+      
+      // Actualizar el valor por defecto de whatsapp_enabled a true
+      try {
+        await client.query(`
+          ALTER TABLE user_preferences_settings 
+          ALTER COLUMN whatsapp_enabled SET DEFAULT true
+        `);
+        console.log("✅ Valor por defecto de 'whatsapp_enabled' actualizado a true.");
+      } catch (error) {
+        console.log("⚠️ Error actualizando valor por defecto:", error.message);
+      }
+
+      // Agregar nuevas columnas de configuración avanzada
+      const newColumns = [
+        { name: 'notification_schedule', type: 'VARCHAR(20) DEFAULT \'always\'', description: 'Horario de notificaciones' },
+        { name: 'notification_start_time', type: 'TIME DEFAULT \'08:00\'', description: 'Hora de inicio de notificaciones' },
+        { name: 'notification_end_time', type: 'TIME DEFAULT \'18:00\'', description: 'Hora de fin de notificaciones' },
+        { name: 'notification_mode', type: 'VARCHAR(20) DEFAULT \'instant\'', description: 'Modo de notificación' },
+        { name: 'min_priority', type: 'VARCHAR(20) DEFAULT \'low\'', description: 'Prioridad mínima' },
+        { name: 'weekend_notifications', type: 'BOOLEAN DEFAULT true', description: 'Notificaciones en fines de semana' },
+        { name: 'sound_enabled', type: 'BOOLEAN DEFAULT true', description: 'Sonido habilitado' },
+        { name: 'daily_limit', type: 'VARCHAR(20) DEFAULT \'unlimited\'', description: 'Límite diario' },
+        { name: 'do_not_disturb', type: 'BOOLEAN DEFAULT false', description: 'Modo no molestar' },
+        { name: 'do_not_disturb_until', type: 'TIMESTAMP NULL', description: 'No molestar hasta' },
+        // Plantillas de mensajes WhatsApp
+        { name: 'whatsapp_template_new_ticket', type: 'TEXT', description: 'Plantilla para nuevos tickets' },
+        { name: 'whatsapp_template_ticket_assigned', type: 'TEXT', description: 'Plantilla para asignación de tickets' },
+        { name: 'whatsapp_template_status_change', type: 'TEXT', description: 'Plantilla para cambio de estado' },
+        { name: 'whatsapp_template_comment', type: 'TEXT', description: 'Plantilla para comentarios' }
+      ];
+
+      for (const column of newColumns) {
+        try {
+          // Verificar si la columna existe
+          const columnExists = await client.query(`
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'user_preferences_settings' 
+              AND column_name = $1
+            )
+          `, [column.name]);
+
+          if (!columnExists.rows[0].exists) {
+            await client.query(`
+              ALTER TABLE user_preferences_settings 
+              ADD COLUMN ${column.name} ${column.type}
+            `);
+            console.log(`✅ Columna '${column.name}' agregada: ${column.description}`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Error agregando columna '${column.name}':`, error.message);
+        }
+      }
+    }
+
     console.log("✅ Validación y creación de tablas completada.");
   } catch (error) {
     console.error("❌ Error al validar la base de datos:", error);

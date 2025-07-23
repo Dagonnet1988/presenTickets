@@ -14,7 +14,7 @@
  */
 
 import { HttpClient } from '@angular/common/http';
-import { Injectable, NgZone } from '@angular/core';
+import { Injectable, NgZone, isDevMode } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../../environments/environment';
@@ -85,7 +85,9 @@ export class NotificationService {
           if (notification.id) {
             this.markSingleNotificationAsRead(notification.id.toString()).subscribe({
               next: () => {
-                console.log('✅ Notificación de ID externo marcada como leída automáticamente');
+                if (isDevMode()) {
+                  console.log('✅ Notificación de ID externo marcada como leída automáticamente');
+                }
               },
               error: (error: any) => {
                 console.error('Error al marcar notificación de ID externo como leída:', error);
