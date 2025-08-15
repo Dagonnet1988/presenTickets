@@ -19,15 +19,17 @@ import { provideClientHydration, withEventReplay } from '@angular/platform-brows
 import { importProvidersFrom } from '@angular/core';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { routes } from './app.routes';
-import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { MatPaginatorIntl } from '@angular/material/paginator';
 import { CustomPaginatorIntl } from './shared/services/custom-paginator-intl';
 import { authInterceptor } from './shared/interceptors/auth-interceptor';
 import { tokenInterceptor } from './shared/interceptors/token.interceptor';
+import { SsrTimeoutInterceptor } from './shared/interceptors/ssr-timeout.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     { provide: MatPaginatorIntl, useClass: CustomPaginatorIntl },
+    { provide: HTTP_INTERCEPTORS, useClass: SsrTimeoutInterceptor, multi: true },
     provideZoneChangeDetection({
       eventCoalescing: true,
       runCoalescing: true

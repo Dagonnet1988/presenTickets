@@ -469,6 +469,9 @@
     </mat-card-content>
   </mat-card>
 
+  <!-- Componente de Participantes del Ticket -->
+  <app-ticket-participants [ticketId]="ticket?.id"></app-ticket-participants>
+
 <!-- Diálogo de confirmación -->
 <ng-template #confirmDialog let-data>
   <h1 mat-dialog-title>Confirmación</h1>

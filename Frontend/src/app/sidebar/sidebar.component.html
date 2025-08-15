@@ -67,7 +67,9 @@
     >
       <mat-icon class="nav-icon">person_add</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Crear Usuario</span>
-    </a>    <!-- Enlace para "Gestionar Usuarios" (solo para administradores) -->
+    </a>
+
+    <!-- Enlace para "Gestionar Usuarios" (solo para administradores) -->
     <a
       mat-list-item
       *ngIf="userRole === 'admin'"
@@ -81,33 +83,19 @@
       <span class="nav-text" *ngIf="!isCollapsed">Gestionar Usuarios</span>
     </a>
 
-    <!-- Enlace para "Dashboard Ejecutivo" (solo para administradores y técnicos) -->
+    <!-- Enlace para "Dashboard" (solo para administradores y técnicos) -->
     <a
       mat-list-item
       *ngIf="userRole === 'admin' || userRole === 'tech'"
       routerLink="/dashboard"
       routerLinkActive="active-link"
       [routerLinkActiveOptions]="{ exact: true }"
-      aria-label="Dashboard Ejecutivo"
-      class="nav-item"
-    >
-      <mat-icon class="nav-icon">analytics</mat-icon>
-      <span class="nav-text" *ngIf="!isCollapsed">Dashboard Ejecutivo</span>
-    </a>
-
-    <!-- Enlace para "Dashboard Administrativo" (solo para administradores y técnicos) -->
- <!--    <a
-      mat-list-item
-      *ngIf="userRole === 'admin' || userRole === 'tech'"
-      routerLink="/admin-dashboard"
-      routerLinkActive="active-link"
-      [routerLinkActiveOptions]="{ exact: true }"
-      aria-label="Dashboard Administrativo"
+      aria-label="Dashboard"
       class="nav-item"
     >
       <mat-icon class="nav-icon">dashboard</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Dashboard</span>
-    </a>   -->
+    </a>
 
     <!-- Enlace para "Editar Perfil" (todos los usuarios) -->
     <a
@@ -120,19 +108,7 @@
     >
       <mat-icon class="nav-icon">account_circle</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">Editar Perfil</span>
-    </a>    <!-- Enlace para "Configuración de Notificaciones" (todos los usuarios) -->
-    <a
-      mat-list-item
-      routerLink="/push-settings"
-      routerLinkActive="active-link"
-      [routerLinkActiveOptions]="{ exact: true }"
-      aria-label="Configuración de Notificaciones"
-      class="nav-item"
-    >
-      <mat-icon class="nav-icon">notifications_active</mat-icon>
-      <span class="nav-text" *ngIf="!isCollapsed">Notificaciones</span>
     </a>
-
     <!-- Enlace para "Administración WhatsApp" (solo para administradores) -->
     <a
       mat-list-item
@@ -145,6 +121,20 @@
     >
       <mat-icon class="nav-icon">forum</mat-icon>
       <span class="nav-text" *ngIf="!isCollapsed">WhatsApp</span>
+    </a>
+
+    <!-- Enlace para "Mantenimiento" (solo para administradores) -->
+    <a
+      mat-list-item
+      *ngIf="userRole === 'admin'"
+      routerLink="/maintenance-admin"
+      routerLinkActive="active-link"
+      [routerLinkActiveOptions]="{ exact: true }"
+      aria-label="Administración de Mantenimiento"
+      class="nav-item"
+    >
+      <mat-icon class="nav-icon">build</mat-icon>
+      <span class="nav-text" *ngIf="!isCollapsed">Mantenimiento</span>
     </a>
 
     <!-- Enlace para "Acerca de" (todos los usuarios) -->

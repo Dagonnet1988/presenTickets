@@ -18,9 +18,19 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 
 export const tokenInterceptor: HttpInterceptorFn = (req, next) => {
-  // Solo agregar token si no es una request de login
-  if (!req.url.includes('/auth/login')) {
-    const token = localStorage.getItem('token');
+  // URLs que NO requieren autenticación
+  const publicUrls = [
+    '/auth/login',
+    '/auth/register',
+    '/maintenance/status'
+  ];
+
+  // Verificar si la URL es pública
+  const isPublicUrl = publicUrls.some(url => req.url.includes(url));
+  
+  // Solo agregar token si no es una URL pública
+  if (!isPublicUrl) {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
 
     if (token) {
       // Verificar si el token existe sin validar la expiración aquí

@@ -43,7 +43,7 @@ import { AuthService } from '../shared/services/auth.service';
 })
 export class AuthComponent implements OnInit {
   authForm!: FormGroup;
-  loginError: string | null = null;
+  loginError = '';
   sessionExpired = false;
 
   constructor(
@@ -55,6 +55,12 @@ export class AuthComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    // Si ya está logueado, redirigir al home
+    if (this.authService.isLoggedIn()) {
+      this.router.navigate(['/']);
+      return;
+    }
+
     this.authForm = this.fb.group({
       username: ['', [Validators.required]],
       password: ['', [Validators.required, Validators.minLength(6)]]
@@ -85,13 +91,14 @@ export class AuthComponent implements OnInit {
       const { username, password } = this.authForm.value;
       this.authService.login(username, password).subscribe(response => {
         if (response.message === 'Inicio de sesión exitoso') {
+          // Redirigir directamente al home
           this.router.navigate(['/']);
         } else {
           this.loginError = response.message;
         }
       }, error => {
         console.error('Error durante el login:', error);
-        this.loginError = 'Error durante el login. Por favor, inténtelo de nuevo.';
+        this.loginError = error.error?.message || 'Error durante el login. Por favor, inténtelo de nuevo.';
       });
     } else {
       console.log('Formulario inválido');

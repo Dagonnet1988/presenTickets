@@ -245,7 +245,7 @@ class WhatsAppService {
       await this.sendMessage(user.phone, formattedMessage);
       
       // Registrar en base de datos
-      await this.logWhatsAppNotification(userId, ticketId, formattedMessage, 'sent');
+      await this.logWhatsAppNotification(userId, ticketId, formattedMessage, 'sent', null, user.phone, notificationType);
       
       client.release();
       return true;
@@ -253,7 +253,7 @@ class WhatsAppService {
     } catch (error) {
       console.error('❌ Error enviando notificación WhatsApp:', error);
       // Registrar error en base de datos
-      await this.logWhatsAppNotification(userId, ticketId, message, 'failed', error.message);
+      await this.logWhatsAppNotification(userId, ticketId, message, 'failed', error.message, null, notificationType);
       return false;
     }
   }
@@ -300,14 +300,14 @@ _Este es un mensaje automático, no responder._`;
   /**
    * Registrar notificación en base de datos
    */
-  async logWhatsAppNotification(userId, ticketId, message, status, error = null) {
+  async logWhatsAppNotification(userId, ticketId, message, status, error = null, phoneNumber = null, notificationType = 'unknown') {
     try {
       const client = await pool.connect();
       await client.query(`
         INSERT INTO whatsapp_notifications 
-        (user_id, ticket_id, message, status, error_message, created_at)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-      `, [userId, ticketId, message, status, error]);
+        (user_id, ticket_id, message, status, error_message, phone_number, notification_type, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+      `, [userId, ticketId, message, status, error, phoneNumber, notificationType]);
       client.release();
     } catch (dbError) {
       console.error('❌ Error registrando notificación WhatsApp en BD:', dbError);

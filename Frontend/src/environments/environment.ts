@@ -20,5 +20,6 @@ export const environment = {
   ticket: 'http://localhost:3000/api/tickets',
   comment: 'http://localhost:3000/api/comments',
   backendUrl: 'http://localhost:3000', // Agregado para adjuntos
-  appVersion: '1.0.5'
+  apiUrl: 'http://localhost:3000', // Para Socket.IO y APIs generales
+  appVersion: '1.0.6'
 };

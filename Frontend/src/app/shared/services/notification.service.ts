@@ -20,7 +20,6 @@ import { io, Socket } from 'socket.io-client';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { RefreshTicketsService } from './refresh-tickets.service';
-import { PushNotificationService } from './push-notification.service';
 
 export interface TicketNotification {
   id?: number;
@@ -42,7 +41,6 @@ export class NotificationService {
     private authService: AuthService,
     private http: HttpClient,
     private refreshTicketsService: RefreshTicketsService,
-    private pushNotificationService: PushNotificationService
   ) {
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],

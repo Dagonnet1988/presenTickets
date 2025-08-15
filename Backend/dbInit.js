@@ -134,6 +134,7 @@ const checkAndCreateTables = async () => {
       `);
     } else {
       console.log("✅ La tabla 'tickets' ya existe. Verificando columnas...");
+      
       // Verificar y agregar columna external_ticket_id si no existe
       const externalTicketIdColumn = await client.query(
         `SELECT column_name FROM information_schema.columns
@@ -144,6 +145,19 @@ const checkAndCreateTables = async () => {
         await client.query(`ALTER TABLE tickets ADD COLUMN external_ticket_id VARCHAR(100)`);
       } else {
         console.log("✅ La columna 'external_ticket_id' ya existe en la tabla 'tickets'.");
+      }
+      
+      // Verificar y agregar columna participants si no existe
+      const participantsColumn = await client.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'tickets' AND column_name = 'participants'`
+      );
+      if (participantsColumn.rows.length === 0) {
+        console.log("➕ Agregando columna 'participants' a la tabla 'tickets'");
+        await client.query(`ALTER TABLE tickets ADD COLUMN participants INTEGER[] DEFAULT '{}'`);
+        console.log("✅ Columna 'participants' agregada exitosamente.");
+      } else {
+        console.log("✅ La columna 'participants' ya existe en la tabla 'tickets'.");
       }
     }
 
@@ -248,31 +262,6 @@ const checkAndCreateTables = async () => {
       }
     }
 
-    // Validar y crear la tabla "push_subscriptions"
-    const pushSubscriptionsTableExists = await client.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_name = 'push_subscriptions'
-      );
-    `);
-
-    if (!pushSubscriptionsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'push_subscriptions'...");
-      await client.query(`
-        CREATE TABLE push_subscriptions (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          endpoint TEXT NOT NULL,
-          p256dh_key TEXT NOT NULL,
-          auth_key TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(user_id, endpoint)
-        );
-      `);
-    } else {
-      console.log("✅ La tabla 'push_subscriptions' ya existe.");
-    }
 
     // Validar y crear la tabla "whatsapp_notifications"
     const whatsappNotificationsTableExists = await client.query(`
@@ -290,6 +279,7 @@ const checkAndCreateTables = async () => {
           user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
           message TEXT NOT NULL,
+          notification_type VARCHAR(50) DEFAULT 'unknown',
           status VARCHAR(20) DEFAULT 'pending',
           error_message TEXT,
           phone_number VARCHAR(20),
@@ -299,6 +289,69 @@ const checkAndCreateTables = async () => {
       `);
     } else {
       console.log("✅ La tabla 'whatsapp_notifications' ya existe.");
+      
+      // Verificar si existe la columna notification_type, si no existe agregarla
+      const notificationTypeColumnExists = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_name = 'whatsapp_notifications' 
+          AND column_name = 'notification_type'
+        );
+      `);
+      
+      if (!notificationTypeColumnExists.rows[0].exists) {
+        console.log("➕ Agregando columna 'notification_type' a 'whatsapp_notifications'...");
+        await client.query(`
+          ALTER TABLE whatsapp_notifications 
+          ADD COLUMN notification_type VARCHAR(50) DEFAULT 'unknown';
+        `);
+        console.log("✅ Columna 'notification_type' agregada exitosamente.");
+      }
+    }
+
+    // Validar y crear la tabla "dashboard_settings"
+    const dashboardSettingsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'dashboard_settings'
+      );
+    `);
+
+    if (!dashboardSettingsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'dashboard_settings'...");
+      await client.query(`
+        CREATE TABLE dashboard_settings (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+          kpis JSONB DEFAULT '{}'::jsonb, -- Configuración de KPIs (editable)
+          work_hours JSONB DEFAULT '{}'::jsonb, -- Horarios de trabajo (editable)
+          dashboard_layout JSONB DEFAULT '{}'::jsonb, -- Configuración visual (opcional)
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log("✅ Tabla 'dashboard_settings' creada exitosamente.");
+    } else {
+      console.log("✅ La tabla 'dashboard_settings' ya existe.");
+      // Validar y agregar columnas si faltan
+      const dashboardColumns = [
+        { name: 'kpis', type: "JSONB DEFAULT '{}'::jsonb" },
+        { name: 'work_hours', type: "JSONB DEFAULT '{}'::jsonb" },
+        { name: 'dashboard_layout', type: "JSONB DEFAULT '{}'::jsonb" },
+        { name: 'created_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+        { name: 'updated_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' }
+      ];
+      for (const column of dashboardColumns) {
+        const columnExists = await client.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_name = 'dashboard_settings' AND column_name = $1`,
+          [column.name]
+        );
+        if (columnExists.rows.length === 0) {
+          console.log(`➕ Agregando columna '${column.name}' a la tabla 'dashboard_settings'`);
+          await client.query(`ALTER TABLE dashboard_settings ADD COLUMN ${column.name} ${column.type}`);
+        }
+      }
     }
 
     // Validar y crear la tabla "user_preferences_settings"
@@ -379,6 +432,67 @@ const checkAndCreateTables = async () => {
           console.log(`⚠️ Error agregando columna '${column.name}':`, error.message);
         }
       }
+    }
+
+    // Crear tabla dashboard_config para configuración de metas
+    const dashboardConfigExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'dashboard_config'
+      );
+    `);
+
+    if (!dashboardConfigExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'dashboard_config'...");
+      await client.query(`
+        CREATE TABLE dashboard_config (
+          id SERIAL PRIMARY KEY,
+          config_key VARCHAR(50) UNIQUE NOT NULL,
+          config_value TEXT NOT NULL,
+          config_type VARCHAR(20) DEFAULT 'text',
+          description TEXT,
+          category VARCHAR(30) DEFAULT 'general',
+          updated_by INTEGER REFERENCES users(id),
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Insertar configuraciones por defecto
+      await client.query(`
+        INSERT INTO dashboard_config (config_key, config_value, config_type, description, category) VALUES
+        ('work_hours_start', '07:00', 'time', 'Hora de inicio laboral', 'schedule'),
+        ('work_hours_end', '17:30', 'time', 'Hora de fin laboral (Lunes-Jueves)', 'schedule'),
+        ('work_hours_friday_end', '16:30', 'time', 'Hora de fin laboral (Viernes)', 'schedule'),
+        ('lunch_break_start', '12:00', 'time', 'Inicio de almuerzo', 'schedule'),
+        ('lunch_break_end', '13:30', 'time', 'Fin de almuerzo', 'schedule'),
+        ('target_response_time', '240', 'number', 'Meta tiempo de respuesta (minutos)', 'targets'),
+        ('target_resolution_time', '1440', 'number', 'Meta tiempo de resolución (minutos)', 'targets'),
+        ('sla_critical', '60', 'number', 'SLA prioridad crítica (minutos)', 'sla'),
+        ('sla_high', '240', 'number', 'SLA prioridad alta (minutos)', 'sla'),
+        ('sla_medium', '480', 'number', 'SLA prioridad media (minutos)', 'sla'),
+        ('sla_low', '1440', 'number', 'SLA prioridad baja (minutos)', 'sla'),
+        ('active_work_states', 'En gestión,Investigando,Resolviendo', 'array', 'Estados considerados trabajo activo', 'workflow'),
+        ('paused_states', 'Escalado a externo,Esperando respuesta del usuario', 'array', 'Estados pausados (no cuentan tiempo)', 'workflow');
+      `);
+      
+      console.log("✅ Tabla 'dashboard_config' creada con configuraciones por defecto.");
+    } else {
+      console.log("✅ La tabla 'dashboard_config' ya existe.");
+    }
+
+    // Eliminar tabla ticket_participants si existe (ya no se usa)
+    const ticketParticipantsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'ticket_participants'
+      );
+    `);
+
+    if (ticketParticipantsTableExists.rows[0].exists) {
+      console.log("🗑️ Eliminando tabla 'ticket_participants' (ya no se usa)...");
+      await client.query(`DROP TABLE IF EXISTS ticket_participants CASCADE;`);
+      console.log("✅ Tabla 'ticket_participants' eliminada exitosamente.");
     }
 
     console.log("✅ Validación y creación de tablas completada.");

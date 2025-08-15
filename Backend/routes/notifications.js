@@ -16,7 +16,6 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { authMiddleware } from './auth.js';
-import { sendPushNotification } from './push.js';
 import { sendWhatsAppNotification } from './whatsapp.js';
 
 const router = express.Router();
@@ -96,21 +95,6 @@ export async function createNotification({ user_id, type, message, ticket_id }) 
     [user_id, type, message, ticket_id]
   );
 
-  // Enviar notificación push al usuario
-  try {
-    const pushNotification = {
-      title: 'PresenTickets',
-      body: message,
-      tag: `ticket-${ticket_id}-${Date.now()}`, // Tag único para cada notificación
-      url: `/ticket/${ticket_id}`,
-      ticketId: ticket_id
-    };
-    
-    await sendPushNotification(user_id, pushNotification);
-  } catch (error) {
-    console.error('Error enviando notificación push:', error);
-    // No fallar la operación principal si las notificaciones push fallan
-  }
 
   // Enviar notificación WhatsApp al usuario
   try {

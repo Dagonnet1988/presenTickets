@@ -26,7 +26,6 @@ import ticketRoutes from './routes/tickets.js';
 import userRoutes from './routes/users.js';
 import commentRoutes from './routes/comments.js';
 import notificationRoutes from './routes/notifications.js';
-import pushRoutes from './routes/push.js';
 import analyticsRoutes from './routes/analytics.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import whatsappService from './services/whatsappService.js';
@@ -34,6 +33,8 @@ import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
+import dashboardSettingsRoutes from './routes/dashboardSettings.js';
+import dashboardConfigRoutes from './routes/dashboardConfig.js';
 
 // Cargar variables de entorno según el entorno
 const ENV = process.env.NODE_ENV || 'development';
@@ -111,6 +112,7 @@ app.use((req, res, next) => {
     next();
   }
 });
+
 
 // Middleware específico para manejar errores de parsing
 app.use((err, req, res, next) => {
@@ -266,9 +268,10 @@ app.use('/api/tickets', authMiddleware, ticketRoutes);
 app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/comments', authMiddleware, commentRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
-app.use('/api/push', pushRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/dashboard', authMiddleware, dashboardSettingsRoutes);
+app.use('/api/dashboard-config', authMiddleware, dashboardConfigRoutes);
 // Rutas públicas
 app.use('/api/auth', authRoutes);
 
@@ -365,16 +368,43 @@ export function emitTicketNotification(type, data, recipients = []) {
   });
 }
 
-// Devuelve un array de userIds a notificar (técnico asignado y creador, excluyendo al actor)
+// Devuelve un array de userIds a notificar (creador, asignado y participantes del ticket, excluyendo al actor)
 export async function getNotificationRecipients(ticketId, actorId) {
   const client = await pool.connect();
   try {
-    const result = await client.query('SELECT user_id, assigned_to FROM tickets WHERE id = $1', [ticketId]);
-    if (!result.rows.length) return [];
-    const { user_id, assigned_to } = result.rows[0];
+    // Obtener creador, asignado y participantes del ticket
+    const result = await client.query(`
+      SELECT user_id, assigned_to, participants 
+      FROM tickets 
+      WHERE id = $1
+    `, [ticketId]);
+    
+    if (result.rows.length === 0) {
+      return [];
+    }
+    
+    const ticket = result.rows[0];
     const recipients = new Set();
-    if (user_id && String(user_id) !== String(actorId)) recipients.add(String(user_id));
-    if (assigned_to && String(assigned_to) !== String(actorId)) recipients.add(String(assigned_to));
+    
+    // Agregar creador del ticket
+    if (ticket.user_id && String(ticket.user_id) !== String(actorId)) {
+      recipients.add(String(ticket.user_id));
+    }
+    
+    // Agregar técnico asignado
+    if (ticket.assigned_to && String(ticket.assigned_to) !== String(actorId)) {
+      recipients.add(String(ticket.assigned_to));
+    }
+    
+    // Agregar participantes adicionales
+    if (ticket.participants && ticket.participants.length > 0) {
+      ticket.participants.forEach(userId => {
+        if (String(userId) !== String(actorId)) {
+          recipients.add(String(userId));
+        }
+      });
+    }
+    
     return Array.from(recipients);
   } catch (err) {
     console.error('Error al obtener destinatarios de notificación:', err);

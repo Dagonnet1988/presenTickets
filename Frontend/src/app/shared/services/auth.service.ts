@@ -13,11 +13,12 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Injectable, isDevMode } from '@angular/core';
+import { Injectable, isDevMode, Inject, PLATFORM_ID, Injector } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
+import { isPlatformBrowser } from '@angular/common';
 
 @Injectable({
   providedIn: 'root'
@@ -25,13 +26,21 @@ import { environment } from '../../../environments/environment';
 export class AuthService {
   private apiUrl = environment.auth;
 
-  constructor(private http: HttpClient) {}  // Iniciar sesión
+  constructor(
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: Object,
+    private injector: Injector
+  ) {
+    // Verificar si ya hay un usuario logueado al inicializar el servicio
+    this.checkExistingLogin();
+  }  // Iniciar sesión
   login(username: string, password: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/login`, { username, password }).pipe(
       tap(response => {
         if (response.token) {
           if (this.isLocalStorageAvailable()) {
             localStorage.setItem('token', response.token);
+            console.log('✅ Token guardado, login exitoso');
           } else {
             console.error('localStorage is not available!');
           }
@@ -183,6 +192,20 @@ export class AuthService {
       }
     } else {
       console.log('No hay token en localStorage');
+    }
+  }
+
+  /**
+   * Verificar si hay un usuario ya logueado al inicializar
+   */
+  private checkExistingLogin(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      // Pequeño delay para asegurar que el localStorage esté disponible
+      setTimeout(() => {
+        if (this.isLoggedIn()) {
+          console.log('🔄 Usuario ya logueado detectado.');
+        }
+      }, 100);
     }
   }
 }

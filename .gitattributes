@@ -1,1 +1,90 @@
+# ============================================
+# PRESENTICKETS - GITATTRIBUTES CONFIG
+# ============================================
+
+# Auto detect text files and perform LF normalization
 * text=auto
+
+# ============================================
+# ARCHIVOS DE CÓDIGO - LF (Unix)
+# ============================================
+
+# JavaScript/TypeScript files
+*.js text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.json text eol=lf
+
+# Web files
+*.html text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+
+# Configuration files
+.gitignore text eol=crlf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+
+# Shell scripts (Unix LF)
+*.sh text eol=lf
+
+# ============================================
+# ARCHIVOS WINDOWS - CRLF
+# ============================================
+
+# Batch files (Windows CRLF)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell scripts (Windows CRLF)
+*.ps1 text eol=crlf
+
+# ============================================
+# ARCHIVOS BINARIOS
+# ============================================
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+
+# Fonts
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
+*.otf binary
+
+# Archives
+*.zip binary
+*.7z binary
+*.tar binary
+*.gz binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+
+# ============================================
+# LINGUIST OVERRIDES (GitHub Language Detection)
+# ============================================
+
+# Ignore generated files in language statistics
+Frontend/dist/** linguist-generated=true
+Backend/node_modules/** linguist-generated=true
+Frontend/node_modules/** linguist-generated=true
+*.map linguist-generated=true
+
+# Mark documentation directories
+Documentacion/** linguist-documentation=true
+*.md linguist-documentation=true
+
+# Ensure TypeScript is primary language
+*.ts linguist-language=TypeScript
+*.js linguist-language=JavaScript

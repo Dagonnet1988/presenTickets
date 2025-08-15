@@ -187,16 +187,30 @@ export class HomeComponent implements OnInit {
 
   loadTickets(): void {
     const userId = this.authService.getUserId();
+
     this.ticketService.getTickets().subscribe(tickets => {
       if (this.userRole === 'admin') {
         this.tickets = tickets;
       } else if (this.userRole === 'tech') {
         this.tickets = this.showAllTickets
           ? tickets
-          : tickets.filter(ticket => !ticket.assigned_to || ticket.assigned_to === Number(userId));
+          : tickets.filter(ticket => {
+              const hasAccess = !ticket.assigned_to ||
+                              ticket.assigned_to === Number(userId) ||
+                              (ticket.participants && Array.isArray(ticket.participants) && ticket.participants.includes(Number(userId)));
+              return hasAccess;
+            });
       } else {
-        this.tickets = tickets.filter(ticket => ticket.user_id === Number(userId));
+        // Para usuarios normales
+        this.tickets = tickets.filter(ticket => {
+          const isCreator = ticket.user_id === Number(userId);
+          const isParticipant = ticket.participants && Array.isArray(ticket.participants) && ticket.participants.includes(Number(userId));
+          const hasAccess = isCreator || isParticipant;
+
+          return hasAccess;
+        });
       }
+
       this.updateStatusCounts();
       this.applyFilters();
       this.loadUserNames(); // <--- Refresca los nombres después de cargar tickets

@@ -48,14 +48,46 @@ function sanitizeFileName(fileName) {
   return fileName.replace(/[^a-z0-9\.\-_]/gi, "_");
 }
 
-// Obtener todos los tickets
+// Obtener todos los tickets (filtrados por acceso del usuario)
 router.get("/", async (req, res) => {
   const client = await pool.connect();
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  
+  // Debug log for troubleshooting
+  // console.log('[TICKETS] Get all tickets for user:', userId, 'role:', userRole);
+  
   try {
-    const result = await client.query(
-      "SELECT * FROM tickets ORDER BY created_at DESC"
-    );
-    res.json(result.rows);
+    let query;
+    let params;
+    
+    // Admin y tech pueden ver todos los tickets
+    if (userRole === 'admin' || userRole === 'tech') {
+      query = "SELECT * FROM tickets ORDER BY created_at DESC";
+      params = [];
+    } else {
+      // Usuarios normales solo ven tickets donde son creador, asignado o participante
+      query = `
+        SELECT * FROM tickets 
+        WHERE user_id = $1 OR assigned_to = $1 OR (participants IS NOT NULL AND $1 = ANY(participants))
+        ORDER BY created_at DESC
+      `;
+      params = [userId];
+    }
+    
+    const result = await client.query(query, params);
+    
+    // Asegurar que participants siempre sea un array válido
+    const ticketsWithValidParticipants = result.rows.map(ticket => ({
+      ...ticket,
+      participants: ticket.participants || []
+    }));
+    
+    // Debug logs for troubleshooting
+    // console.log('[TICKETS] Returning', ticketsWithValidParticipants.length, 'tickets');
+    // console.log('[TICKETS] Sample ticket participants:', ticketsWithValidParticipants[0]?.participants);
+    
+    res.json(ticketsWithValidParticipants);
   } catch (err) {
     console.error("Error al obtener los tickets:", err);
     res.status(500).json({ message: "Error al obtener los tickets" });
@@ -64,11 +96,18 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Obtener un ticket por ID
+// Obtener un ticket por ID (con control de acceso)
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
+  const userRole = req.user.role;
   const client = await pool.connect();
+  
+  // Debug log for troubleshooting
+  // console.log('[TICKET] Getting ticket', id, 'for user:', userId, 'role:', userRole);
+  
   try {
+    // Obtener el ticket
     const ticketResult = await client.query(
       "SELECT * FROM tickets WHERE id = $1",
       [id]
@@ -78,11 +117,37 @@ router.get("/:id", async (req, res) => {
     }
 
     const ticket = ticketResult.rows[0];
+    
+    // Verificar acceso (admin/tech pueden ver todos, usuarios solo los suyos)
+    if (userRole !== 'admin' && userRole !== 'tech') {
+      const userIdNum = parseInt(userId);
+      const isCreator = ticket.user_id == userIdNum;
+      const isAssigned = ticket.assigned_to == userIdNum;
+      const isParticipant = ticket.participants && ticket.participants.includes(userIdNum);
+      const hasAccess = isCreator || isAssigned || isParticipant;
+      
+      // Debug log for troubleshooting access issues
+      // console.log('[TICKET] Access check for user', userIdNum, ':', {
+      //   isCreator, isAssigned, isParticipant, hasAccess,
+      //   ticketUserId: ticket.user_id,
+      //   ticketAssignedTo: ticket.assigned_to,
+      //   ticketParticipants: ticket.participants
+      // });
+      
+      if (!hasAccess) {
+        return res.status(403).json({ message: "No tienes acceso a este ticket" });
+      }
+    }
+
+    // Obtener adjuntos
     const attachmentsResult = await client.query(
       "SELECT * FROM attachments WHERE ticket_id = $1",
       [id]
     );
     ticket.attachments = attachmentsResult.rows;
+
+    // Asegurar que participants siempre sea un array válido
+    ticket.participants = ticket.participants || [];
 
     res.json(ticket);
   } catch (err) {
@@ -682,6 +747,280 @@ router.get("/uploads/:filename", (req, res) => {
     res.setHeader("Content-Type", contentType);
     res.sendFile(filePath);
   });
+});
+
+// ============= RUTAS DE PARTICIPANTES =============
+
+// Middleware para verificar que el usuario puede ver el ticket
+async function canViewTicket(req, res, next) {
+  try {
+    const ticketId = req.params.ticketId || req.body.ticketId;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    // Admin y tech pueden ver todos los tickets
+    if (userRole === 'admin' || userRole === 'tech') {
+      return next();
+    }
+    
+    const client = await pool.connect();
+    try {
+      // Para usuarios normales, verificar si es creador, asignado o participante
+      const accessCheck = await client.query(`
+        SELECT 1 FROM tickets t
+        WHERE t.id = $1 AND (
+          t.user_id = $2 OR 
+          t.assigned_to = $2 OR 
+          (t.participants IS NOT NULL AND $2 = ANY(t.participants))
+        )
+      `, [ticketId, userId]);
+      
+      if (accessCheck.rows.length > 0) {
+        return next();
+      }
+      
+      return res.status(403).json({ message: 'No tienes acceso a este ticket' });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error verificando acceso al ticket:', error);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+}
+
+// Middleware para verificar permisos de edición (solo admin y tech pueden editar)
+function canEditParticipants(req, res, next) {
+  const userRole = req.user.role;
+  
+  if (userRole === 'admin' || userRole === 'tech') {
+    return next();
+  }
+  
+  return res.status(403).json({ message: 'No tienes permisos para editar participantes en este ticket' });
+}
+
+// Obtener participantes de un ticket
+router.get('/:ticketId/participants', canViewTicket, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    
+    const client = await pool.connect();
+    try {
+      const result = await client.query(`
+        SELECT DISTINCT
+          u.id as user_id,
+          u.username,
+          CONCAT(u.firstname, ' ', u.lastname) as full_name,
+          u.role,
+          u.email
+        FROM tickets t
+        JOIN users u ON u.id = ANY(t.participants)
+        WHERE t.id = $1 AND array_length(t.participants, 1) > 0
+        ORDER BY full_name
+      `, [ticketId]);
+      
+      res.json(result.rows);
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error obteniendo participantes:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Agregar participante a un ticket
+router.post('/:ticketId/participants', canEditParticipants, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'ID de usuario requerido' });
+    }
+    
+    const client = await pool.connect();
+    try {
+      // Verificar que el usuario existe
+      const userCheck = await client.query('SELECT id, firstname, lastname FROM users WHERE id = $1', [userId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+      }
+      
+      // Verificar que el ticket existe y obtener participantes actuales
+      const ticketCheck = await client.query(
+        'SELECT id, user_id, assigned_to, participants FROM tickets WHERE id = $1', 
+        [ticketId]
+      );
+      if (ticketCheck.rows.length === 0) {
+        return res.status(404).json({ message: 'Ticket no encontrado' });
+      }
+      
+      const ticket = ticketCheck.rows[0];
+      const currentParticipants = ticket.participants || [];
+      
+      // Verificar que no sea el creador o asignado
+      if (ticket.user_id == userId || ticket.assigned_to == userId) {
+        return res.status(400).json({ 
+          message: 'No se puede agregar al creador o técnico asignado como participante adicional' 
+        });
+      }
+      
+      // Verificar que no esté ya en participantes
+      if (currentParticipants.includes(parseInt(userId))) {
+        return res.status(400).json({ message: 'El usuario ya es participante del ticket' });
+      }
+      
+      // Agregar participante al array
+      const newParticipants = [...currentParticipants, parseInt(userId)];
+      
+      await client.query(
+        'UPDATE tickets SET participants = $1 WHERE id = $2',
+        [newParticipants, ticketId]
+      );
+      
+      const user = userCheck.rows[0];
+      res.status(201).json({
+        message: 'Participante agregado exitosamente',
+        participant: {
+          user_id: parseInt(userId),
+          username: user.username,
+          full_name: `${user.firstname} ${user.lastname}`
+        }
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error agregando participante:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Remover participante de un ticket  
+router.delete('/:ticketId/participants/:userId', canEditParticipants, async (req, res) => {
+  try {
+    const { ticketId, userId } = req.params;
+    
+    const client = await pool.connect();
+    try {
+      // Obtener ticket y participantes actuales
+      const ticketResult = await client.query(
+        'SELECT participants FROM tickets WHERE id = $1', 
+        [ticketId]
+      );
+      
+      if (ticketResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Ticket no encontrado' });
+      }
+      
+      const currentParticipants = ticketResult.rows[0].participants || [];
+      const userIdInt = parseInt(userId);
+      
+      if (!currentParticipants.includes(userIdInt)) {
+        return res.status(404).json({ message: 'Usuario no es participante del ticket' });
+      }
+      
+      // Remover participante del array
+      const newParticipants = currentParticipants.filter(id => id !== userIdInt);
+      
+      await client.query(
+        'UPDATE tickets SET participants = $1 WHERE id = $2',
+        [newParticipants, ticketId]
+      );
+      
+      // Obtener nombre del usuario para el mensaje
+      const userResult = await client.query(
+        'SELECT firstname, lastname FROM users WHERE id = $1', 
+        [userId]
+      );
+      const user = userResult.rows[0];
+      
+      res.json({
+        message: `${user.firstname} ${user.lastname} removido del ticket exitosamente`
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error removiendo participante:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Obtener usuarios disponibles para agregar como participantes
+router.get('/:ticketId/available-users', canViewTicket, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const { search = '' } = req.query;
+    
+    const client = await pool.connect();
+    try {
+      // Obtener el ticket para excluir creador, asignado y participantes actuales
+      const ticketResult = await client.query(
+        'SELECT user_id, assigned_to, participants FROM tickets WHERE id = $1',
+        [ticketId]
+      );
+      
+      if (ticketResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Ticket no encontrado' });
+      }
+      
+      const ticket = ticketResult.rows[0];
+      const excludedIds = [ticket.user_id, ticket.assigned_to, ...(ticket.participants || [])].filter(id => id != null);
+      
+      let query = `
+        SELECT 
+          u.id, 
+          u.username, 
+          CONCAT(u.firstname, ' ', u.lastname) as full_name, 
+          u.email, 
+          u.role
+        FROM users u
+        WHERE u.status = true
+      `;
+      
+      let params = [];
+      let paramIndex = 1;
+      
+      if (excludedIds.length > 0) {
+        query += ` AND u.id NOT IN (${excludedIds.map(id => `$${paramIndex++}`).join(',')})`;
+        params.push(...excludedIds);
+      }
+      
+      if (search) {
+        query += ` AND (
+          u.firstname ILIKE $${paramIndex} OR 
+          u.lastname ILIKE $${paramIndex} OR 
+          u.username ILIKE $${paramIndex} OR 
+          u.email ILIKE $${paramIndex}
+        )`;
+        params.push(`%${search}%`);
+      }
+      
+      query += ` ORDER BY u.firstname, u.lastname LIMIT 20`;
+      
+      const result = await client.query(query, params);
+      
+      res.json(result.rows);
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('Error obteniendo usuarios disponibles:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
 });
 
 export default router;

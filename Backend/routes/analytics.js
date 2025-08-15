@@ -15,7 +15,7 @@
 
 import express from "express";
 import { pool } from "../server.js";
-import { calculateDashboardMetrics, calculateTicketTimings } from "../services/timeCalculations.js";
+import { calculateDashboardMetrics, calculateTicketTimings, calculateEnhancedMetrics } from "../services/timeCalculations.js";
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ function requireTechOrAdmin(req, res, next) {
   next();
 }
 
-// Obtener métricas del dashboard
+// Obtener métricas del dashboard con configuración dinámica
 router.get('/dashboard', requireTechOrAdmin, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -40,8 +40,44 @@ router.get('/dashboard', requireTechOrAdmin, async (req, res) => {
       };
     }
     
-    const metrics = await calculateDashboardMetrics(pool, dateRange);
-    res.json(metrics);
+    const client = await pool.connect();
+    
+    try {
+      // Obtener configuración actual
+      const configResult = await client.query(`
+        SELECT config_key, config_value, config_type
+        FROM dashboard_config
+        WHERE category IN ('targets', 'sla', 'workflow')
+      `);
+      
+      const config = {};
+      configResult.rows.forEach(row => {
+        let value = row.config_value;
+        if (row.config_type === 'number') {
+          value = parseInt(value);
+        } else if (row.config_type === 'array') {
+          value = value.split(',');
+        }
+        config[row.config_key] = value;
+      });
+      
+      // Preparar filtro de usuario para técnicos
+      const userFilter = req.user.role === 'tech' ? {
+        role: req.user.role,
+        userId: req.user.userId
+      } : null;
+      
+      // Calcular métricas mejoradas con configuración dinámica
+      const metrics = await calculateEnhancedMetrics(pool, dateRange, config, userFilter);
+      
+      // Agregar configuración actual para el frontend
+      metrics.configuration = config;
+      
+      res.json(metrics);
+      
+    } finally {
+      client.release();
+    }
     
   } catch (error) {
     console.error('Error al obtener métricas del dashboard:', error);
@@ -54,20 +90,50 @@ router.get('/tickets-by-status', requireTechOrAdmin, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    let dateFilter = '';
+    let whereConditions = [];
     let params = [];
+    let paramIndex = 1;
     
+    // Filtro de fecha
     if (startDate && endDate) {
-      dateFilter = 'WHERE created_at >= $1 AND created_at <= $2';
-      params = [startDate, endDate];
+      // Asegurarse de que endDate incluya todo el día
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
+      whereConditions.push(`created_at >= $${paramIndex} AND created_at <= $${paramIndex + 1}`);
+      params.push(new Date(startDate), adjustedEndDate);
+      paramIndex += 2;
     }
+    
+    // Filtro por técnico (solo para role 'tech')
+    if (req.user.role === 'tech') {
+      whereConditions.push(`assigned_to = $${paramIndex}`);
+      params.push(req.user.userId);
+      paramIndex++;
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Primero obtener el total de tickets para calcular porcentajes
+    const totalQuery = `
+      SELECT COUNT(*) as total_count
+      FROM tickets 
+      ${whereClause}
+    `;
+    
+    const totalResult = await pool.query(totalQuery, params);
+    const totalTickets = parseInt(totalResult.rows[0].total_count);
     
     const query = `
       SELECT 
         status,
-        COUNT(*) as count
+        COUNT(*) as count,
+        CASE 
+          WHEN ${totalTickets} > 0 THEN ROUND((COUNT(*) * 100.0) / ${totalTickets}, 1)
+          ELSE 0
+        END as percentage
       FROM tickets 
-      ${dateFilter}
+      ${whereClause}
       GROUP BY status
       ORDER BY count DESC
     `;
@@ -109,8 +175,11 @@ router.get('/time-trends', requireTechOrAdmin, async (req, res) => {
     let params = [];
     
     if (startDate && endDate) {
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
       dateFilter = 'WHERE created_at >= $1 AND created_at <= $2';
-      params = [startDate, endDate];
+      params = [new Date(startDate), adjustedEndDate];
     }
     
     const query = `
@@ -142,8 +211,11 @@ router.get('/tech-performance', requireTechOrAdmin, async (req, res) => {
     let params = [];
     
     if (startDate && endDate) {
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
       dateFilter = 'AND t.created_at >= $1 AND t.created_at <= $2';
-      params = [startDate, endDate];
+      params = [new Date(startDate), adjustedEndDate];
     }
     
     const query = `
@@ -203,13 +275,29 @@ router.get('/tickets-by-priority', requireTechOrAdmin, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    let dateFilter = '';
+    let whereConditions = [];
     let params = [];
+    let paramIndex = 1;
     
+    // Filtro de fecha
     if (startDate && endDate) {
-      dateFilter = 'WHERE created_at >= $1 AND created_at <= $2';
-      params = [startDate, endDate];
+      // Asegurar formato correcto de fechas
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
+      whereConditions.push(`created_at >= $${paramIndex} AND created_at <= $${paramIndex + 1}`);
+      params.push(new Date(startDate), adjustedEndDate);
+      paramIndex += 2;
     }
+    
+    // Filtro por técnico (solo para role 'tech')
+    if (req.user.role === 'tech') {
+      whereConditions.push(`assigned_to = $${paramIndex}`);
+      params.push(req.user.userId);
+      paramIndex++;
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
     const query = `
       SELECT 
@@ -217,7 +305,7 @@ router.get('/tickets-by-priority', requireTechOrAdmin, async (req, res) => {
         COUNT(*) as count,
         COUNT(CASE WHEN status IN ('Cerrado', 'Resuelto') THEN 1 END) as closed_count
       FROM tickets 
-      ${dateFilter}
+      ${whereClause}
       GROUP BY priority
       ORDER BY 
         CASE priority 
@@ -243,21 +331,51 @@ router.get('/tickets-by-area', requireTechOrAdmin, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    let dateFilter = '';
+    let whereConditions = [];
     let params = [];
+    let paramIndex = 1;
     
+    // Filtro de fecha
     if (startDate && endDate) {
-      dateFilter = 'WHERE created_at >= $1 AND created_at <= $2';
-      params = [startDate, endDate];
+      // Asegurar formato correcto de fechas
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
+      whereConditions.push(`created_at >= $${paramIndex} AND created_at <= $${paramIndex + 1}`);
+      params.push(new Date(startDate), adjustedEndDate);
+      paramIndex += 2;
     }
+    
+    // Filtro por técnico (solo para role 'tech')
+    if (req.user.role === 'tech') {
+      whereConditions.push(`assigned_to = $${paramIndex}`);
+      params.push(req.user.userId);
+      paramIndex++;
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Obtener total de tickets para calcular porcentajes
+    const totalQuery = `
+      SELECT COUNT(*) as total_count
+      FROM tickets 
+      ${whereClause}
+    `;
+    
+    const totalResult = await pool.query(totalQuery, params);
+    const totalTickets = parseInt(totalResult.rows[0].total_count);
     
     const query = `
       SELECT 
-        area,
-        category,
-        COUNT(*) as count
+        COALESCE(area, 'Sin área') as area,
+        COALESCE(category, 'Sin categoría') as category,
+        COUNT(*) as count,
+        CASE 
+          WHEN ${totalTickets} > 0 THEN ROUND((COUNT(*) * 100.0) / ${totalTickets}, 1)
+          ELSE 0
+        END as percentage
       FROM tickets 
-      ${dateFilter}
+      ${whereClause}
       GROUP BY area, category
       ORDER BY count DESC
     `;

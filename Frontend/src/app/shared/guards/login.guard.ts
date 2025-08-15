@@ -21,13 +21,18 @@ import { AuthService } from '../services/auth.service';
   providedIn: 'root'
 })
 export class LoginGuard implements CanActivate {
-  constructor(private authService: AuthService, private router: Router) {}
+
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
   canActivate(): boolean {
-    if (this.authService.isLoggedIn()) {
-      this.router.navigate(['/']);
+    if (!this.authService.isLoggedIn()) {
+      return true; // Permitir acceso a login si no está logueado
+    } else {
+      this.router.navigate(['/']); // Redirigir al home si ya está logueado
       return false;
     }
-    return true;
   }
 }

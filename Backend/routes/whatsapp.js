@@ -251,25 +251,85 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, status, user, type } = req.query;
     const client = await pool.connect();
     
-    const result = await client.query(`
-      SELECT 
-        wn.*,
-        u.firstname || ' ' || u.lastname as user_name,
-        u.email,
-        u.phone,
-        t.title as ticket_subject
-      FROM whatsapp_notifications wn
-      JOIN users u ON wn.user_id = u.id
-      LEFT JOIN tickets t ON wn.ticket_id = t.id
-      ORDER BY wn.created_at DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+    // Construir condiciones WHERE dinámicamente
+    let whereConditions = [];
+    let queryParams = [];
+    let paramIndex = 1;
+    
+    // Agregar condiciones de filtro
+    if (status) {
+      whereConditions.push(`status = $${paramIndex}`);
+      queryParams.push(status);
+      paramIndex++;
+    }
+    
+    if (user) {
+      whereConditions.push(`(u.firstname ILIKE $${paramIndex} OR u.lastname ILIKE $${paramIndex} OR (u.firstname || ' ' || u.lastname) ILIKE $${paramIndex})`);
+      queryParams.push(`%${user}%`);
+      paramIndex++;
+    }
+    
+    if (type) {
+      if (type === 'maintenance') {
+        whereConditions.push(`message_type = 'maintenance'`);
+      } else {
+        // Para otros tipos específicos, filtrar por notification_type
+        whereConditions.push(`message_type = $${paramIndex}`);
+        queryParams.push(type);
+        paramIndex++;
+      }
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Query base con filtros aplicados
+    const baseQuery = `
+      SELECT * FROM (
+        -- Mensajes de tickets regulares
+        SELECT 
+          wn.id,
+          wn.user_id,
+          wn.ticket_id,
+          wn.message,
+          wn.phone_number,
+          wn.status,
+          wn.error_message,
+          wn.created_at,
+          wn.notification_type,
+          u.firstname || ' ' || u.lastname as user_name,
+          u.email,
+          u.phone,
+          t.title as ticket_subject,
+          COALESCE(wn.notification_type, 'unknown') as message_type
+        FROM whatsapp_notifications wn
+        JOIN users u ON wn.user_id = u.id
+        LEFT JOIN tickets t ON wn.ticket_id = t.id
+      ) combined_messages
+      ${whereClause}
+    `;
+    
+    // Primero obtener el count total con filtros
+    const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) filtered_messages`;
+    const countResult = await client.query(countQuery, queryParams);
+    const totalCount = parseInt(countResult.rows[0].total);
+    
+    // Luego obtener los datos paginados con filtros
+    const dataQuery = `${baseQuery} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(limit, offset);
+    const result = await client.query(dataQuery, queryParams);
 
     client.release();
-    res.json(result.rows);
+    
+    // Devolver datos con metadata de paginación
+    res.json({
+      data: result.rows,
+      total: totalCount,
+      page: Math.floor(offset / limit) + 1,
+      limit: limit
+    });
   } catch (error) {
     console.error('❌ Error obteniendo historial WhatsApp:', error);
     res.status(500).json({ error: 'Error interno del servidor' });

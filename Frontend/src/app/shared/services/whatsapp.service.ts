@@ -107,9 +107,21 @@ export class WhatsAppService {
   /**
    * Obtener historial de notificaciones
    */
-  async getNotificationHistory(): Promise<any> {
+  async getNotificationHistory(params?: any): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/history`, {
+
+    let queryParams = '';
+    if (params) {
+      const searchParams = new URLSearchParams();
+      if (params.limit !== undefined) searchParams.set('limit', params.limit.toString());
+      if (params.offset !== undefined) searchParams.set('offset', params.offset.toString());
+      if (params.status) searchParams.set('status', params.status);
+      if (params.user) searchParams.set('user', params.user);
+      if (params.type) searchParams.set('type', params.type);
+      queryParams = searchParams.toString() ? '?' + searchParams.toString() : '';
+    }
+
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/history${queryParams}`, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;

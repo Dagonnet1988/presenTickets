@@ -32,6 +32,31 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      // Verificar si es error de mantenimiento PRIMERO
+      if (error.status === 503 && error.error?.error === 'MAINTENANCE_ACTIVE') {
+        console.log('🚧 Sistema en mantenimiento detectado en interceptor');
+        
+        const maintenanceData = error.error.maintenance;
+        
+        // Si estamos intentando hacer login durante mantenimiento, SIEMPRE dejar que 
+        // el componente de login maneje el error y la redirección
+        if (req.url.includes('/auth/login')) {
+          console.log('🚧 Error 503 en login - delegando al componente auth');
+          return throwError(() => error);
+        }
+        
+        // Solo redirigir automáticamente si NO es una petición de login
+        console.log('🚧 Redirigiendo automáticamente por mantenimiento (no-login)');
+        router.navigate(['/maintenance'], {
+          queryParams: {
+            maintenance: JSON.stringify(maintenanceData),
+            endTime: maintenanceData?.endTime,
+            allowedRoles: JSON.stringify(maintenanceData?.allowedRoles || [])
+          }
+        });
+        return throwError(() => error);
+      }
+
       // Solo procesar errores de token expirado/inválido, no errores de permisos específicos
       const isTokenError = error.status === 401 &&
                           (error.error?.message?.includes('Token') ||

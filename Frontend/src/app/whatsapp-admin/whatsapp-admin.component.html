@@ -553,7 +553,7 @@
           </mat-card-header>
           <mat-card-content>
             <!-- Filtros -->
-            <div class="history-filters" *ngIf="notifications.length > 0">
+            <div class="history-filters">
               <mat-form-field appearance="outline">
                 <mat-label>Filtrar por estado</mat-label>
                 <mat-select
@@ -579,6 +579,7 @@
                   <mat-option value="status_change">Cambio Estado</mat-option>
                   <mat-option value="comment">Comentario</mat-option>
                   <mat-option value="test_message">Mensaje Prueba</mat-option>
+                  <mat-option value="maintenance">Mantenimiento</mat-option>
                 </mat-select>
               </mat-form-field>
 
@@ -627,13 +628,28 @@
 
                 <!-- Columna Ticket -->
                 <ng-container matColumnDef="ticket">
-                  <mat-header-cell *matHeaderCellDef>Ticket</mat-header-cell>
+                  <mat-header-cell *matHeaderCellDef>Ticket/Origen</mat-header-cell>
                   <mat-cell *matCellDef="let notification">
                     <div class="ticket-info">
-                      <mat-icon class="ticket-icon"
-                        >confirmation_number</mat-icon
-                      >
-                      <span [textContent]="'#' + notification.ticket_id"></span>
+                      <mat-icon class="ticket-icon">
+                        {{ notification.message_type === 'maintenance' ? 'build' : 'confirmation_number' }}
+                      </mat-icon>
+                      <span *ngIf="notification.ticket_id">
+                        #{{ notification.ticket_id }}
+                      </span>
+                      <span *ngIf="!notification.ticket_id" class="maintenance-label">
+                        Mantenimiento
+                      </span>
+                    </div>
+                  </mat-cell>
+                </ng-container>
+
+                <!-- Columna Asunto/Título -->
+                <ng-container matColumnDef="subject">
+                  <mat-header-cell *matHeaderCellDef>Asunto</mat-header-cell>
+                  <mat-cell *matCellDef="let notification">
+                    <div class="subject-info">
+                      <span [textContent]="notification.ticket_subject || 'Sin asunto'"></span>
                     </div>
                   </mat-cell>
                 </ng-container>
@@ -715,8 +731,11 @@
 
               <!-- Paginador -->
               <mat-paginator
+                [length]="totalNotifications"
+                [pageSize]="pageSize"
                 [pageSizeOptions]="[5, 10, 20, 50]"
-                [pageSize]="10"
+                [pageIndex]="currentPage"
+                (page)="onPageChange($event)"
                 showFirstLastButtons
               >
               </mat-paginator>

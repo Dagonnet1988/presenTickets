@@ -1,400 +1,600 @@
-<!--
-  PresenTickets - Dashboard Ejecutivo
-  Herramienta avanzada de análisis y toma de decisiones
-  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
--->
-
+<!-- Dashboard Unificado -->
 <div class="dashboard-container">
-  <!-- Header del Dashboard -->
+  
+  <!-- Header con título y filtros -->
   <div class="dashboard-header">
     <div class="header-content">
-      <h1>
+      <h1 class="dashboard-title">
         <mat-icon>dashboard</mat-icon>
         Dashboard Ejecutivo
+        <mat-chip class="role-chip" [color]="isAdmin ? 'primary' : 'accent'">
+          {{ isAdmin ? 'Administrador' : 'Técnico' }}
+        </mat-chip>
       </h1>
-      <p class="header-subtitle">Panel de control y análisis para la toma de decisiones</p>
-    </div>
-
-    <!-- Controles de período -->
-    <div class="period-controls">
-      <mat-form-field appearance="outline">
-        <mat-label>Período</mat-label>
-        <mat-select [(value)]="selectedPeriod" (selectionChange)="onPeriodChange()">
-          <mat-option value="daily">Diario</mat-option>
-          <mat-option value="weekly">Semanal</mat-option>
-          <mat-option value="monthly">Mensual</mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline">
-        <mat-label>Desde</mat-label>
-        <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" (dateChange)="onDateRangeChange()">
-        <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
-        <mat-datepicker #startPicker></mat-datepicker>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline">
-        <mat-label>Hasta</mat-label>
-        <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDate" (dateChange)="onDateRangeChange()">
-        <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
-        <mat-datepicker #endPicker></mat-datepicker>
-      </mat-form-field>
-    </div>
-  </div>
-
-  <!-- Alertas y Recomendaciones -->
-  <div class="alerts-section" *ngIf="alerts.length > 0">
-    <h2>
-      <mat-icon>notification_important</mat-icon>
-      Alertas y Recomendaciones
-    </h2>
-    <div class="alerts-grid">
-      <mat-card *ngFor="let alert of alerts" [class]="'alert-' + alert.type">
-        <mat-card-content>
-          <div class="alert-content">
-            <mat-icon [class]="'alert-icon-' + alert.type">{{ getAlertIcon(alert.type) }}</mat-icon>
-            <div class="alert-text">
-              <p class="alert-message">{{ alert.message }}</p>
-              <p class="alert-action" *ngIf="alert.action">{{ alert.action }}</p>
-            </div>
-          </div>
-        </mat-card-content>
-      </mat-card>
+      
+      <!-- Filtros de fecha -->
+      <div class="date-filters" [formGroup]="dateFilterForm">
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Período</mat-label>
+          <mat-select formControlName="dateRange">
+            <mat-option *ngFor="let range of dateRanges" [value]="range.value">
+              {{ range.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+        
+        <mat-form-field appearance="outline" class="filter-field" 
+                        *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'">
+          <mat-label>Fecha inicio</mat-label>
+          <input matInput [matDatepicker]="startPicker" formControlName="startDate">
+          <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
+          <mat-datepicker #startPicker></mat-datepicker>
+        </mat-form-field>
+        
+        <mat-form-field appearance="outline" class="filter-field"
+                        *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'">
+          <mat-label>Fecha fin</mat-label>
+          <input matInput [matDatepicker]="endPicker" formControlName="endDate">
+          <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
+          <mat-datepicker #endPicker></mat-datepicker>
+        </mat-form-field>
+        
+        <button mat-raised-button color="primary" 
+                (click)="applyCustomFilter()"
+                *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'"
+                [disabled]="loading.metrics">
+          <mat-icon>search</mat-icon>
+          Aplicar
+        </button>
+        
+        <button mat-icon-button 
+                (click)="loadMetrics()" 
+                [disabled]="loading.metrics"
+                matTooltip="Actualizar datos">
+          <mat-icon>refresh</mat-icon>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Métricas Principales -->
-  <div class="metrics-section">
-    <h2>
-      <mat-icon>analytics</mat-icon>
-      Métricas Principales
-    </h2>
+  <!-- Loading principal -->
+  <div *ngIf="loading.metrics" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Cargando métricas del dashboard...</p>
+  </div>
+
+  <!-- Contenido principal -->
+  <div *ngIf="!loading.metrics && metrics" class="dashboard-content">
+    
+    <!-- Métricas principales -->
     <div class="metrics-grid">
-      <!-- KPIs Principales -->
-      <mat-card class="metric-card primary">
+      
+      <!-- Total de tickets -->
+      <mat-card class="metric-card">
         <mat-card-header>
-          <mat-card-title>
-            <mat-icon>confirmation_number</mat-icon>
-            Total Tickets
-          </mat-card-title>
+          <mat-icon mat-card-avatar class="metric-icon total">confirmation_number</mat-icon>
+          <mat-card-title>Total Tickets</mat-card-title>
+          <mat-card-subtitle>Período seleccionado</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <div class="metric-value">{{ dashboardMetrics?.totalTickets || 0 }}</div>
-          <div class="metric-subtitle">en el período seleccionado</div>
+          <div class="metric-value">{{ metrics.totalTickets }}</div>
         </mat-card-content>
       </mat-card>
 
-      <mat-card class="metric-card success">
+      <!-- Tickets en progreso -->
+      <mat-card class="metric-card">
         <mat-card-header>
-          <mat-card-title>
-            <mat-icon>check_circle</mat-icon>
-            Tickets Cerrados
-          </mat-card-title>
+          <mat-icon mat-card-avatar class="metric-icon progress">build</mat-icon>
+          <mat-card-title>En Gestión</mat-card-title>
+          <mat-card-subtitle>Trabajo activo</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <div class="metric-value">{{ dashboardMetrics?.closedTickets || 0 }}</div>
-          <div class="metric-subtitle">
-            {{ getClosedTicketsPercentage() }}%
-            del total
+          <div class="metric-value">{{ metrics.inProgressTickets }}</div>
+          <div class="metric-detail">
+            {{ metrics.pausedTickets }} pausados
           </div>
         </mat-card-content>
       </mat-card>
 
-      <mat-card class="metric-card warning">
+      <!-- Tiempo promedio de respuesta -->
+      <mat-card class="metric-card">
         <mat-card-header>
-          <mat-card-title>
-            <mat-icon>pending</mat-icon>
-            Tickets Abiertos
-          </mat-card-title>
+          <mat-icon mat-card-avatar class="metric-icon response">schedule</mat-icon>
+          <mat-card-title>Tiempo Respuesta</mat-card-title>
+          <mat-card-subtitle>Promedio</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <div class="metric-value">{{ dashboardMetrics?.openTickets || 0 }}</div>
-          <div class="metric-subtitle">requieren atención</div>
+          <div class="metric-value">{{ metrics.avgResponseTimeFormatted }}</div>
+          <div class="metric-detail" *ngIf="metrics.targets">
+            Meta: {{ metrics.targets.responseTimeFormatted }}
+          </div>
+          <mat-progress-bar 
+            [value]="metrics.responseTimeCompliance" 
+            [color]="getComplianceColor(metrics.responseTimeCompliance)"
+            class="compliance-bar">
+          </mat-progress-bar>
+          <div class="compliance-text">
+            {{ metrics.responseTimeCompliance }}% cumplimiento
+          </div>
         </mat-card-content>
       </mat-card>
 
-      <mat-card class="metric-card info">
+      <!-- Tiempo real de trabajo -->
+      <mat-card class="metric-card">
         <mat-card-header>
-          <mat-card-title>
-            <mat-icon>schedule</mat-icon>
-            Tiempo Promedio de Resolución
-          </mat-card-title>
+          <mat-icon mat-card-avatar class="metric-icon work">timer</mat-icon>
+          <mat-card-title>Tiempo Trabajo Real</mat-card-title>
+          <mat-card-subtitle>Solo estados activos</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <div class="metric-value">{{ dashboardMetrics?.avgResolutionTime || 'N/A' }}</div>
-          <div class="metric-subtitle">tiempo efectivo de trabajo</div>
+          <div class="metric-value">{{ metrics.avgRealWorkTimeFormatted }}</div>
+          <div class="metric-detail" *ngIf="metrics.targets">
+            Meta: {{ metrics.targets.resolutionTimeFormatted }}
+          </div>
+          <mat-progress-bar 
+            [value]="metrics.workTimeCompliance" 
+            [color]="getComplianceColor(metrics.workTimeCompliance)"
+            class="compliance-bar">
+          </mat-progress-bar>
+          <div class="compliance-text">
+            {{ metrics.workTimeCompliance }}% cumplimiento
+          </div>
         </mat-card-content>
       </mat-card>
+
+      <!-- Tickets vencidos -->
+      <mat-card class="metric-card" *ngIf="metrics.ticketsOverdue > 0">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="metric-icon overdue">warning</mat-icon>
+          <mat-card-title>Tickets Vencidos</mat-card-title>
+          <mat-card-subtitle>Requieren atención</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="metric-value overdue-count">{{ metrics.ticketsOverdue }}</div>
+          <div class="metric-detail">
+            Sin respuesta inicial
+          </div>
+        </mat-card-content>
+      </mat-card>
+
     </div>
-  </div>
 
-  <!-- Métricas Avanzadas -->
-  <div class="advanced-metrics-section">
-    <h2>
-      <mat-icon>trending_up</mat-icon>
-      Análisis Avanzado
-    </h2>
-    <div class="advanced-metrics-grid">
-      <mat-card class="advanced-metric-card">
-        <mat-card-header>
-          <mat-card-title>
-            <mat-icon>speed</mat-icon>
-            Cumplimiento SLA
-          </mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="metric-with-progress">
-            <div class="metric-value">{{ dashboardMetrics?.slaComplianceRate?.toFixed(1) || 0 }}%</div>
-            <mat-progress-bar
-              [value]="dashboardMetrics?.slaComplianceRate || 0"
-              [color]="getPerformanceColor(dashboardMetrics?.slaComplianceRate || 0, {good: 90, warning: 80})">
-            </mat-progress-bar>
-            <div class="metric-subtitle">
-              {{ getSlaComplianceText() }}
-            </div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="advanced-metric-card">
-        <mat-card-header>
-          <mat-card-title>
-            <mat-icon>timeline</mat-icon>
-            Tendencia de Productividad
-          </mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="metric-with-trend">
-            <div class="metric-value"
-                 [class.positive]="calculatedMetrics.productivityTrend > 0"
-                 [class.negative]="calculatedMetrics.productivityTrend < 0">
-              {{ calculatedMetrics.productivityTrend > 0 ? '+' : '' }}{{ calculatedMetrics.productivityTrend.toFixed(1) }}%
-            </div>
-            <mat-icon [class.positive]="calculatedMetrics.productivityTrend > 0"
-                      [class.negative]="calculatedMetrics.productivityTrend < 0">
-              {{ calculatedMetrics.productivityTrend > 0 ? 'trending_up' : 'trending_down' }}
-            </mat-icon>
-            <div class="metric-subtitle">vs. período anterior</div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="advanced-metric-card">
-        <mat-card-header>
-          <mat-card-title>
-            <mat-icon>priority_high</mat-icon>
-            Tickets Críticos
-          </mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="metric-with-progress">
-            <div class="metric-value">{{ calculatedMetrics.criticalTicketsPercentage.toFixed(1) }}%</div>
-            <mat-progress-bar
-              [value]="calculatedMetrics.criticalTicketsPercentage"
-              [color]="getPerformanceColor(calculatedMetrics.criticalTicketsPercentage, {good: 5, warning: 10})">
-            </mat-progress-bar>
-            <div class="metric-subtitle">del total de tickets</div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="advanced-metric-card">
-        <mat-card-header>
-          <mat-card-title>
-            <mat-icon>call_made</mat-icon>
-            Tasa de Escalación
-          </mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="metric-with-progress">
-            <div class="metric-value">{{ calculatedMetrics.escalationRate.toFixed(1) }}%</div>
-            <mat-progress-bar
-              [value]="calculatedMetrics.escalationRate"
-              [color]="getPerformanceColor(calculatedMetrics.escalationRate, {good: 10, warning: 15})">
-            </mat-progress-bar>
-            <div class="metric-subtitle">tickets escalados</div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-    </div>
-  </div>
-
-  <!-- Distribución por Estado -->
-  <div class="distribution-section">
-    <h2>
-      <mat-icon>donut_large</mat-icon>
-      Distribución por Estado
-    </h2>
-    <div class="distribution-grid">
-      <mat-card class="distribution-card">
-        <mat-card-header>
-          <mat-card-title>Tickets por Estado</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="status-distribution">
-            <div *ngFor="let status of ticketsByStatus" class="status-item">
-              <div class="status-label">{{ status.status }}</div>
-              <div class="status-bar">
-                <mat-progress-bar
-                  [value]="getDistributionPercentage(status.count)"
-                  color="primary">
-                </mat-progress-bar>
-              </div>
-              <div class="status-count">{{ status.count }}</div>
-            </div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="distribution-card">
-        <mat-card-header>
-          <mat-card-title>Tickets por Prioridad</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="priority-distribution">
-            <div *ngFor="let priority of ticketsByPriority" class="priority-item">
-              <div class="priority-label" [class]="'priority-' + (priority.priority || 'unknown').toLowerCase()">
-                {{ priority.priority || 'Sin Prioridad' }}
-              </div>
-              <div class="priority-bar">
-                <mat-progress-bar
-                  [value]="getDistributionPercentage(priority.count)"
-                  [color]="priority.priority === 'Urgente' ? 'warn' : 'primary'">
-                </mat-progress-bar>
-              </div>
-              <div class="priority-count">{{ priority.count }}</div>
-            </div>
-          </div>
-        </mat-card-content>
-      </mat-card>
-    </div>
-  </div>
-
-  <!-- Performance del Equipo -->
-  <div class="team-performance-section">
-    <h2>
-      <mat-icon>groups</mat-icon>
-      Performance del Equipo
-    </h2>
-    <mat-card class="team-performance-card">
+    <!-- Gráfico de estados de tickets activos (temporalmente reemplazado por tabla) -->
+    <mat-card class="status-chart" *ngIf="!loading.charts && ticketsByStatus.length > 0">
       <mat-card-header>
+        <mat-icon mat-card-avatar>pie_chart</mat-icon>
+        <mat-card-title>Estados de Tickets Activos</mat-card-title>
+        <mat-card-subtitle>Distribución de tickets en estados diferentes a cerrado/resuelto</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="status-summary">
+          <div *ngFor="let status of getActiveStatusData()" class="status-item">
+            <div class="status-header">
+              <span class="status-name">{{ status.status }}</span>
+              <span class="status-count">{{ status.count }}</span>
+            </div>
+            <mat-progress-bar 
+              [value]="status.percentage" 
+              mode="determinate"
+              class="status-bar">
+            </mat-progress-bar>
+            <div class="status-percentage">{{ status.percentage.toFixed(1) }}%</div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Loading para gráfico -->
+    <div *ngIf="loading.charts" class="loading-container">
+      <mat-spinner diameter="30"></mat-spinner>
+      <p>Cargando estados de tickets...</p>
+    </div>
+
+    <!-- Rendimiento por técnico (Solo Admin) -->
+    <mat-card class="tech-performance" *ngIf="isAdmin && !loading.performance && techPerformance.length > 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>leaderboard</mat-icon>
         <mat-card-title>Rendimiento por Técnico</mat-card-title>
+        <mat-card-subtitle>Estadísticas de productividad del equipo técnico</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <div class="team-performance-table">
-          <div class="performance-header">
-            <div class="header-item">Técnico</div>
-            <div class="header-item">Total Tickets</div>
-            <div class="header-item">Cerrados</div>
-            <div class="header-item">Tasa de Cierre</div>
-            <div class="header-item">Tiempo Promedio</div>
+        <div class="performance-grid">
+          <div *ngFor="let tech of techPerformance" class="performance-card">
+            <div class="tech-info">
+              <h4>{{ tech.firstname }}</h4>
+              <span class="tech-username">{{ '@' + tech.username }}</span>
+            </div>
+            <div class="performance-metrics">
+              <div class="metric-row">
+                <span class="metric-label">Total tickets:</span>
+                <span class="metric-value">{{ tech.total_tickets }}</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Cerrados:</span>
+                <span class="metric-value">{{ tech.closed_tickets }}</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Tasa cierre:</span>
+                <span class="metric-value highlight">{{ tech.closure_rate }}%</span>
+              </div>
+              <div class="metric-row" *ngIf="tech.avg_resolution_hours">
+                <span class="metric-label">Resolución promedio:</span>
+                <span class="metric-value">{{ tech.avg_resolution_hours | number:'1.1-1' }}h</span>
+              </div>
+            </div>
+            <mat-progress-bar 
+              [value]="tech.closure_rate" 
+              [color]="tech.closure_rate >= 80 ? 'primary' : tech.closure_rate >= 60 ? 'accent' : 'warn'"
+              class="performance-bar">
+            </mat-progress-bar>
           </div>
-          <div *ngFor="let tech of techPerformance" class="performance-row">
-            <div class="performance-item">
-              <div class="tech-name">{{ tech.name || tech.username }}</div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Loading para rendimiento -->
+    <div *ngIf="isAdmin && loading.performance" class="loading-container">
+      <mat-spinner diameter="30"></mat-spinner>
+      <p>Cargando rendimiento por técnico...</p>
+    </div>
+
+    <!-- Análisis por área -->
+    <mat-card class="area-analysis" *ngIf="!loading.areas && ticketsByArea.length > 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>domain</mat-icon>
+        <mat-card-title>Análisis por Área</mat-card-title>
+        <mat-card-subtitle>Distribución de tickets por área y categoría</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="areas-grid">
+          <div *ngFor="let area of getTopAreas()" class="area-card">
+            <div class="area-header">
+              <h4>{{ area.area || 'Sin área' }}</h4>
+              <span class="area-count">{{ area.totalCount }} tickets</span>
             </div>
-            <div class="performance-item">
-              <mat-chip>{{ tech.total_tickets }}</mat-chip>
-            </div>
-            <div class="performance-item">
-              <mat-chip color="primary">{{ tech.closed_tickets }}</mat-chip>
-            </div>
-            <div class="performance-item">
-              <div class="closure-rate">
-                <span [class]="tech.closure_rate >= 80 ? 'rate-good' : tech.closure_rate >= 60 ? 'rate-warning' : 'rate-poor'">
-                  {{ tech.closure_rate.toFixed(1) || 0 }}%
-                </span>
-                <mat-progress-bar
-                  [value]="tech.closure_rate"
-                  [color]="tech.closure_rate >= 80 ? 'primary' : tech.closure_rate >= 60 ? 'accent' : 'warn'">
+            <div class="area-categories">
+              <div *ngFor="let category of area.categories" class="category-item">
+                <span class="category-name">{{ category.category || 'Sin categoría' }}</span>
+                <span class="category-count">{{ category.count }}</span>
+                <mat-progress-bar 
+                  [value]="(category.count / area.totalCount) * 100"
+                  mode="determinate"
+                  class="category-bar">
                 </mat-progress-bar>
               </div>
             </div>
-            <div class="performance-item">
-              <span class="resolution-time">{{ tech.avg_resolution_hours.toFixed(1) || 'N/A' }}h</span>
-            </div>
           </div>
         </div>
       </mat-card-content>
     </mat-card>
-  </div>
 
-  <!-- Tickets por Área -->
-  <div class="area-analysis-section">
-    <h2>
-      <mat-icon>business</mat-icon>
-      Análisis por Área
-    </h2>
-    <mat-card class="area-analysis-card">
+    <!-- Loading para análisis por área -->
+    <div *ngIf="loading.areas" class="loading-container">
+      <mat-spinner diameter="30"></mat-spinner>
+      <p>Cargando análisis por área...</p>
+    </div>
+
+    <!-- Resumen Ejecutivo -->
+    <mat-card class="executive-summary" *ngIf="metrics">
       <mat-card-header>
-        <mat-card-title>Distribución por Área/Categoría</mat-card-title>
+        <mat-icon mat-card-avatar>summarize</mat-icon>
+        <mat-card-title>Resumen Ejecutivo</mat-card-title>
+        <mat-card-subtitle>Indicadores clave de rendimiento del sistema de soporte</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <div class="area-distribution">
-          <div *ngFor="let area of ticketsByArea" class="area-item">
-            <div class="area-info">
-              <div class="area-name">{{ area.area }}</div>
-              <div class="area-category">{{ area.category }}</div>
-            </div>
-            <div class="area-count">
-              <mat-chip>{{ area.count }}</mat-chip>
+        <div class="summary-grid">
+          
+          <!-- KPI Principal -->
+          <div class="summary-section">
+            <h4>📊 Indicadores Clave</h4>
+            <div class="kpi-list">
+              <div class="kpi-item">
+                <span class="kpi-label">Volumen total de tickets:</span>
+                <span class="kpi-value">{{ metrics.totalTickets }}</span>
+              </div>
+              <div class="kpi-item">
+                <span class="kpi-label">Productividad (tickets cerrados):</span>
+                <span class="kpi-value">{{ metrics.closedTickets }}</span>
+              </div>
+              <div class="kpi-item">
+                <span class="kpi-label">Carga de trabajo actual:</span>
+                <span class="kpi-value">{{ metrics.inProgressTickets + metrics.pausedTickets }}</span>
+              </div>
             </div>
           </div>
+
+          <!-- Rendimiento del Servicio -->
+          <div class="summary-section">
+            <h4>⚡ Rendimiento del Servicio</h4>
+            <div class="performance-summary">
+              <div class="performance-indicator" [ngClass]="getPerformanceClass(metrics.responseTimeCompliance)">
+                <span class="indicator-label">Tiempo de Respuesta</span>
+                <span class="indicator-value">{{ metrics.responseTimeCompliance }}%</span>
+                <span class="indicator-status">{{ getPerformanceStatus(metrics.responseTimeCompliance) }}</span>
+              </div>
+              <div class="performance-indicator" [ngClass]="getPerformanceClass(metrics.workTimeCompliance)">
+                <span class="indicator-label">Tiempo de Resolución</span>
+                <span class="indicator-value">{{ metrics.workTimeCompliance }}%</span>
+                <span class="indicator-status">{{ getPerformanceStatus(metrics.workTimeCompliance) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alertas y Atención Requerida -->
+          <div class="summary-section">
+            <h4>🚨 Estado Operacional</h4>
+            <div class="alerts-summary">
+              <div class="alert-item" *ngIf="metrics.ticketsOverdue > 0" class="alert-warning">
+                <mat-icon>warning</mat-icon>
+                <span>{{ metrics.ticketsOverdue }} tickets vencidos requieren atención inmediata</span>
+              </div>
+              <div class="alert-item" *ngIf="metrics.pausedTickets > 0" class="alert-info">
+                <mat-icon>pause_circle</mat-icon>
+                <span>{{ metrics.pausedTickets }} tickets pausados (esperando respuesta externa)</span>
+              </div>
+              <div class="alert-item" *ngIf="metrics.ticketsOverdue === 0 && metrics.responseTimeCompliance >= 80" class="alert-success">
+                <mat-icon>check_circle</mat-icon>
+                <span>Sistema operando dentro de parámetros normales</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recomendaciones -->
+          <div class="summary-section">
+            <h4>💡 Recomendaciones</h4>
+            <div class="recommendations">
+              <div class="recommendation-item" *ngIf="metrics.responseTimeCompliance < 70">
+                <mat-icon>trending_up</mat-icon>
+                <span>Mejorar tiempos de primera respuesta. Meta: &lt; {{ metrics.targets.responseTimeFormatted }}</span>
+              </div>
+              <div class="recommendation-item" *ngIf="metrics.workTimeCompliance < 70">
+                <mat-icon>schedule</mat-icon>
+                <span>Optimizar procesos de resolución. Meta: &lt; {{ metrics.targets.resolutionTimeFormatted }}</span>
+              </div>
+              <div class="recommendation-item" *ngIf="metrics.inProgressTickets > 20">
+                <mat-icon>group_work</mat-icon>
+                <span>Considerar redistribución de carga de trabajo entre técnicos</span>
+              </div>
+              <div class="recommendation-item" *ngIf="getRecommendationScore() >= 80">
+                <mat-icon>star</mat-icon>
+                <span>Excelente rendimiento. Mantener estándares actuales de servicio</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </mat-card-content>
     </mat-card>
-  </div>
 
-  <!-- Acciones Rápidas -->
-  <div class="quick-actions-section">
-    <h2>
-      <mat-icon>flash_on</mat-icon>
-      Acciones Rápidas
-    </h2>
-    <div class="quick-actions-grid">
-      <mat-card class="action-card" (click)="navigateToTickets('open')">
-        <mat-card-content>
-          <mat-icon>pending</mat-icon>
-          <div class="action-title">Ver Tickets Abiertos</div>
-          <div class="action-subtitle">{{ dashboardMetrics?.openTickets || 0 }} tickets</div>
-        </mat-card-content>
-      </mat-card>
+    <!-- Panel de configuración (Solo Admin) -->
+    <mat-expansion-panel *ngIf="showConfigPanel" class="config-panel">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>settings</mat-icon>
+          Configuración de Metas y Horarios
+        </mat-panel-title>
+        <mat-panel-description>
+          Solo administradores pueden modificar estos valores
+        </mat-panel-description>
+      </mat-expansion-panel-header>
 
-      <mat-card class="action-card" (click)="navigateToTickets('critical')">
-        <mat-card-content>
-          <mat-icon>priority_high</mat-icon>
-          <div class="action-title">Tickets Críticos</div>
-          <div class="action-subtitle">Requieren atención inmediata</div>
-        </mat-card-content>
-      </mat-card>
+      <div *ngIf="loading.config" class="config-loading">
+        <mat-spinner diameter="30"></mat-spinner>
+        <span>Cargando configuración...</span>
+      </div>
 
-      <mat-card class="action-card" (click)="navigateToTickets('escalated')">
-        <mat-card-content>
-          <mat-icon>call_made</mat-icon>
-          <div class="action-title">Tickets Escalados</div>
-          <div class="action-subtitle">En revisión externa</div>
-        </mat-card-content>
-      </mat-card>
+      <form *ngIf="!loading.config && configuration" [formGroup]="configForm" class="config-form">
+        
+        <!-- Horarios laborales -->
+        <div class="config-section">
+          <h3>
+            <mat-icon>access_time</mat-icon>
+            Horarios Laborales
+          </h3>
+          <div class="config-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Hora inicio</mat-label>
+              <input matInput type="time" formControlName="work_hours_start">
+              <mat-error *ngIf="configForm.get('work_hours_start')?.hasError('required')">
+                Campo requerido
+              </mat-error>
+              <mat-error *ngIf="configForm.get('work_hours_start')?.hasError('pattern')">
+                Formato inválido (HH:MM)
+              </mat-error>
+            </mat-form-field>
 
-      <mat-card class="action-card" (click)="navigateToTickets('unassigned')">
-        <mat-card-content>
-          <mat-icon>assignment_ind</mat-icon>
-          <div class="action-title">Sin Asignar</div>
-          <div class="action-subtitle">Requieren asignación</div>
-        </mat-card-content>
-      </mat-card>
-    </div>
-  </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Hora fin (Lun-Jue)</mat-label>
+              <input matInput type="time" formControlName="work_hours_end">
+            </mat-form-field>
 
-  <!-- Loading Overlay -->
-  <div class="loading-overlay" *ngIf="isLoading">
-    <mat-card class="loading-card">
+            <mat-form-field appearance="outline">
+              <mat-label>Hora fin (Viernes)</mat-label>
+              <input matInput type="time" formControlName="work_hours_friday_end">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Inicio almuerzo</mat-label>
+              <input matInput type="time" formControlName="lunch_break_start">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Fin almuerzo</mat-label>
+              <input matInput type="time" formControlName="lunch_break_end">
+            </mat-form-field>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <!-- Metas de tiempo -->
+        <div class="config-section">
+          <h3>
+            <mat-icon>flag</mat-icon>
+            Metas de Tiempo
+          </h3>
+          <div class="config-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Meta tiempo respuesta (minutos)</mat-label>
+              <input matInput type="number" formControlName="target_response_time" min="1" max="10080">
+              <mat-hint>Tiempo desde creación hasta primera respuesta técnica</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Meta tiempo resolución (minutos)</mat-label>
+              <input matInput type="number" formControlName="target_resolution_time" min="1" max="20160">
+              <mat-hint>Tiempo total de trabajo activo para resolver</mat-hint>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <!-- SLA por prioridad -->
+        <div class="config-section">
+          <h3>
+            <mat-icon>priority_high</mat-icon>
+            SLA por Prioridad
+          </h3>
+          <div class="config-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Crítica (minutos)</mat-label>
+              <input matInput type="number" formControlName="sla_critical" min="1" max="1440">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Alta (minutos)</mat-label>
+              <input matInput type="number" formControlName="sla_high" min="1" max="2880">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Media (minutos)</mat-label>
+              <input matInput type="number" formControlName="sla_medium" min="1" max="4320">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Baja (minutos)</mat-label>
+              <input matInput type="number" formControlName="sla_low" min="1" max="10080">
+            </mat-form-field>
+          </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="config-actions">
+          <button mat-raised-button color="primary" 
+                  (click)="saveConfiguration()"
+                  [disabled]="loading.saving || !configForm.valid">
+            <mat-icon *ngIf="!loading.saving">save</mat-icon>
+            <mat-spinner *ngIf="loading.saving" diameter="20"></mat-spinner>
+            {{ loading.saving ? 'Guardando...' : 'Guardar Configuración' }}
+          </button>
+
+          <button mat-stroked-button color="warn"
+                  (click)="resetConfiguration()"
+                  [disabled]="loading.saving">
+            <mat-icon>restore</mat-icon>
+            Restablecer Valores por Defecto
+          </button>
+
+          <button mat-stroked-button
+                  (click)="loadConfiguration()"
+                  [disabled]="loading.saving">
+            <mat-icon>refresh</mat-icon>
+            Recargar
+          </button>
+        </div>
+      </form>
+    </mat-expansion-panel>
+
+    <!-- Tabla de tickets detallados -->
+    <mat-card class="detailed-tickets" *ngIf="metrics.detailed && metrics.detailed.length > 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>list</mat-icon>
+        <mat-card-title>Tickets Detallados</mat-card-title>
+        <mat-card-subtitle>{{ metrics.detailed.length }} tickets en el período</mat-card-subtitle>
+      </mat-card-header>
       <mat-card-content>
-        <div class="loading-content">
-          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-          <p>Cargando datos del dashboard...</p>
-        </div>
+        <table mat-table [dataSource]="metrics.detailed" class="tickets-table">
+          
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let ticket">#{{ ticket.id }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="subject">
+            <th mat-header-cell *matHeaderCellDef>Asunto</th>
+            <td mat-cell *matCellDef="let ticket">{{ ticket.subject }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
+            <td mat-cell *matCellDef="let ticket">
+              <mat-chip [color]="ticket.status === 'Cerrado' ? 'primary' : 'accent'">
+                <mat-icon>{{ getStatusIcon(ticket.status) }}</mat-icon>
+                {{ ticket.status }}
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="priority">
+            <th mat-header-cell *matHeaderCellDef>Prioridad</th>
+            <td mat-cell *matCellDef="let ticket">
+              <span class="priority-badge" [ngClass]="getPriorityClass(ticket.priority)">
+                {{ ticket.priority }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="realWorkTime">
+            <th mat-header-cell *matHeaderCellDef>Tiempo Real</th>
+            <td mat-cell *matCellDef="let ticket">
+              {{ formatMinutes(ticket.realWorkTime) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="responseTime">
+            <th mat-header-cell *matHeaderCellDef>Tiempo Respuesta</th>
+            <td mat-cell *matCellDef="let ticket">
+              <span *ngIf="ticket.responseTime !== null">
+                {{ formatMinutes(ticket.responseTime) }}
+              </span>
+              <span *ngIf="ticket.responseTime === null" class="no-response">
+                Sin respuesta
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="isOverdue">
+            <th mat-header-cell *matHeaderCellDef>Estado</th>
+            <td mat-cell *matCellDef="let ticket">
+              <mat-chip *ngIf="ticket.isOverdue" color="warn">
+                <mat-icon>warning</mat-icon>
+                Vencido
+              </mat-chip>
+              <mat-chip *ngIf="!ticket.isOverdue" color="primary">
+                <mat-icon>check</mat-icon>
+                En tiempo
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="ticketColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: ticketColumns;"></tr>
+        </table>
       </mat-card-content>
     </mat-card>
+
   </div>
+
+  <!-- Estado sin datos -->
+  <div *ngIf="!loading.metrics && !metrics" class="no-data">
+    <mat-icon>info</mat-icon>
+    <h3>No hay datos disponibles</h3>
+    <p>No se encontraron métricas para el período seleccionado.</p>
+    <button mat-raised-button color="primary" (click)="loadMetrics()">
+      <mat-icon>refresh</mat-icon>
+      Intentar nuevamente
+    </button>
+  </div>
+
 </div>

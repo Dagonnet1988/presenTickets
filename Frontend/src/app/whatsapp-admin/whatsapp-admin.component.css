@@ -874,3 +874,27 @@ mat-icon {
     max-width: 100%;
   }
 }
+
+/* Estilos para mensajes de mantenimiento */
+.maintenance-label {
+  color: #ff9800;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.ticket-info mat-icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.subject-info {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subject-info span {
+  font-size: 0.9em;
+  color: #666;
+}

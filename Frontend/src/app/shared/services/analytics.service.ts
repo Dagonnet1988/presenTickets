@@ -22,15 +22,42 @@ export interface DashboardMetrics {
   totalTickets: number;
   closedTickets: number;
   openTickets: number;
-  avgResolutionTime: string;
-  avgResponseTime: string;
-  slaComplianceRate: number;
-  rawMetrics: any[];
+  inProgressTickets: number;
+  pausedTickets: number;
+  avgRealWorkTime: number;
+  avgResponseTime: number;
+  avgRealWorkTimeFormatted: string;
+  avgResponseTimeFormatted: string;
+  responseTimeCompliance: number;
+  workTimeCompliance: number;
+  slaBreaches: number;
+  ticketsOverdue: number;
+  targets: {
+    responseTime: number;
+    resolutionTime: number;
+    responseTimeFormatted: string;
+    resolutionTimeFormatted: string;
+  };
+  configuration: any;
+  detailed: EnhancedTicketDetail[];
+}
+
+export interface EnhancedTicketDetail {
+  id: number;
+  subject: string;
+  status: string;
+  priority: string;
+  realWorkTime: number;
+  responseTime: number | null;
+  createdAt: string;
+  closedAt: string | null;
+  isOverdue: boolean;
 }
 
 export interface TicketByStatus {
   status: string;
   count: number;
+  percentage?: number;
 }
 
 export interface TimeTrend {
@@ -42,7 +69,7 @@ export interface TimeTrend {
 export interface TechPerformance {
   id: number;
   username: string;
-  name: string;
+  firstname: string;
   total_tickets: number;
   closed_tickets: number;
   closure_rate: number;
@@ -59,6 +86,7 @@ export interface TicketByArea {
   area: string;
   category: string;
   count: number;
+  percentage?: number;
 }
 
 export interface RecentActivity {
@@ -98,10 +126,13 @@ export class AnalyticsService {
   /**
    * Obtiene métricas generales del dashboard
    */
-  getDashboardMetrics(startDate?: string, endDate?: string): Observable<DashboardMetrics> {
+  getDashboardMetrics(dateParams?: any): Observable<DashboardMetrics> {
     let params = new HttpParams();
-    if (startDate) params = params.set('startDate', startDate);
-    if (endDate) params = params.set('endDate', endDate);
+    
+    if (dateParams) {
+      if (dateParams.startDate) params = params.set('startDate', dateParams.startDate);
+      if (dateParams.endDate) params = params.set('endDate', dateParams.endDate);
+    }
 
     return this.http.get<DashboardMetrics>(`${this.baseUrl}/dashboard`, { params });
   }

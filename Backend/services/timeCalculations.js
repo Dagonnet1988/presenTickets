@@ -18,25 +18,25 @@ const WORK_SCHEDULE = {
     1: { // Lunes
       periods: [
         { start: 7, end: 12 },     // 7:00 AM - 12:00 PM
-        { start: 13.5, end: 18 }   // 1:30 PM - 6:00 PM
+        { start: 13.5, end: 17.5 } // 1:30 PM - 5:30 PM
       ]
     },
     2: { // Martes
       periods: [
         { start: 7, end: 12 },     // 7:00 AM - 12:00 PM
-        { start: 13.5, end: 18 }   // 1:30 PM - 6:00 PM
+        { start: 13.5, end: 17.5 } // 1:30 PM - 5:30 PM
       ]
     },
     3: { // Miércoles
       periods: [
         { start: 7, end: 12 },     // 7:00 AM - 12:00 PM
-        { start: 13.5, end: 18 }   // 1:30 PM - 6:00 PM
+        { start: 13.5, end: 17.5 } // 1:30 PM - 5:30 PM
       ]
     },
     4: { // Jueves
       periods: [
         { start: 7, end: 12 },     // 7:00 AM - 12:00 PM
-        { start: 13.5, end: 18 }   // 1:30 PM - 6:00 PM
+        { start: 13.5, end: 17.5 } // 1:30 PM - 5:30 PM
       ]
     },
     5: { // Viernes
@@ -96,7 +96,78 @@ const ACTIVE_WORK_STATES = [
 ];
 
 /**
- * Verifica si una fecha es día laboral
+ * Obtener configuración de horarios desde la BD
+ */
+async function getWorkScheduleConfig(pool) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT config_key, config_value
+      FROM dashboard_config
+      WHERE category = 'schedule'
+    `);
+    
+    const config = {};
+    result.rows.forEach(row => {
+      config[row.config_key] = row.config_value;
+    });
+    
+    // Convertir horarios a formato decimal
+    const timeToDecimal = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours + (minutes / 60);
+    };
+    
+    const workStart = config.work_hours_start ? timeToDecimal(config.work_hours_start) : 7;
+    const workEnd = config.work_hours_end ? timeToDecimal(config.work_hours_end) : 17.5;
+    const workEndFriday = config.work_hours_friday_end ? timeToDecimal(config.work_hours_friday_end) : 16.5;
+    const lunchStart = config.lunch_break_start ? timeToDecimal(config.lunch_break_start) : 12;
+    const lunchEnd = config.lunch_break_end ? timeToDecimal(config.lunch_break_end) : 13.5;
+    
+    return {
+      dailySchedules: {
+        1: { // Lunes
+          periods: [
+            { start: workStart, end: lunchStart },
+            { start: lunchEnd, end: workEnd }
+          ]
+        },
+        2: { // Martes
+          periods: [
+            { start: workStart, end: lunchStart },
+            { start: lunchEnd, end: workEnd }
+          ]
+        },
+        3: { // Miércoles
+          periods: [
+            { start: workStart, end: lunchStart },
+            { start: lunchEnd, end: workEnd }
+          ]
+        },
+        4: { // Jueves
+          periods: [
+            { start: workStart, end: lunchStart },
+            { start: lunchEnd, end: workEnd }
+          ]
+        },
+        5: { // Viernes
+          periods: [
+            { start: workStart, end: lunchStart },
+            { start: lunchEnd, end: workEndFriday }
+          ]
+        }
+      },
+      workDays: [1, 2, 3, 4, 5],
+      slaHours: 10,
+      holidays: WORK_SCHEDULE.holidays // Mantener los festivos estáticos
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Verifica si una fecha es día laboral (con configuración dinámica)
  */
 function isWorkDay(date) {
   const dayOfWeek = date.getDay();
@@ -369,8 +440,13 @@ async function calculateDashboardMetrics(pool, dateRange = null) {
     let params = [];
     
     if (dateRange) {
+      // Asegurar formato correcto de fechas
+      const startDate = new Date(dateRange.start);
+      const endDate = new Date(dateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+      
       dateFilter = 'WHERE created_at >= $1 AND created_at <= $2';
-      params = [dateRange.start, dateRange.end];
+      params = [startDate, endDate];
     }
     
     // Obtener tickets para análisis
@@ -426,10 +502,293 @@ async function calculateDashboardMetrics(pool, dateRange = null) {
   }
 }
 
+/**
+ * Calcular métricas mejoradas con configuración dinámica
+ */
+async function calculateEnhancedMetrics(pool, dateRange = null, config = null, userFilter = null) {
+  const client = await pool.connect();
+  
+  try {
+    // Si no se proporciona config, obtenerla de la BD
+    if (!config) {
+      const configResult = await client.query(`
+        SELECT config_key, config_value, config_type
+        FROM dashboard_config
+        WHERE category IN ('targets', 'sla', 'workflow')
+      `);
+      
+      config = {};
+      configResult.rows.forEach(row => {
+        let value = row.config_value;
+        if (row.config_type === 'number') {
+          value = parseInt(value);
+        } else if (row.config_type === 'array') {
+          value = value.split(',');
+        }
+        config[row.config_key] = value;
+      });
+    }
+    
+    // Obtener tickets según rango de fechas y filtro de usuario
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+    
+    // Filtro de fecha
+    if (dateRange) {
+      // Asegurar que las fechas estén en formato correcto
+      const startDate = new Date(dateRange.start);
+      const endDate = new Date(dateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+      
+      whereConditions.push(`t.created_at >= $${paramIndex} AND t.created_at <= $${paramIndex + 1}`);
+      params.push(startDate, endDate);
+      paramIndex += 2;
+    }
+    
+    // Filtro por técnico (solo para role 'tech')
+    if (userFilter && userFilter.role === 'tech') {
+      whereConditions.push(`t.assigned_to = $${paramIndex}`);
+      params.push(userFilter.userId);
+      paramIndex++;
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    const ticketsQuery = `
+      SELECT 
+        t.*,
+        u.firstname AS user_firstname,
+        u.lastname AS user_lastname,
+        assigned_u.firstname AS assigned_firstname,
+        assigned_u.lastname AS assigned_lastname
+      FROM tickets t
+      LEFT JOIN users u ON t.user_id = u.id
+      LEFT JOIN users assigned_u ON t.assigned_to = assigned_u.id
+      ${whereClause}
+      ORDER BY t.created_at DESC
+    `;
+    
+    const ticketsResult = await client.query(ticketsQuery, params);
+    const tickets = ticketsResult.rows;
+    
+    // Calcular métricas mejoradas
+    const metrics = {
+      totalTickets: tickets.length,
+      openTickets: 0,
+      inProgressTickets: 0,
+      pausedTickets: 0,
+      closedTickets: 0,
+      avgRealWorkTime: 0,
+      avgResponseTime: 0,
+      responseTimeCompliance: 0,
+      workTimeCompliance: 0,
+      slaBreaches: 0,
+      ticketsOverdue: 0,
+      detailed: []
+    };
+    
+    const activeStates = config.active_work_states || ['En gestión'];
+    const pausedStates = config.paused_states || ['Escalado a externo', 'Esperando respuesta del usuario'];
+    const targetResponseTime = config.target_response_time || 240; // 4 horas por defecto
+    const targetResolutionTime = config.target_resolution_time || 1440; // 24 horas por defecto
+    
+    let totalRealWorkTime = 0;
+    let totalResponseTime = 0;
+    let validResponseTimes = 0;
+    let validWorkTimes = 0;
+    let responseTimeCompliant = 0;
+    let workTimeCompliant = 0;
+    
+    for (const ticket of tickets) {
+      const createdAt = new Date(ticket.created_at);
+      const now = new Date();
+      const closedAt = ticket.closed_at ? new Date(ticket.closed_at) : null;
+      
+      // Calcular tiempo real de trabajo (solo estados activos)
+      let realWorkTime = 0;
+      let responseTime = null;
+      let firstTechResponse = null;
+      
+      // Obtener historial de comentarios y cambios
+      const historyQuery = `
+        SELECT 
+          c.created_at,
+          c.comment,
+          u.role,
+          u.firstname,
+          u.lastname
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.ticket_id = $1
+        ORDER BY c.created_at ASC
+      `;
+      
+      const historyResult = await client.query(historyQuery, [ticket.id]);
+      const history = historyResult.rows;
+      
+      // Detectar primera respuesta técnica
+      for (const entry of history) {
+        if (entry.role === 'tech' && !firstTechResponse) {
+          firstTechResponse = new Date(entry.created_at);
+          responseTime = Math.floor((firstTechResponse - createdAt) / (1000 * 60));
+          break;
+        }
+      }
+      
+      // Si hay asignación pero no comentarios de tech, usar fecha de asignación
+      if (!firstTechResponse && ticket.assigned_to && ticket.assigned_at) {
+        firstTechResponse = new Date(ticket.assigned_at);
+        responseTime = Math.floor((firstTechResponse - createdAt) / (1000 * 60));
+      }
+      
+      // Simular cálculo de tiempo real (solo estados activos)
+      // En una implementación completa, esto requeriría un log de cambios de estado
+      if (activeStates.includes(ticket.status)) {
+        const workEnd = closedAt || now;
+        realWorkTime = calculateWorkingTime(createdAt, workEnd);
+        metrics.inProgressTickets++;
+      } else if (pausedStates.includes(ticket.status)) {
+        metrics.pausedTickets++;
+      } else if (ticket.status === 'Cerrado' || ticket.status === 'Resuelto') {
+        const workEnd = closedAt || now;
+        realWorkTime = calculateWorkingTime(createdAt, workEnd);
+        metrics.closedTickets++;
+      } else {
+        metrics.openTickets++;
+      }
+      
+      // Calcular compliance
+      if (responseTime !== null) {
+        totalResponseTime += responseTime;
+        validResponseTimes++;
+        
+        if (responseTime <= targetResponseTime) {
+          responseTimeCompliant++;
+        }
+      }
+      
+      if (realWorkTime > 0) {
+        totalRealWorkTime += realWorkTime;
+        validWorkTimes++;
+        
+        if (closedAt && realWorkTime <= targetResolutionTime) {
+          workTimeCompliant++;
+        }
+      }
+      
+      // Detectar tickets vencidos
+      if (!closedAt) {
+        const timeSinceCreation = Math.floor((now - createdAt) / (1000 * 60));
+        if (timeSinceCreation > targetResponseTime && !responseTime) {
+          metrics.ticketsOverdue++;
+        }
+      }
+      
+      metrics.detailed.push({
+        id: ticket.id,
+        subject: ticket.title, // Usar title como subject
+        status: ticket.status,
+        priority: ticket.priority,
+        realWorkTime,
+        responseTime,
+        createdAt: ticket.created_at,
+        closedAt: ticket.closed_at,
+        isOverdue: !closedAt && Math.floor((now - createdAt) / (1000 * 60)) > targetResponseTime
+      });
+    }
+    
+    // Calcular promedios
+    metrics.avgRealWorkTime = validWorkTimes > 0 ? Math.round(totalRealWorkTime / validWorkTimes) : 0;
+    metrics.avgResponseTime = validResponseTimes > 0 ? Math.round(totalResponseTime / validResponseTimes) : 0;
+    
+    // Calcular porcentajes de compliance
+    metrics.responseTimeCompliance = validResponseTimes > 0 ? Math.round((responseTimeCompliant / validResponseTimes) * 100) : 0;
+    metrics.workTimeCompliance = validWorkTimes > 0 ? Math.round((workTimeCompliant / validWorkTimes) * 100) : 0;
+    
+    // Agregar metas para comparación
+    metrics.targets = {
+      responseTime: targetResponseTime,
+      resolutionTime: targetResolutionTime,
+      responseTimeFormatted: formatMinutes(targetResponseTime),
+      resolutionTimeFormatted: formatMinutes(targetResolutionTime)
+    };
+    
+    // Formatear tiempos
+    metrics.avgRealWorkTimeFormatted = formatMinutes(metrics.avgRealWorkTime);
+    metrics.avgResponseTimeFormatted = formatMinutes(metrics.avgResponseTime);
+    
+    return metrics;
+    
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Calcular tiempo de trabajo con configuración dinámica
+ */
+async function calculateWorkingTimeWithConfig(pool, startDate, endDate) {
+  const workSchedule = await getWorkScheduleConfig(pool);
+  return calculateWorkingTimeFromSchedule(startDate, endDate, workSchedule);
+}
+
+/**
+ * Calcular tiempo de trabajo usando un horario específico
+ */
+function calculateWorkingTimeFromSchedule(startDate, endDate, schedule) {
+  if (startDate >= endDate) return 0;
+  
+  let totalMinutes = 0;
+  const current = new Date(startDate);
+  
+  while (current < endDate) {
+    const dayOfWeek = current.getDay();
+    const dateString = current.toISOString().split('T')[0];
+    
+    // Verificar si es día laboral
+    if (!schedule.workDays.includes(dayOfWeek) || schedule.holidays.includes(dateString)) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+      continue;
+    }
+    
+    const daySchedule = schedule.dailySchedules[dayOfWeek];
+    if (!daySchedule) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+      continue;
+    }
+    
+    for (const period of daySchedule.periods) {
+      const periodStart = new Date(current);
+      periodStart.setHours(Math.floor(period.start), (period.start % 1) * 60, 0, 0);
+      
+      const periodEnd = new Date(current);
+      periodEnd.setHours(Math.floor(period.end), (period.end % 1) * 60, 0, 0);
+      
+      const workStart = startDate > periodStart ? startDate : periodStart;
+      const workEnd = endDate < periodEnd ? endDate : periodEnd;
+      
+      if (workStart < workEnd) {
+        totalMinutes += Math.floor((workEnd - workStart) / (1000 * 60));
+      }
+    }
+    
+    current.setDate(current.getDate() + 1);
+    current.setHours(0, 0, 0, 0);
+  }
+  
+  return totalMinutes;
+}
+
 export {
   calculateTicketTimings,
   calculateDashboardMetrics,
+  calculateEnhancedMetrics,
   calculateWorkingTime,
+  calculateWorkingTimeWithConfig,
+  getWorkScheduleConfig,
   formatMinutes,
   WORK_SCHEDULE,
   ACTIVE_WORK_STATES,

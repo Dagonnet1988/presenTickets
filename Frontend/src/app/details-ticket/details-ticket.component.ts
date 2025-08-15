@@ -36,6 +36,7 @@ import { NotificationService } from '../shared/services/notification.service';
 import { environment } from '../../environments/environment';
 import localeEs from '@angular/common/locales/es';
 import { forkJoin, map, catchError, of, finalize, Subscription, switchMap, tap } from 'rxjs';
+import { TicketParticipantsComponent } from '../ticket-participants/ticket-participants.component';
 
 registerLocaleData(localeEs, 'es');
 
@@ -53,7 +54,8 @@ registerLocaleData(localeEs, 'es');
     MatDialogModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
-    TextFieldModule
+    TextFieldModule,
+    TicketParticipantsComponent
   ],providers: [
     { provide: LOCALE_ID, useValue: 'es' }
   ],

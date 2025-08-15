@@ -30,13 +30,13 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginatorModule, MatPaginatorIntl } from '@angular/material/paginator';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { WhatsAppService } from '../shared/services/whatsapp.service';
 import { AuthService } from '../shared/services/auth.service';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 
 @Component({
   selector: 'app-whatsapp-admin',
@@ -131,8 +131,13 @@ export class WhatsAppAdminComponent implements OnInit {
   // Historial de notificaciones
   notifications: any[] = [];
   filteredNotifications: any[] = [];
+  totalNotifications: number = 0;
   notificationColumns: string[] = ['created_at', 'user_name', 'ticket_subject', 'message', 'status'];
-  historyColumns: string[] = ['user', 'ticket', 'message', 'type', 'status', 'date'];
+  historyColumns: string[] = ['user', 'ticket', 'subject', 'message', 'type', 'status', 'date'];
+
+  // Paginación
+  pageSize: number = 10;
+  currentPage: number = 0;
 
   // Filtros de historial
   historyFilter = {
@@ -168,11 +173,27 @@ export class WhatsAppAdminComponent implements OnInit {
   // Código QR
   qrCode: string | null = null;
 
+  // Configuración personalizada del paginador
+  customPaginatorIntl = new MatPaginatorIntl();
+
   constructor(
     private whatsappService: WhatsAppService,
     private snackBar: MatSnackBar,
     private authService: AuthService
   ) {
+    // Configurar etiquetas del paginador para mensajes
+    this.customPaginatorIntl.itemsPerPageLabel = 'Mensajes por página:';
+    this.customPaginatorIntl.nextPageLabel = 'Siguiente página';
+    this.customPaginatorIntl.previousPageLabel = 'Página anterior';
+    this.customPaginatorIntl.getRangeLabel = (page: number, pageSize: number, length: number): string => {
+      if (length === 0 || pageSize === 0) {
+        return `0 de ${length}`;
+      }
+      const startIndex = page * pageSize;
+      const endIndex = Math.min(startIndex + pageSize, length);
+      return `${startIndex + 1} – ${endIndex} de ${length}`;
+    };
+
     // Inicializar Socket.IO
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
@@ -372,17 +393,43 @@ export class WhatsAppAdminComponent implements OnInit {
   async loadNotificationHistory() {
     this.loading.notifications = true;
     try {
-      this.notifications = await this.whatsappService.getNotificationHistory();
+      // Pasar parámetros de paginación al backend (convertir page/size a limit/offset)
+      const params: any = {
+        limit: this.pageSize,
+        offset: this.currentPage * this.pageSize
+      };
 
-      // Limpiar cache de tipos cuando se cargan nuevas notificaciones
-      this.typeCache.clear();
+      // Agregar filtros si están definidos
+      if (this.historyFilter.status) {
+        params.status = this.historyFilter.status;
+      }
+      if (this.historyFilter.user) {
+        params.user = this.historyFilter.user;
+      }
+      if (this.historyFilter.type) {
+        params.type = this.historyFilter.type;
+      }
 
-      this.applyHistoryFilter(); // Aplicar filtros después de cargar
+      // Ahora todos los filtros se aplican en el backend
+      const response = await this.whatsappService.getNotificationHistory(params);
+
+      // Verificar si la respuesta tiene la nueva estructura con metadata
+      if (response && typeof response === 'object' && response.data) {
+        this.notifications = response.data;
+        this.filteredNotifications = response.data;
+        this.totalNotifications = response.total || 0;
+      } else {
+        // Backward compatibility - respuesta directa como array
+        this.notifications = response || [];
+        this.filteredNotifications = response || [];
+        this.totalNotifications = this.notifications.length;
+      }
     } catch (error: any) {
       // Si la ruta no existe (404), usar array vacío silenciosamente
       if (error?.status === 404) {
         this.notifications = [];
         this.filteredNotifications = [];
+        this.totalNotifications = 0;
       } else {
         console.error('Error al cargar historial:', error);
         this.showError('Error al cargar historial de notificaciones');
@@ -617,20 +664,13 @@ export class WhatsAppAdminComponent implements OnInit {
   // Nuevos métodos para el historial mejorado
 
   /**
-   * Aplicar filtros al historial
+   * Aplicar filtros al historial (ahora se maneja en el backend)
    */
   applyHistoryFilter() {
-    this.filteredNotifications = this.notifications.filter(notification => {
-      const statusMatch = !this.historyFilter.status || notification.status === this.historyFilter.status;
-      const userMatch = !this.historyFilter.user ||
-        notification.user_name?.toLowerCase().includes(this.historyFilter.user.toLowerCase());
-
-      // Usar la función de detección de tipo para el filtro
-      const detectedType = this.detectNotificationType(notification);
-      const typeMatch = !this.historyFilter.type || detectedType === this.historyFilter.type;
-
-      return statusMatch && userMatch && typeMatch;
-    });
+    // Resetear paginación cuando se aplican filtros
+    this.currentPage = 0;
+    // Recargar datos con filtros aplicados en el backend
+    this.loadNotificationHistory();
   }
 
   /**
@@ -731,7 +771,7 @@ export class WhatsAppAdminComponent implements OnInit {
   }
 
   /**
-   * Exportar historial a XLSX
+   * Exportar historial a XLSX usando ExcelJS
    */
   async exportHistory() {
     if (this.notifications.length === 0) {
@@ -743,48 +783,50 @@ export class WhatsAppAdminComponent implements OnInit {
       // Importación dinámica de file-saver para mejor compatibilidad ESM
       const { saveAs } = await import('file-saver');
 
-      // Preparar datos para exportación con caracteres UTF-8 correctos
-      const excelData = this.notifications.map(notification => ({
-        'Fecha': this.formatDate(notification.created_at),
-        'Usuario': notification.user_name || 'Sin usuario',
-        'Ticket': `#${notification.ticket_id}`,
-        'Mensaje': notification.message || 'Sin mensaje',
-        'Tipo': this.getTypeText(notification),
-        'Estado': this.getStatusText(notification.status),
-        'Teléfono': notification.phone_number || 'N/A',
-        'Error': notification.error_message || ''
-      }));
+      // Crear libro de trabajo con ExcelJS
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Historial WhatsApp');
 
-      // Crear libro de trabajo
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-
-      // Agregar hoja de trabajo
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial WhatsApp');
-
-      // Configurar ancho de columnas para mejor visualización
-      const columnWidths = [
-        { wch: 20 }, // Fecha
-        { wch: 25 }, // Usuario
-        { wch: 10 }, // Ticket
-        { wch: 50 }, // Mensaje
-        { wch: 15 }, // Tipo
-        { wch: 15 }, // Estado
-        { wch: 20 }, // Teléfono
-        { wch: 30 }  // Error
+      // Definir columnas
+      worksheet.columns = [
+        { header: 'Fecha', key: 'fecha', width: 20 },
+        { header: 'Usuario', key: 'usuario', width: 25 },
+        { header: 'Ticket', key: 'ticket', width: 10 },
+        { header: 'Mensaje', key: 'mensaje', width: 50 },
+        { header: 'Tipo', key: 'tipo', width: 15 },
+        { header: 'Estado', key: 'estado', width: 15 },
+        { header: 'Teléfono', key: 'telefono', width: 20 },
+        { header: 'Error', key: 'error', width: 30 }
       ];
-      worksheet['!cols'] = columnWidths;
 
-      // Generar archivo Excel
-      const excelBuffer = XLSX.write(workbook, {
-        bookType: 'xlsx',
-        type: 'array',
-        bookSST: false // Para mantener caracteres especiales
+      // Agregar datos
+      this.notifications.forEach(notification => {
+        worksheet.addRow({
+          fecha: this.formatDate(notification.created_at),
+          usuario: notification.user_name || 'Sin usuario',
+          ticket: `#${notification.ticket_id}`,
+          mensaje: notification.message || 'Sin mensaje',
+          tipo: this.getTypeText(notification),
+          estado: this.getStatusText(notification.status),
+          telefono: notification.phone_number || 'N/A',
+          error: notification.error_message || ''
+        });
       });
 
+      // Estilizar la cabecera
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE6E6FA' }
+      };
+
+      // Generar buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+
       // Crear blob y descargar
-      const data = new Blob([excelBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'
+      const data = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
 
       const fileName = `historial_whatsapp_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -815,9 +857,9 @@ export class WhatsAppAdminComponent implements OnInit {
    * Obtener icono para tipo de notificación
    */
   getTypeIcon(type: string | any): string {
-    // Si se pasa el objeto notification directamente, detectar el tipo
+    // Si se pasa el objeto notification directamente, usar el campo notification_type
     if (typeof type === 'object' && type !== null) {
-      type = this.detectNotificationType(type);
+      type = type.notification_type || type.message_type || 'unknown';
     }
 
     switch (type) {
@@ -831,69 +873,18 @@ export class WhatsAppAdminComponent implements OnInit {
         return 'comment';
       case 'test_message':
         return 'send';
+      case 'maintenance':
+        return 'build';
       default:
         return 'notifications';
     }
   }
 
   // Cache para tipos de notificación para evitar recálculos
-  private typeCache = new Map<any, string>();
-
-  /**
-   * Detectar el tipo de notificación desde varios campos posibles
-   */
-  private detectNotificationType(notification: any): string {
-    // Usar cache para evitar recálculos constantes
-    if (this.typeCache.has(notification)) {
-      return this.typeCache.get(notification)!;
-    }
-
-    // Posibles nombres de campos que pueden contener el tipo
-    const possibleFields = [
-      'notification_type',
-      'type',
-      'message_type',
-      'event_type',
-      'trigger_type'
-    ];
-
-    for (const field of possibleFields) {
-      if (notification[field]) {
-        const detectedType = notification[field];
-        this.typeCache.set(notification, detectedType);
-        return detectedType;
-      }
-    }
-
-    // Si no encuentra ningún campo, intentar detectar por el contenido del mensaje
-    if (notification.message) {
-      const message = notification.message.toLowerCase();
-      let detectedType = 'unknown';
-
-      if (message.includes('nuevo ticket') || message.includes('se ha creado')) {
-        detectedType = 'new_ticket';
-      } else if (message.includes('asignado') || message.includes('assign')) {
-        detectedType = 'ticket_assigned';
-      } else if (message.includes('estado') || message.includes('status')) {
-        detectedType = 'status_change';
-      } else if (message.includes('comentario') || message.includes('comment')) {
-        detectedType = 'comment';
-      } else if (message.includes('test') || message.includes('prueba')) {
-        detectedType = 'test_message';
-      }
-
-      this.typeCache.set(notification, detectedType);
-      return detectedType;
-    }
-
-    const defaultType = 'unknown';
-    this.typeCache.set(notification, defaultType);
-    return defaultType;
-  }
   getTypeText(type: string | any): string {
-    // Si se pasa el objeto notification directamente, detectar el tipo
+    // Si se pasa el objeto notification directamente, usar el campo notification_type
     if (typeof type === 'object' && type !== null) {
-      type = this.detectNotificationType(type);
+      type = type.notification_type || type.message_type || 'unknown';
     }
 
     if (!type) {
@@ -911,6 +902,8 @@ export class WhatsAppAdminComponent implements OnInit {
         return 'Comentario';
       case 'test_message':
         return 'Mensaje Prueba';
+      case 'maintenance':
+        return 'Mantenimiento';
       default:
         return `Desconocido (${type})`;
     }
@@ -920,9 +913,9 @@ export class WhatsAppAdminComponent implements OnInit {
    * Obtener clase CSS para tipo de notificación
    */
   getTypeClass(type: string | any): string {
-    // Si se pasa el objeto notification directamente, detectar el tipo
+    // Si se pasa el objeto notification directamente, usar el campo notification_type
     if (typeof type === 'object' && type !== null) {
-      type = this.detectNotificationType(type);
+      type = type.notification_type || type.message_type || 'unknown';
     }
 
     switch (type) {
@@ -939,5 +932,14 @@ export class WhatsAppAdminComponent implements OnInit {
       default:
         return 'type-unknown';
     }
+  }
+
+  /**
+   * Manejar cambio de página en el paginador
+   */
+  onPageChange(event: any) {
+    this.currentPage = event.pageIndex;
+    this.pageSize = event.pageSize;
+    this.loadNotificationHistory();
   }
 }
