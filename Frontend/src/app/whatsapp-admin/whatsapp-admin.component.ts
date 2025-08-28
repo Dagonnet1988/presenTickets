@@ -127,6 +127,34 @@ export class WhatsAppAdminComponent implements OnInit {
 
   // Estadísticas
   stats: any[] = [];
+  detailedStats: any = {
+    summary: {},
+    type_stats: [],
+    top_users: [],
+    hourly_stats: [],
+    error_stats: [],
+    daily_stats: []
+  };
+  performanceReport: any = {
+    performance_analysis: {
+      status: '',
+      recommendations: [],
+      peak_hours: []
+    },
+    detailed_metrics: {
+      daily_trend: '',
+      notification_types: [],
+      top_errors: []
+    }
+  };
+  selectedStatsPeriod: string = '30';
+  availablePeriods = [
+    { value: '7', label: 'Últimos 7 días' },
+    { value: '15', label: 'Últimos 15 días' },
+    { value: '30', label: 'Últimos 30 días' },
+    { value: '60', label: 'Últimos 60 días' },
+    { value: '90', label: 'Últimos 90 días' }
+  ];
 
   // Historial de notificaciones
   notifications: any[] = [];
@@ -151,10 +179,13 @@ export class WhatsAppAdminComponent implements OnInit {
 
   // Plantillas de mensajes
   templates: any = {
-    new_ticket: '🆕 *PresenTickets* - Nuevo Ticket\n\nHola {userName},\n\nSe ha creado un nuevo ticket #{ticketId}\n📝 Asunto: {subject}\n\n🕒 {timestamp}',
-    ticket_assigned: '👤 *PresenTickets* - Ticket Asignado\n\nHola {userName},\n\nSe le ha asignado el ticket #{ticketId}\n📝 Asunto: {subject}\n\nPor favor revise y atienda este ticket.\n\n🕒 {timestamp}',
-    status_change: '🔄 *PresenTickets* - Cambio de Estado\n\nHola {userName},\n\nEl ticket #{ticketId} cambió a: *{newStatus}*\n📝 Asunto: {subject}\n\n🕒 {timestamp}',
-    comment: '💬 *PresenTickets* - Nuevo Comentario\n\nHola {userName},\n\nNuevo comentario en el ticket #{ticketId}\n📝 Asunto: {subject}\n\n💭 Comentario: {comment}\n\n🕒 {timestamp}'
+    new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+    ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n� Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+    status_change: '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+    comment: '💬 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📝 Nuevo comentario en su ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n💭 *Comentario:* {comment}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._'
   };
 
   // Estados de loading
@@ -166,6 +197,8 @@ export class WhatsAppAdminComponent implements OnInit {
     userSettings: false,
     systemSettings: false,
     stats: false,
+    detailedStats: false,
+    performanceReport: false,
     notifications: false,
     templates: false
   };
@@ -212,6 +245,8 @@ export class WhatsAppAdminComponent implements OnInit {
     this.loadUserSettings();
     this.loadSystemSettings(); // Restaurar la carga de configuración del sistema
     this.loadStats();
+    this.loadDetailedStats(); // Cargar estadísticas detalladas
+    this.loadPerformanceReport(); // Cargar reporte de rendimiento
     this.loadNotificationHistory();
     this.loadTemplates(); // Cargar plantillas
   }
@@ -373,7 +408,7 @@ export class WhatsAppAdminComponent implements OnInit {
   async loadStats() {
     this.loading.stats = true;
     try {
-      this.stats = await this.whatsappService.getStats();
+      this.stats = await this.whatsappService.getSimpleStats();
     } catch (error: any) {
       // Si la ruta no existe (404), usar array vacío silenciosamente
       if (error?.status === 404) {
@@ -385,6 +420,170 @@ export class WhatsAppAdminComponent implements OnInit {
     } finally {
       this.loading.stats = false;
     }
+  }
+
+  /**
+   * Cargar estadísticas detalladas
+   */
+  async loadDetailedStats(period: string = this.selectedStatsPeriod) {
+    this.loading.detailedStats = true;
+    this.selectedStatsPeriod = period;
+    try {
+      const result = await this.whatsappService.getDetailedStats(period);
+      this.detailedStats = result || {
+        summary: {},
+        type_stats: [],
+        top_users: [],
+        hourly_stats: [],
+        error_stats: [],
+        daily_stats: []
+      };
+    } catch (error) {
+      console.error('Error al cargar estadísticas detalladas:', error);
+      this.showError('Error al cargar estadísticas detalladas');
+      this.detailedStats = {
+        summary: {},
+        type_stats: [],
+        top_users: [],
+        hourly_stats: [],
+        error_stats: [],
+        daily_stats: []
+      };
+    } finally {
+      this.loading.detailedStats = false;
+    }
+  }
+
+  /**
+   * Cargar reporte de rendimiento
+   */
+  async loadPerformanceReport(period: string = this.selectedStatsPeriod) {
+    this.loading.performanceReport = true;
+    try {
+      const result = await this.whatsappService.getPerformanceReport(period, 'json');
+      this.performanceReport = result || {
+        performance_analysis: {
+          status: '',
+          recommendations: [],
+          peak_hours: []
+        },
+        detailed_metrics: {
+          daily_trend: '',
+          notification_types: [],
+          top_errors: []
+        }
+      };
+    } catch (error) {
+      console.error('Error al cargar reporte de rendimiento:', error);
+      this.showError('Error al cargar reporte de rendimiento');
+      this.performanceReport = {
+        performance_analysis: {
+          status: '',
+          recommendations: [],
+          peak_hours: []
+        },
+        detailed_metrics: {
+          daily_trend: '',
+          notification_types: [],
+          top_errors: []
+        }
+      };
+    } finally {
+      this.loading.performanceReport = false;
+    }
+  }
+
+  /**
+   * Descargar reporte de rendimiento como texto
+   */
+  async downloadPerformanceReport() {
+    try {
+      const reportText = await this.whatsappService.getPerformanceReport(this.selectedStatsPeriod, 'text');
+
+      const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `reporte-whatsapp-${this.selectedStatsPeriod}dias-${new Date().getTime()}.txt`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      this.showSuccess('Reporte descargado exitosamente');
+    } catch (error) {
+      console.error('Error al descargar reporte:', error);
+      this.showError('Error al descargar reporte');
+    }
+  }
+
+  /**
+   * Cambiar período de estadísticas
+   */
+  async onStatsPeriodChange() {
+    await Promise.all([
+      this.loadDetailedStats(),
+      this.loadPerformanceReport()
+    ]);
+  }
+
+  /**
+   * Obtener clase CSS para tasa de éxito
+   */
+  getSuccessRateClass(successRate: number): string {
+    if (successRate >= 90) return 'excellent';
+    if (successRate >= 75) return 'good';
+    if (successRate >= 50) return 'regular';
+    return 'poor';
+  }
+
+  /**
+   * Obtener clase CSS para estado de rendimiento
+   */
+  getPerformanceStatusClass(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'excelente': return 'excellent';
+      case 'bueno': return 'good';
+      case 'regular': return 'regular';
+      case 'deficiente': return 'poor';
+      default: return 'neutral';
+    }
+  }
+
+  /**
+   * Verificar si las estadísticas detalladas están cargadas y válidas
+   */
+  hasValidDetailedStats(): boolean {
+    return !!(this.detailedStats &&
+              this.detailedStats.summary &&
+              typeof this.detailedStats.summary === 'object');
+  }
+
+  /**
+   * Verificar si el reporte de rendimiento está cargado y válido
+   */
+  hasValidPerformanceReport(): boolean {
+    return !!(this.performanceReport &&
+              this.performanceReport.performance_analysis &&
+              typeof this.performanceReport.performance_analysis === 'object');
+  }
+
+  /**
+   * Verificar si hay datos de tipos de estadísticas
+   */
+  hasTypeStats(): boolean {
+    return !!(this.detailedStats &&
+              this.detailedStats.type_stats &&
+              Array.isArray(this.detailedStats.type_stats) &&
+              this.detailedStats.type_stats.length > 0);
+  }
+
+  /**
+   * Verificar si hay datos de usuarios top
+   */
+  hasTopUsers(): boolean {
+    return !!(this.detailedStats &&
+              this.detailedStats.top_users &&
+              Array.isArray(this.detailedStats.top_users) &&
+              this.detailedStats.top_users.length > 0);
   }
 
   /**
@@ -440,21 +639,21 @@ export class WhatsAppAdminComponent implements OnInit {
   }
 
   /**
-   * Cargar configuración global del sistema (usa configuración del admin)
+   * Cargar configuración global del sistema
    */
   async loadSystemSettings() {
     this.loading.systemSettings = true;
     try {
       const settings = await this.whatsappService.getSystemSettings();
       if (settings) {
-        // Mapear las configuraciones del usuario a configuraciones del sistema
+        // Mapear las configuraciones globales del sistema
         this.systemSettings = {
           ...this.systemSettings,
-          whatsapp_enabled_globally: settings.whatsapp_enabled,
-          enable_new_ticket_notifications: settings.whatsapp_ticket_created,
-          enable_assignment_notifications: settings.whatsapp_ticket_assigned,
-          enable_status_change_notifications: settings.whatsapp_ticket_status,
-          enable_comment_notifications: settings.whatsapp_comments
+          whatsapp_enabled_globally: settings.whatsapp_global_enabled,
+          enable_new_ticket_notifications: settings.whatsapp_global_ticket_created,
+          enable_assignment_notifications: settings.whatsapp_global_ticket_assigned,
+          enable_status_change_notifications: settings.whatsapp_global_ticket_status,
+          enable_comment_notifications: settings.whatsapp_global_comments
         };
       }
     } catch (error: any) {
@@ -476,20 +675,20 @@ export class WhatsAppAdminComponent implements OnInit {
   async saveSystemSettings() {
     this.loading.systemSettings = true;
     try {
-      // Mapear las configuraciones del sistema a configuraciones del usuario
-      const userSettings = {
-        whatsapp_enabled: this.systemSettings.whatsapp_enabled_globally,
-        whatsapp_ticket_created: this.systemSettings.enable_new_ticket_notifications,
-        whatsapp_ticket_assigned: this.systemSettings.enable_assignment_notifications,
-        whatsapp_ticket_status: this.systemSettings.enable_status_change_notifications,
-        whatsapp_comments: this.systemSettings.enable_comment_notifications
+      // Mapear las configuraciones del frontend a configuraciones globales del sistema
+      const globalSettings = {
+        whatsapp_global_enabled: this.systemSettings.whatsapp_enabled_globally,
+        whatsapp_global_ticket_created: this.systemSettings.enable_new_ticket_notifications,
+        whatsapp_global_ticket_assigned: this.systemSettings.enable_assignment_notifications,
+        whatsapp_global_ticket_status: this.systemSettings.enable_status_change_notifications,
+        whatsapp_global_comments: this.systemSettings.enable_comment_notifications
       };
 
-      await this.whatsappService.saveSystemSettings(userSettings);
-      this.showSuccess('Configuración del sistema guardada correctamente');
+      await this.whatsappService.saveSystemSettings(globalSettings);
+      this.showSuccess('Configuración global del sistema guardada correctamente');
     } catch (error) {
-      console.error('Error guardando configuración del sistema:', error);
-      this.showError('Error al guardar la configuración del sistema');
+      console.error('Error guardando configuración global del sistema:', error);
+      this.showError('Error al guardar la configuración global del sistema');
     } finally {
       this.loading.systemSettings = false;
     }
@@ -600,10 +799,13 @@ export class WhatsAppAdminComponent implements OnInit {
    */
   resetTemplates() {
     this.templates = {
-      new_ticket: '🆕 *PresenTickets* - Nuevo Ticket\n\nHola {userName},\n\nSe ha creado un nuevo ticket #{ticketId}\n📝 Asunto: {subject}\n\n🕒 {timestamp}',
-      ticket_assigned: '👤 *PresenTickets* - Ticket Asignado\n\nHola {userName},\n\nSe le ha asignado el ticket #{ticketId}\n📝 Asunto: {subject}\n\nPor favor revise y atienda este ticket.\n\n🕒 {timestamp}',
-      status_change: '🔄 *PresenTickets* - Cambio de Estado\n\nHola {userName},\n\nEl ticket #{ticketId} cambió a: *{newStatus}*\n📝 Asunto: {subject}\n\n🕒 {timestamp}',
-      comment: '💬 *PresenTickets* - Nuevo Comentario\n\nHola {userName},\n\nNuevo comentario en el ticket #{ticketId}\n📝 Asunto: {subject}\n\n💭 Comentario: {comment}\n\n🕒 {timestamp}'
+      new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+      ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n� Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+      status_change: '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+
+      comment: '💬 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📝 Nuevo comentario en su ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n💭 *Comentario:* {comment}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._'
     };
     this.showSuccess('Plantillas restauradas a valores por defecto');
   }
@@ -863,12 +1065,20 @@ export class WhatsAppAdminComponent implements OnInit {
     }
 
     switch (type) {
+      case 'nuevo_ticket':
       case 'new_ticket':
         return 'add_circle';
+      case 'ticket_asignado':
       case 'ticket_assigned':
-        return 'person';
+        return 'person_add';
+      case 'cambio_estado':
       case 'status_change':
+      case 'ticket_reabierto':
         return 'update';
+      case 'comentario':
+      case 'comentario_user':
+      case 'comentario_tech':
+      case 'admin_comentario':
       case 'comment':
         return 'comment';
       case 'test_message':
@@ -892,14 +1102,26 @@ export class WhatsAppAdminComponent implements OnInit {
     }
 
     switch (type) {
+      case 'nuevo_ticket':
       case 'new_ticket':
         return 'Nuevo Ticket';
+      case 'ticket_asignado':
       case 'ticket_assigned':
-        return 'Asignación';
+        return 'Ticket Asignado';
+      case 'cambio_estado':
       case 'status_change':
         return 'Cambio Estado';
+      case 'ticket_reabierto':
+        return 'Ticket Reabierto';
+      case 'comentario':
       case 'comment':
         return 'Comentario';
+      case 'comentario_user':
+        return 'Comentario Usuario';
+      case 'comentario_tech':
+        return 'Comentario Técnico';
+      case 'admin_comentario':
+        return 'Comentario Admin';
       case 'test_message':
         return 'Mensaje Prueba';
       case 'maintenance':
@@ -919,12 +1141,20 @@ export class WhatsAppAdminComponent implements OnInit {
     }
 
     switch (type) {
+      case 'nuevo_ticket':
       case 'new_ticket':
         return 'type-new-ticket';
+      case 'ticket_asignado':
       case 'ticket_assigned':
         return 'type-assigned';
+      case 'cambio_estado':
       case 'status_change':
+      case 'ticket_reabierto':
         return 'type-status-change';
+      case 'comentario':
+      case 'comentario_user':
+      case 'comentario_tech':
+      case 'admin_comentario':
       case 'comment':
         return 'type-comment';
       case 'test_message':

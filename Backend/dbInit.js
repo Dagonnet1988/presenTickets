@@ -495,6 +495,62 @@ const checkAndCreateTables = async () => {
       console.log("✅ Tabla 'ticket_participants' eliminada exitosamente.");
     }
 
+    // ==========================================
+    // 8. TABLA SYSTEM_SETTINGS (Configuración Global)
+    // ==========================================
+    console.log("🔧 Verificando tabla 'system_settings'...");
+    const systemSettingsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'system_settings'
+      );
+    `);
+
+    if (!systemSettingsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'system_settings' (configuración global del sistema)...");
+      await client.query(`
+        CREATE TABLE system_settings (
+          id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- Solo una fila de configuración
+          
+          -- Configuraciones generales de WhatsApp
+          whatsapp_global_enabled BOOLEAN DEFAULT true,
+          whatsapp_global_ticket_created BOOLEAN DEFAULT true,
+          whatsapp_global_ticket_assigned BOOLEAN DEFAULT true,
+          whatsapp_global_ticket_status BOOLEAN DEFAULT true,
+          whatsapp_global_comments BOOLEAN DEFAULT true,
+          
+          -- Configuraciones de mantenimiento (futuro uso)
+          maintenance_mode BOOLEAN DEFAULT false,
+          maintenance_message TEXT DEFAULT 'Sistema en mantenimiento. Disculpe las molestias.',
+          
+          -- Auditoría
+          updated_by INTEGER REFERENCES users(id),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      
+      // Insertar configuración por defecto
+      await client.query(`
+        INSERT INTO system_settings (
+          id,
+          whatsapp_global_enabled,
+          whatsapp_global_ticket_created,
+          whatsapp_global_ticket_assigned,
+          whatsapp_global_ticket_status,
+          whatsapp_global_comments
+        ) VALUES (
+          1, true, true, true, true, true
+        );
+      `);
+      
+      console.log("✅ Tabla 'system_settings' creada exitosamente con configuración por defecto.");
+    } else {
+      console.log("✅ La tabla 'system_settings' ya existe.");
+    }
+
+    // ==========================================
+    // 9. TABLA MAINTENANCE_SESSIONS (Nuevo módulo)
+    // ==========================================
     // Validar y crear la tabla "maintenance_sessions" (NUEVO MÓDULO SIMPLIFICADO)
     const maintenanceSessionsTableExists = await client.query(`
       SELECT EXISTS (

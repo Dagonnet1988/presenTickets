@@ -898,3 +898,369 @@ mat-icon {
   font-size: 0.9em;
   color: #666;
 }
+
+/* === ESTADÍSTICAS DETALLADAS === */
+
+/* Selector de período */
+.period-selector {
+  margin-bottom: 20px;
+}
+
+.period-selector mat-card-content {
+  padding: 16px;
+}
+
+/* Resumen ejecutivo */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  border-left: 4px solid;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.summary-card mat-icon {
+  font-size: 32px;
+  margin-right: 16px;
+  opacity: 0.8;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-number {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.summary-percentage {
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Colores para tipos de resumen */
+.summary-card.total {
+  border-left-color: #2196f3;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.summary-card.success {
+  border-left-color: #4caf50;
+  background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+}
+
+.summary-card.failed {
+  border-left-color: #f44336;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+}
+
+.summary-card.skipped {
+  border-left-color: #ff9800;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+}
+
+.summary-card.users {
+  border-left-color: #9c27b0;
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+.summary-card.tickets {
+  border-left-color: #607d8b;
+  background: linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%);
+}
+
+/* Estadísticas por tipo */
+.type-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.type-stat-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+.type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+}
+
+.type-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.type-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.metric-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.metric-value {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.metric-value.success {
+  color: #4caf50;
+}
+
+.metric-value.failed {
+  color: #f44336;
+}
+
+.metric-value.skipped {
+  color: #ff9800;
+}
+
+/* Análisis de rendimiento */
+.performance-analysis > * {
+  margin-bottom: 16px;
+}
+
+.performance-status {
+  margin-bottom: 16px;
+}
+
+.performance-status h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.recommendations {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.recommendations h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px 0;
+  color: #2196f3;
+}
+
+.recommendations ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.recommendations li {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.peak-hours, .daily-trend {
+  margin: 16px 0;
+}
+
+.peak-hours h4, .daily-trend h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px 0;
+}
+
+/* Top usuarios */
+.top-users {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  transition: background-color 0.2s ease;
+}
+
+.user-item:hover {
+  background: #f0f0f0;
+}
+
+.user-rank {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #2196f3;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-right: 16px;
+}
+
+.user-info {
+  flex: 1;
+  margin-right: 16px;
+}
+
+.user-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.user-phone {
+  font-size: 12px;
+  color: #666;
+}
+
+.user-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.user-stats span {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.user-stats .total {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.user-stats .sent {
+  background: #e8f5e8;
+  color: #2e7d32;
+}
+
+.user-stats .failed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Chips de estado */
+mat-chip.excellent {
+  background: #4caf50 !important;
+  color: white !important;
+}
+
+mat-chip.good {
+  background: #8bc34a !important;
+  color: white !important;
+}
+
+mat-chip.regular {
+  background: #ff9800 !important;
+  color: white !important;
+}
+
+mat-chip.poor {
+  background: #f44336 !important;
+  color: white !important;
+}
+
+mat-chip.neutral {
+  background: #9e9e9e !important;
+  color: white !important;
+}
+
+/* Responsive para estadísticas */
+@media (max-width: 768px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .type-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .type-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .user-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .user-stats {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 4px;
+  }
+}
+
+/* Mensaje sin datos */
+.no-data-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.no-data-message mat-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-data-message h3 {
+  margin: 16px 0;
+  font-weight: 500;
+}
+
+.no-data-message p {
+  margin-bottom: 24px;
+  line-height: 1.5;
+}

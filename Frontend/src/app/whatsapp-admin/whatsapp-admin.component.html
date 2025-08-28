@@ -492,20 +492,220 @@
     </mat-tab>
 
     <!-- Tab 5: Estadísticas -->
+    <!-- Tab 5: Estadísticas Detalladas -->
     <mat-tab label="Estadísticas">
       <div class="tab-content">
-        <mat-card>
+        <!-- Selector de período -->
+        <mat-card class="period-selector">
+          <mat-card-content>
+            <mat-form-field appearance="outline">
+              <mat-label>Período de análisis</mat-label>
+              <mat-select [(ngModel)]="selectedStatsPeriod" (selectionChange)="onStatsPeriodChange()">
+                <mat-option *ngFor="let period of availablePeriods" [value]="period.value">
+                  {{ period.label }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Resumen Ejecutivo -->
+        <mat-card *ngIf="hasValidDetailedStats() && !loading.detailedStats">
           <mat-card-header>
             <mat-card-title>
-              <mat-icon>analytics</mat-icon>
-              Estadísticas de Notificaciones
+              <mat-icon>dashboard</mat-icon>
+              Resumen Ejecutivo - {{ selectedStatsPeriod }} días
             </mat-card-title>
           </mat-card-header>
           <mat-card-content>
-            <div class="stats-grid" *ngIf="stats.length > 0">
+            <div class="summary-grid">
+              <div class="summary-card total">
+                <mat-icon>notifications</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.total_notifications }}</span>
+                  <span class="summary-label">Total Notificaciones</span>
+                </div>
+              </div>
+
+              <div class="summary-card success">
+                <mat-icon>check_circle</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.total_sent }}</span>
+                  <span class="summary-label">Enviadas</span>
+                  <span class="summary-percentage">({{ detailedStats.summary.success_rate }}%)</span>
+                </div>
+              </div>
+
+              <div class="summary-card failed">
+                <mat-icon>error</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.total_failed }}</span>
+                  <span class="summary-label">Fallidas</span>
+                  <span class="summary-percentage">({{ detailedStats.summary.failure_rate }}%)</span>
+                </div>
+              </div>
+
+              <div class="summary-card skipped">
+                <mat-icon>skip_next</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.total_skipped }}</span>
+                  <span class="summary-label">Omitidas</span>
+                </div>
+              </div>
+
+              <div class="summary-card users">
+                <mat-icon>people</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.unique_users }}</span>
+                  <span class="summary-label">Usuarios Únicos</span>
+                </div>
+              </div>
+
+              <div class="summary-card tickets">
+                <mat-icon>confirmation_number</mat-icon>
+                <div class="summary-content">
+                  <span class="summary-number">{{ detailedStats.summary.unique_tickets }}</span>
+                  <span class="summary-label">Tickets Únicos</span>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Estadísticas por Tipo -->
+        <mat-card *ngIf="hasTypeStats() && !loading.detailedStats">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>category</mat-icon>
+              Rendimiento por Tipo de Notificación
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="type-stats-grid">
+              <div class="type-stat-card" *ngFor="let typeStat of detailedStats.type_stats">
+                <div class="type-header">
+                  <h4>{{ typeStat.notification_type }}</h4>
+                  <mat-chip [class]="getSuccessRateClass(typeStat.success_rate)">
+                    {{ typeStat.success_rate }}%
+                  </mat-chip>
+                </div>
+                <div class="type-metrics">
+                  <div class="metric">
+                    <span class="metric-label">Total:</span>
+                    <span class="metric-value">{{ typeStat.total }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">Enviadas:</span>
+                    <span class="metric-value success">{{ typeStat.sent }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">Fallidas:</span>
+                    <span class="metric-value failed">{{ typeStat.failed }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">Omitidas:</span>
+                    <span class="metric-value skipped">{{ typeStat.skipped }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Reporte de Rendimiento -->
+        <mat-card *ngIf="hasValidPerformanceReport() && !loading.performanceReport">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>assessment</mat-icon>
+              Análisis de Rendimiento
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="performance-analysis">
+              <div class="performance-status">
+                <h4>Estado General:
+                  <mat-chip *ngIf="performanceReport.performance_analysis && performanceReport.performance_analysis.status" [class]="getPerformanceStatusClass(performanceReport.performance_analysis.status)">
+                    {{ performanceReport.performance_analysis.status }}
+                  </mat-chip>
+                </h4>
+              </div>              <div class="recommendations" *ngIf="performanceReport.performance_analysis && performanceReport.performance_analysis.recommendations && performanceReport.performance_analysis.recommendations.length > 0">
+                <h4><mat-icon>lightbulb</mat-icon> Recomendaciones:</h4>
+                <ul>
+                  <li *ngFor="let recommendation of performanceReport.performance_analysis.recommendations">
+                    {{ recommendation }}
+                  </li>
+                </ul>
+              </div>
+
+              <div class="peak-hours" *ngIf="performanceReport.performance_analysis && performanceReport.performance_analysis.peak_hours && performanceReport.performance_analysis.peak_hours.length > 0">
+                <h4><mat-icon>schedule</mat-icon> Horarios Pico:</h4>
+                <mat-chip-set>
+                  <mat-chip *ngFor="let hour of performanceReport.performance_analysis.peak_hours">
+                    {{ hour }}
+                  </mat-chip>
+                </mat-chip-set>
+              </div>
+
+              <div class="daily-trend">
+                <h4><mat-icon>trending_up</mat-icon> Tendencia:
+                  <span *ngIf="performanceReport.detailed_metrics && performanceReport.detailed_metrics.daily_trend" [textContent]="performanceReport.detailed_metrics.daily_trend"></span>
+                </h4>
+              </div>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-raised-button color="primary" (click)="downloadPerformanceReport()">
+              <mat-icon>download</mat-icon>
+              Descargar Reporte Completo
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
+        <!-- Top Usuarios -->
+        <mat-card *ngIf="hasTopUsers() && !loading.detailedStats">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>leaderboard</mat-icon>
+              Usuarios Más Activos
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="top-users">
+              <div class="user-item" *ngFor="let user of detailedStats.top_users; let i = index">
+                <div class="user-rank">{{ i + 1 }}</div>
+                <div class="user-info">
+                  <div class="user-name">{{ user.full_name }}</div>
+                  <div class="user-phone">{{ user.phone }}</div>
+                </div>
+                <div class="user-stats">
+                  <span class="total">{{ user.notification_count }} total</span>
+                  <span class="sent">{{ user.sent_count }} enviadas</span>
+                  <span class="failed" *ngIf="user.failed_count > 0">{{ user.failed_count }} fallidas</span>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Loading -->
+        <div class="loading-container" *ngIf="loading.detailedStats || loading.performanceReport">
+          <mat-spinner></mat-spinner>
+          <p>Cargando estadísticas detalladas...</p>
+        </div>
+
+        <!-- Estadísticas simples (fallback) -->
+        <mat-card *ngIf="!hasValidDetailedStats() && stats.length > 0 && !loading.detailedStats">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>analytics</mat-icon>
+              Estadísticas Básicas
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="stats-grid">
               <div class="stat-card" *ngFor="let stat of stats">
                 <div class="stat-header">
-                  <mat-icon [matBadge]="stat.count" matBadgeColor="primary" aria-hidden="false">
+                  <mat-icon [matBadge]="stat.count" matBadgeColor="primary">
                     <ng-container [ngSwitch]="stat.status">
                       <span *ngSwitchCase="'sent'">check_circle</span>
                       <span *ngSwitchDefault>error</span>
@@ -518,22 +718,32 @@
                     </ng-container>
                   </span>
                 </div>
-                <div class="stat-count" [textContent]="stat.count"></div>
-                <div class="stat-date">Fecha</div>
+                <div class="stat-count">{{ stat.count }}</div>
+                <div class="stat-date">{{ stat.date }}</div>
               </div>
-            </div>
-
-            <div class="no-stats" *ngIf="stats.length === 0">
-              <mat-icon>info</mat-icon>
-              <p>No hay estadísticas disponibles</p>
             </div>
           </mat-card-content>
           <mat-card-actions>
             <button mat-button (click)="loadStats()" [disabled]="loading.stats">
               <mat-icon>refresh</mat-icon>
-              Actualizar Estadísticas
+              Actualizar
             </button>
           </mat-card-actions>
+        </mat-card>
+
+        <!-- Mensaje cuando no hay datos -->
+        <mat-card *ngIf="!hasValidDetailedStats() && stats.length === 0 && !loading.detailedStats && !loading.stats">
+          <mat-card-content>
+            <div class="no-data-message">
+              <mat-icon>info</mat-icon>
+              <h3>No hay estadísticas disponibles</h3>
+              <p>No se encontraron datos de notificaciones WhatsApp para el período seleccionado.</p>
+              <button mat-raised-button color="primary" (click)="onStatsPeriodChange()">
+                <mat-icon>refresh</mat-icon>
+                Recargar Estadísticas
+              </button>
+            </div>
+          </mat-card-content>
         </mat-card>
       </div>
     </mat-tab>
@@ -574,10 +784,10 @@
                   (selectionChange)="applyHistoryFilter()"
                 >
                   <mat-option value="">Todos</mat-option>
-                  <mat-option value="new_ticket">Nuevo Ticket</mat-option>
-                  <mat-option value="ticket_assigned">Asignación</mat-option>
-                  <mat-option value="status_change">Cambio Estado</mat-option>
-                  <mat-option value="comment">Comentario</mat-option>
+                  <mat-option value="nuevo_ticket">Nuevo Ticket</mat-option>
+                  <mat-option value="ticket_asignado">Asignación</mat-option>
+                  <mat-option value="cambio_estado">Cambio Estado</mat-option>
+                  <mat-option value="comentario">Comentario</mat-option>
                   <mat-option value="test_message">Mensaje Prueba</mat-option>
                   <mat-option value="maintenance">Mantenimiento</mat-option>
                 </mat-select>

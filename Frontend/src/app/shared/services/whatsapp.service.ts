@@ -105,6 +105,47 @@ export class WhatsAppService {
   }
 
   /**
+   * Obtener estadísticas detalladas
+   */
+  async getDetailedStats(period: string = '30'): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/stats?period=${period}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
+   * Obtener reporte de rendimiento
+   */
+  async getPerformanceReport(period: string = '30', format: string = 'json'): Promise<any> {
+    const token = localStorage.getItem('token');
+
+    // Si el formato es texto, especificar responseType como 'text'
+    const options: any = {
+      headers: { Authorization: `Bearer ${token}` }
+    };
+
+    if (format === 'text') {
+      options.responseType = 'text';
+    }
+
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/performance-report?period=${period}&format=${format}`, options).toPromise();
+    return response;
+  }
+
+  /**
+   * Obtener estadísticas simples (compatibilidad)
+   */
+  async getSimpleStats(): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/stats/simple`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
    * Obtener historial de notificaciones
    */
   async getNotificationHistory(params?: any): Promise<any> {
@@ -128,22 +169,22 @@ export class WhatsAppService {
   }
 
   /**
-   * Obtener configuraciones globales del sistema (usando configuración del admin)
+   * Obtener configuraciones globales del sistema
    */
   async getSystemSettings(): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/user-settings`, {
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/global-config`, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;
   }
 
   /**
-   * Guardar configuraciones globales del sistema (usando configuración del admin)
+   * Guardar configuraciones globales del sistema
    */
   async saveSystemSettings(settings: any): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.put(`${environment.backendUrl}/api/whatsapp/user-settings`, settings, {
+    const response = await this.http.put(`${environment.backendUrl}/api/whatsapp/global-config`, settings, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;

@@ -214,7 +214,7 @@ router.post('/:ticketId', async (req, res) => {
           await createNotification({
             user_id: recipientId,
             type: notificationType,
-            message: `${ticketTitle} - Nuevo comentario de ${username}`,
+            message: message || 'Archivo adjunto sin comentario', // Usar el contenido real del comentario
             ticket_id: ticketId
           });
         }

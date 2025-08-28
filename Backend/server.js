@@ -445,7 +445,7 @@ checkAndCreateTables().then(() => {
     
     // Inicializar servicio de WhatsApp después de que el servidor esté listo
     setTimeout(() => {
-      console.log('🔄 Iniciando servicio de WhatsApp...');
+      console.log('� Configurando servicio de WhatsApp desde servidor...');
       whatsappService.initialize().catch(err => {
         console.error('❌ Error al inicializar WhatsApp:', err);
       });
