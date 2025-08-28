@@ -61,11 +61,8 @@ router.get('/dashboard', requireTechOrAdmin, async (req, res) => {
         config[row.config_key] = value;
       });
       
-      // Preparar filtro de usuario para técnicos
-      const userFilter = req.user.role === 'tech' ? {
-        role: req.user.role,
-        userId: req.user.userId
-      } : null;
+      // Técnicos y admins ven los mismos datos - sin filtro por usuario
+      const userFilter = null;
       
       // Calcular métricas mejoradas con configuración dinámica
       const metrics = await calculateEnhancedMetrics(pool, dateRange, config, userFilter);
@@ -105,12 +102,7 @@ router.get('/tickets-by-status', requireTechOrAdmin, async (req, res) => {
       paramIndex += 2;
     }
     
-    // Filtro por técnico (solo para role 'tech')
-    if (req.user.role === 'tech') {
-      whereConditions.push(`assigned_to = $${paramIndex}`);
-      params.push(req.user.userId);
-      paramIndex++;
-    }
+    // Técnicos y admins ven los mismos datos - sin filtro por usuario
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
@@ -236,11 +228,10 @@ router.get('/tech-performance', requireTechOrAdmin, async (req, res) => {
           END
         ) as avg_resolution_hours
       FROM users u
-      LEFT JOIN tickets t ON u.id = t.assigned_to ${dateFilter}
+      INNER JOIN tickets t ON u.id = t.assigned_to ${dateFilter}
       WHERE u.role IN ('tech', 'admin')
       GROUP BY u.id, u.username, u.firstname
-      HAVING COUNT(t.id) > 0
-      ORDER BY closure_rate DESC, total_tickets DESC
+      ORDER BY total_tickets DESC, closure_rate DESC
     `;
     
     const result = await pool.query(query, params);
@@ -290,12 +281,7 @@ router.get('/tickets-by-priority', requireTechOrAdmin, async (req, res) => {
       paramIndex += 2;
     }
     
-    // Filtro por técnico (solo para role 'tech')
-    if (req.user.role === 'tech') {
-      whereConditions.push(`assigned_to = $${paramIndex}`);
-      params.push(req.user.userId);
-      paramIndex++;
-    }
+    // Técnicos y admins ven los mismos datos - sin filtro por usuario (tickets-by-priority)
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
@@ -346,12 +332,7 @@ router.get('/tickets-by-area', requireTechOrAdmin, async (req, res) => {
       paramIndex += 2;
     }
     
-    // Filtro por técnico (solo para role 'tech')
-    if (req.user.role === 'tech') {
-      whereConditions.push(`assigned_to = $${paramIndex}`);
-      params.push(req.user.userId);
-      paramIndex++;
-    }
+    // Técnicos y admins ven los mismos datos - sin filtro por usuario (tickets-by-area)
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     

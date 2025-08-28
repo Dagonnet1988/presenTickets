@@ -2,9 +2,15 @@
  * PresenTickets - Sistema de Gestión de Tickets de Soporte
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Dashboard Unificado - Vista única con roles Admin/Tech
- * Admin: Ve métricas + puede editar metas
- * Tech: Ve métricas (solo lectura)
+ * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+ * desarrollado como iniciativa personal por Diego Sánchez.
+ *
+ * Uso autorizado únicamente según los términos del acuerdo de licencia.
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
+ * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+ *
+ * Está prohibida la redistribución, modificación o uso no autorizado
+ * de este código sin el consentimiento expreso por escrito del autor.
  */
 
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
@@ -27,6 +33,7 @@ import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 // import { NgChartsModule } from 'ng2-charts';
@@ -59,6 +66,7 @@ import { AuthService } from '../shared/services/auth.service';
     MatProgressBarModule,
     MatTooltipModule,
     MatDividerModule,
+    MatPaginatorModule,
     // NgChartsModule // Removido temporalmente por problemas de compatibilidad
   ],
   templateUrl: './dashboard.component.html',
@@ -77,7 +85,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ticketsByStatus: TicketByStatus[] = [];
   techPerformance: TechPerformance[] = [];
   ticketsByArea: TicketByArea[] = [];
-  
+
   // Estados de loading
   loading = {
     metrics: false,
@@ -90,12 +98,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Configuración del gráfico removida temporalmente por problemas de compatibilidad
 
+  // Control de paginación para tabla de tickets
+  pageSize = 10;
+  pageSizeOptions = [5, 10, 25, 50];
+  currentPage = 0;
+  paginatedTickets: any[] = [];
+
   // Formularios
   dateFilterForm!: FormGroup;
   configForm!: FormGroup;
 
   // Filtros de fecha
   dateRanges = [
+    { label: 'Todos los tickets', value: 'all' },
     { label: 'Hoy', value: 'today' },
     { label: 'Esta semana', value: 'week' },
     { label: 'Este mes', value: 'month' },
@@ -136,7 +151,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private initializeForms() {
     // Formulario de filtros de fecha
     this.dateFilterForm = this.fb.group({
-      dateRange: ['month'],
+      dateRange: ['all'], // Cambiar por defecto a mostrar todos los tickets
       startDate: [null],
       endDate: [null]
     });
@@ -149,11 +164,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       work_hours_friday_end: ['', [Validators.required, Validators.pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)]],
       lunch_break_start: ['', [Validators.required, Validators.pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)]],
       lunch_break_end: ['', [Validators.required, Validators.pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)]],
-      
+
       // Metas de tiempo
       target_response_time: [240, [Validators.required, Validators.min(1), Validators.max(10080)]], // max 1 semana
       target_resolution_time: [1440, [Validators.required, Validators.min(1), Validators.max(20160)]], // max 2 semanas
-      
+
       // SLA por prioridad
       sla_critical: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
       sla_high: [240, [Validators.required, Validators.min(1), Validators.max(2880)]],
@@ -187,7 +202,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadChartData();
     this.loadTechPerformance();
     this.loadAreaAnalysis();
-    
+
     if (this.isAdmin) {
       this.loadConfiguration();
     }
@@ -213,7 +228,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   loadMetrics() {
     this.loading.metrics = true;
-    
+
     const dateParams = this.getDateParams();
 
     const metricsSub = this.analyticsService.getDashboardMetrics(dateParams)
@@ -221,6 +236,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (data) => {
           this.metrics = data;
+          // Actualizar paginación cuando cambien los datos
+          this.currentPage = 0; // Reiniciar a la primera página
+          this.updatePaginatedTickets();
           this.cdr.detectChanges();
         },
         error: (error) => {
@@ -230,7 +248,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
 
     this.subscriptions.push(metricsSub);
-    
+
     // También recargar datos de gráficos y análisis
     this.loadChartData();
     this.loadTechPerformance();
@@ -242,7 +260,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   loadChartData() {
     this.loading.charts = true;
-    
+
     const dateParams = this.getDateParams();
 
     const chartSub = this.analyticsService.getTicketsByStatus(dateParams.startDate, dateParams.endDate)
@@ -266,17 +284,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   getActiveStatusData() {
     // Filtrar solo estados activos (no cerrados ni resueltos)
-    const activeStatuses = this.ticketsByStatus.filter(item => 
+    const activeStatuses = this.ticketsByStatus.filter(item =>
       item.status !== 'Cerrado' && item.status !== 'Resuelto'
     );
 
-    const total = activeStatuses.reduce((sum, item) => sum + item.count, 0);
-    
-    return activeStatuses.map(item => ({
-      status: item.status,
-      count: item.count,
-      percentage: total > 0 ? (item.count / total) * 100 : 0
-    }));
+    // Usar directamente los porcentajes calculados por el backend
+    // Si no existen, calcular localmente solo para estados activos
+    if (activeStatuses.length > 0 && activeStatuses[0].percentage !== undefined) {
+      const result = activeStatuses.map(item => ({
+        status: item.status,
+        count: item.count,
+        percentage: typeof item.percentage === 'string' ? parseFloat(item.percentage) : (item.percentage || 0)
+      }));
+      return result;
+    } else {
+      // Fallback: calcular porcentajes localmente solo para estados activos
+      const total = activeStatuses.reduce((sum, item) => sum + item.count, 0);
+      const result = activeStatuses.map(item => ({
+        status: item.status,
+        count: item.count,
+        percentage: total > 0 ? (item.count / total) * 100 : 0
+      }));
+      return result;
+    }
   }
 
   /**
@@ -287,7 +317,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!this.isAdmin) return;
 
     this.loading.performance = true;
-    
+
     const dateParams = this.getDateParams();
 
     const performanceSub = this.analyticsService.getTechPerformance(dateParams.startDate, dateParams.endDate)
@@ -311,7 +341,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   loadAreaAnalysis() {
     this.loading.areas = true;
-    
+
     const dateParams = this.getDateParams();
 
     const areasSub = this.analyticsService.getTicketsByArea(dateParams.startDate, dateParams.endDate)
@@ -337,7 +367,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!this.isAdmin) return;
 
     this.loading.config = true;
-    
+
     const configSub = this.configService.getConfiguration()
       .pipe(finalize(() => this.loading.config = false))
       .subscribe({
@@ -372,6 +402,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     let endDate = new Date(now);
 
     switch (range) {
+      case 'all':
+        // No aplicar filtros de fecha, mostrar todos los tickets
+        this.dateFilterForm.patchValue({
+          startDate: null,
+          endDate: null
+        }, { emitEvent: false });
+        this.loadMetrics();
+        return;
       case 'today':
         startDate = new Date(now);
         startDate.setHours(0, 0, 0, 0);
@@ -405,7 +443,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   private getDateParams(): { startDate?: string, endDate?: string } {
     const formValue = this.dateFilterForm.value;
-    
+
+    // Si es 'all', no enviar parámetros de fecha
+    if (formValue.dateRange === 'all') {
+      return {};
+    }
+
     if (formValue.dateRange === 'custom' && formValue.startDate && formValue.endDate) {
       return {
         startDate: formValue.startDate.toISOString(),
@@ -420,7 +463,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         };
       }
     }
-    
+
     return {};
   }
 
@@ -485,7 +528,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   applyCustomFilter() {
     const formValue = this.dateFilterForm.value;
-    
+
     if (!formValue.startDate || !formValue.endDate) {
       this.showError('Seleccione fechas de inicio y fin');
       return;
@@ -514,6 +557,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   getStatusIcon(status: string): string {
     switch (status.toLowerCase()) {
       case 'creado': return 'fiber_new';
+      case 'en revisión': return 'visibility';
       case 'en gestión': return 'build';
       case 'escalado a externo': return 'call_made';
       case 'esperando respuesta del usuario': return 'schedule';
@@ -548,10 +592,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   getTopAreas() {
     const areaGroups: { [key: string]: any } = {};
-    
+
     // Agrupar por área
     this.ticketsByArea.forEach(item => {
       const areaKey = item.area || 'Sin área';
+
       if (!areaGroups[areaKey]) {
         areaGroups[areaKey] = {
           area: areaKey,
@@ -559,11 +604,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
           categories: []
         };
       }
-      
-      areaGroups[areaKey].totalCount += item.count;
+
+      areaGroups[areaKey].totalCount += parseInt(item.count.toString(), 10);
       areaGroups[areaKey].categories.push({
         category: item.category,
-        count: item.count
+        count: parseInt(item.count.toString(), 10)
       });
     });
 
@@ -598,11 +643,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   getRecommendationScore(): number {
     if (!this.metrics) return 0;
-    
+
     const responseScore = this.metrics.responseTimeCompliance;
     const workScore = this.metrics.workTimeCompliance;
     const overdueScore = this.metrics.ticketsOverdue === 0 ? 100 : Math.max(0, 100 - (this.metrics.ticketsOverdue * 10));
-    
+
     return Math.round((responseScore + workScore + overdueScore) / 3);
   }
 
@@ -624,5 +669,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
+  }
+
+  /**
+   * Manejar cambio de página en la tabla de tickets
+   */
+  onPageChange(event: PageEvent) {
+    this.currentPage = event.pageIndex;
+    this.pageSize = event.pageSize;
+    this.updatePaginatedTickets();
+  }
+
+  /**
+   * Actualizar tickets paginados
+   */
+  private updatePaginatedTickets() {
+    if (!this.metrics?.detailed) {
+      this.paginatedTickets = [];
+      return;
+    }
+
+    const startIndex = this.currentPage * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedTickets = this.metrics.detailed.slice(startIndex, endIndex);
+  }
+
+  /**
+   * Obtener total de tickets para el paginador
+   */
+  getTotalTickets(): number {
+    return this.metrics?.detailed?.length || 0;
   }
 }

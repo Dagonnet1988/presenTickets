@@ -348,6 +348,23 @@ router.patch("/:id", async (req, res) => {
     updates.push(`assigned_to = $${index}`);
     values.push(parseInt(assigned_to, 10));
     index++;
+    
+    // Si se está asignando un técnico y no se especificó un estado, 
+    // cambiar automáticamente a "En revisión"
+    if (!status) {
+      // Verificar que el ticket no esté ya cerrado
+      const currentStatusResult = await pool.query(
+        "SELECT status FROM tickets WHERE id = $1",
+        [id]
+      );
+      const currentStatus = currentStatusResult.rows[0]?.status;
+      
+      if (currentStatus && currentStatus !== 'Cerrado' && currentStatus !== 'Resuelto') {
+        updates.push(`status = $${index}`);
+        values.push('En revisión');
+        index++;
+      }
+    }
   }
 
   // Agregar soporte para actualizar el título/nombre del ticket

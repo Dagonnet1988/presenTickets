@@ -463,6 +463,16 @@
   font-weight: 500;
 }
 
+.status-review {
+  background-color: #f3e5f5 !important;
+  color: #7b1fa2 !important;
+  border: 1px solid #ce93d8;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .status-in-progress {
   background-color: #fff8e1 !important;
   color: #0026ff !important;

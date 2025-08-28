@@ -1,0 +1,24 @@
+{
+  "watch": [
+    "*.js",
+    "routes/",
+    "services/", 
+    "middleware/"
+  ],
+  "ignore": [
+    "node_modules/",
+    "uploads/",
+    "whatsapp_auth/",
+    "*.log",
+    "*.tmp",
+    "test-*.js",
+    "check-*.js",
+    "fix-*.js",
+    ".env.*"
+  ],
+  "ext": "js,json",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 2500
+}

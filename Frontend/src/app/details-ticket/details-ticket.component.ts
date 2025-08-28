@@ -656,6 +656,8 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'Creado':
         return 'status-chip status-created';
+      case 'En revisión':
+        return 'status-chip status-review';
       case 'En gestión':
         return 'status-chip status-in-progress';
       case 'Esperando respuesta del usuario':

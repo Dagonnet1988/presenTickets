@@ -130,7 +130,7 @@ export interface UpdateConfigResponse {
 })
 export class DashboardConfigService {
   private apiUrl = `${environment.backendUrl}/api/dashboard-config`;
-  
+
   // Subject para notificar cambios de configuración
   private configChangedSubject = new BehaviorSubject<boolean>(false);
   public configChanged$ = this.configChangedSubject.asObservable();
@@ -182,7 +182,7 @@ export class DashboardConfigService {
    */
   flattenConfig(config: DashboardConfig): { [key: string]: any } {
     const flattened: { [key: string]: any } = {};
-    
+
     // Procesar cada categoría
     Object.keys(config).forEach(category => {
       const categoryData = config[category as keyof DashboardConfig];
@@ -195,7 +195,7 @@ export class DashboardConfigService {
         });
       }
     });
-    
+
     return flattened;
   }
 
@@ -204,10 +204,10 @@ export class DashboardConfigService {
    */
   formatMinutes(minutes: number): string {
     if (minutes === 0) return '0 min';
-    
+
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    
+
     if (hours === 0) return `${mins} min`;
     if (mins === 0) return `${hours}h`;
     return `${hours}h ${mins}min`;
@@ -245,7 +245,7 @@ export class DashboardConfigService {
       sla_high: 240,
       sla_medium: 480,
       sla_low: 1440,
-      active_work_states: ['En gestión', 'Investigando', 'Resolviendo'],
+      active_work_states: ['En revisión', 'En gestión', 'Investigando', 'Resolviendo'],
       paused_states: ['Escalado a externo', 'Esperando respuesta del usuario']
     };
   }

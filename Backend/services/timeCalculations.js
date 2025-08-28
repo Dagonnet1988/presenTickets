@@ -8,7 +8,7 @@
 
 /**
  * Configuración de horario laboral real
- * Lunes a Jueves: 7:00 AM - 12:00 PM y 1:30 PM - 6:00 PM
+ * Lunes a Jueves: 7:00 AM - 12:00 PM y 1:30 PM - 5:30 PM
  * Viernes: 7:00 AM - 12:00 PM y 1:30 PM - 4:30 PM
  */
 const WORK_SCHEDULE = {

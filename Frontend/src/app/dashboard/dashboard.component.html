@@ -1,6 +1,22 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+
+  Este archivo es parte de PresenTickets, un sistema de gestión de tickets
+  desarrollado como iniciativa personal por Diego Sánchez.
+
+  Uso autorizado únicamente según los términos del acuerdo de licencia.
+  Este software es propiedad intelectual de Diego Sánchez y su uso en
+  Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
+
+  Está prohibida la redistribución, modificación o uso no autorizado
+  de este código sin el consentimiento expreso por escrito del autor.
+-->
+
+
 <!-- Dashboard Unificado -->
 <div class="dashboard-container">
-  
+
   <!-- Header con título y filtros -->
   <div class="dashboard-header">
     <div class="header-content">
@@ -11,7 +27,7 @@
           {{ isAdmin ? 'Administrador' : 'Técnico' }}
         </mat-chip>
       </h1>
-      
+
       <!-- Filtros de fecha -->
       <div class="date-filters" [formGroup]="dateFilterForm">
         <mat-form-field appearance="outline" class="filter-field">
@@ -22,15 +38,15 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
-        
-        <mat-form-field appearance="outline" class="filter-field" 
+
+        <mat-form-field appearance="outline" class="filter-field"
                         *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'">
           <mat-label>Fecha inicio</mat-label>
           <input matInput [matDatepicker]="startPicker" formControlName="startDate">
           <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
           <mat-datepicker #startPicker></mat-datepicker>
         </mat-form-field>
-        
+
         <mat-form-field appearance="outline" class="filter-field"
                         *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'">
           <mat-label>Fecha fin</mat-label>
@@ -38,17 +54,17 @@
           <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
           <mat-datepicker #endPicker></mat-datepicker>
         </mat-form-field>
-        
-        <button mat-raised-button color="primary" 
+
+        <button mat-raised-button color="primary"
                 (click)="applyCustomFilter()"
                 *ngIf="dateFilterForm.get('dateRange')?.value === 'custom'"
                 [disabled]="loading.metrics">
           <mat-icon>search</mat-icon>
           Aplicar
         </button>
-        
-        <button mat-icon-button 
-                (click)="loadMetrics()" 
+
+        <button mat-icon-button
+                (click)="loadMetrics()"
                 [disabled]="loading.metrics"
                 matTooltip="Actualizar datos">
           <mat-icon>refresh</mat-icon>
@@ -65,10 +81,10 @@
 
   <!-- Contenido principal -->
   <div *ngIf="!loading.metrics && metrics" class="dashboard-content">
-    
+
     <!-- Métricas principales -->
     <div class="metrics-grid">
-      
+
       <!-- Total de tickets -->
       <mat-card class="metric-card">
         <mat-card-header>
@@ -108,8 +124,8 @@
           <div class="metric-detail" *ngIf="metrics.targets">
             Meta: {{ metrics.targets.responseTimeFormatted }}
           </div>
-          <mat-progress-bar 
-            [value]="metrics.responseTimeCompliance" 
+          <mat-progress-bar
+            [value]="metrics.responseTimeCompliance"
             [color]="getComplianceColor(metrics.responseTimeCompliance)"
             class="compliance-bar">
           </mat-progress-bar>
@@ -131,8 +147,8 @@
           <div class="metric-detail" *ngIf="metrics.targets">
             Meta: {{ metrics.targets.resolutionTimeFormatted }}
           </div>
-          <mat-progress-bar 
-            [value]="metrics.workTimeCompliance" 
+          <mat-progress-bar
+            [value]="metrics.workTimeCompliance"
             [color]="getComplianceColor(metrics.workTimeCompliance)"
             class="compliance-bar">
           </mat-progress-bar>
@@ -173,8 +189,8 @@
               <span class="status-name">{{ status.status }}</span>
               <span class="status-count">{{ status.count }}</span>
             </div>
-            <mat-progress-bar 
-              [value]="status.percentage" 
+            <mat-progress-bar
+              [value]="status.percentage"
               mode="determinate"
               class="status-bar">
             </mat-progress-bar>
@@ -189,6 +205,25 @@
       <mat-spinner diameter="30"></mat-spinner>
       <p>Cargando estados de tickets...</p>
     </div>
+
+    <!-- Mensaje cuando no hay tickets -->
+    <mat-card class="no-data-card" *ngIf="!loading.charts && ticketsByStatus.length === 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>info</mat-icon>
+        <mat-card-title>Sin tickets asignados</mat-card-title>
+        <mat-card-subtitle *ngIf="isTech">No tienes tickets asignados en el período seleccionado</mat-card-subtitle>
+        <mat-card-subtitle *ngIf="!isTech">No hay tickets en el período seleccionado</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p *ngIf="isTech">
+          Como técnico, solo puedes ver los tickets que tienes asignados.
+          Si no ves datos, verifica con el administrador que tengas tickets asignados.
+        </p>
+        <p *ngIf="!isTech">
+          Intenta cambiar el filtro de fecha o verifica que existan tickets en el sistema.
+        </p>
+      </mat-card-content>
+    </mat-card>
 
     <!-- Rendimiento por técnico (Solo Admin) -->
     <mat-card class="tech-performance" *ngIf="isAdmin && !loading.performance && techPerformance.length > 0">
@@ -222,8 +257,8 @@
                 <span class="metric-value">{{ tech.avg_resolution_hours | number:'1.1-1' }}h</span>
               </div>
             </div>
-            <mat-progress-bar 
-              [value]="tech.closure_rate" 
+            <mat-progress-bar
+              [value]="tech.closure_rate"
               [color]="tech.closure_rate >= 80 ? 'primary' : tech.closure_rate >= 60 ? 'accent' : 'warn'"
               class="performance-bar">
             </mat-progress-bar>
@@ -237,6 +272,19 @@
       <mat-spinner diameter="30"></mat-spinner>
       <p>Cargando rendimiento por técnico...</p>
     </div>
+
+    <!-- Mensaje cuando no hay datos de performance -->
+    <mat-card class="no-data-card" *ngIf="isAdmin && !loading.performance && techPerformance.length === 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>info</mat-icon>
+        <mat-card-title>Sin datos de rendimiento</mat-card-title>
+        <mat-card-subtitle>No se encontraron técnicos con tickets asignados</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p>No hay datos de rendimiento disponibles para el período seleccionado.</p>
+        <p>Verifica que existan técnicos con tickets asignados.</p>
+      </mat-card-content>
+    </mat-card>
 
     <!-- Análisis por área -->
     <mat-card class="area-analysis" *ngIf="!loading.areas && ticketsByArea.length > 0">
@@ -256,7 +304,7 @@
               <div *ngFor="let category of area.categories" class="category-item">
                 <span class="category-name">{{ category.category || 'Sin categoría' }}</span>
                 <span class="category-count">{{ category.count }}</span>
-                <mat-progress-bar 
+                <mat-progress-bar
                   [value]="(category.count / area.totalCount) * 100"
                   mode="determinate"
                   class="category-bar">
@@ -274,6 +322,19 @@
       <p>Cargando análisis por área...</p>
     </div>
 
+    <!-- Mensaje cuando no hay datos de área -->
+    <mat-card class="no-data-card" *ngIf="!loading.areas && ticketsByArea.length === 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>info</mat-icon>
+        <mat-card-title>Sin datos de área</mat-card-title>
+        <mat-card-subtitle>No se encontraron tickets con área asignada</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p>Los tickets no tienen información de área o categoría asignada.</p>
+        <p>Verifica que los tickets tengan áreas configuradas correctamente.</p>
+      </mat-card-content>
+    </mat-card>
+
     <!-- Resumen Ejecutivo -->
     <mat-card class="executive-summary" *ngIf="metrics">
       <mat-card-header>
@@ -283,7 +344,7 @@
       </mat-card-header>
       <mat-card-content>
         <div class="summary-grid">
-          
+
           <!-- KPI Principal -->
           <div class="summary-section">
             <h4>📊 Indicadores Clave</h4>
@@ -384,7 +445,7 @@
       </div>
 
       <form *ngIf="!loading.config && configuration" [formGroup]="configForm" class="config-form">
-        
+
         <!-- Horarios laborales -->
         <div class="config-section">
           <h3>
@@ -481,7 +542,7 @@
 
         <!-- Botones de acción -->
         <div class="config-actions">
-          <button mat-raised-button color="primary" 
+          <button mat-raised-button color="primary"
                   (click)="saveConfiguration()"
                   [disabled]="loading.saving || !configForm.valid">
             <mat-icon *ngIf="!loading.saving">save</mat-icon>
@@ -507,15 +568,15 @@
     </mat-expansion-panel>
 
     <!-- Tabla de tickets detallados -->
-    <mat-card class="detailed-tickets" *ngIf="metrics.detailed && metrics.detailed.length > 0">
+    <mat-card class="detailed-tickets" *ngIf="metrics?.detailed && metrics.detailed.length > 0">
       <mat-card-header>
         <mat-icon mat-card-avatar>list</mat-icon>
         <mat-card-title>Tickets Detallados</mat-card-title>
-        <mat-card-subtitle>{{ metrics.detailed.length }} tickets en el período</mat-card-subtitle>
+        <mat-card-subtitle>{{ getTotalTickets() }} tickets en el período</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <table mat-table [dataSource]="metrics.detailed" class="tickets-table">
-          
+        <table mat-table [dataSource]="paginatedTickets" class="tickets-table">
+
           <ng-container matColumnDef="id">
             <th mat-header-cell *matHeaderCellDef>ID</th>
             <td mat-cell *matCellDef="let ticket">#{{ ticket.id }}</td>
@@ -581,6 +642,17 @@
           <tr mat-header-row *matHeaderRowDef="ticketColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: ticketColumns;"></tr>
         </table>
+
+        <!-- Paginador -->
+        <mat-paginator
+          [length]="getTotalTickets()"
+          [pageSize]="pageSize"
+          [pageSizeOptions]="pageSizeOptions"
+          [pageIndex]="currentPage"
+          (page)="onPageChange($event)"
+          showFirstLastButtons
+          aria-label="Seleccionar página de tickets">
+        </mat-paginator>
       </mat-card-content>
     </mat-card>
 

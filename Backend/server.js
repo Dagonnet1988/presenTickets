@@ -35,6 +35,9 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 import dashboardSettingsRoutes from './routes/dashboardSettings.js';
 import dashboardConfigRoutes from './routes/dashboardConfig.js';
+import maintenanceRoutes from './routes/maintenance.js';
+import maintenanceService from './services/maintenanceService.js';
+import { maintenanceMiddleware, criticalRouteMaintenanceMiddleware } from './middleware/maintenanceMiddleware.js';
 
 // Cargar variables de entorno según el entorno
 const ENV = process.env.NODE_ENV || 'development';
@@ -264,14 +267,18 @@ app.get('/api/health', (req, res) => {
 });
 
 // Rutas API protegidas with JWT
-app.use('/api/tickets', authMiddleware, ticketRoutes);
-app.use('/api/users', authMiddleware, userRoutes);
-app.use('/api/comments', authMiddleware, commentRoutes);
-app.use('/api/notifications', authMiddleware, notificationRoutes);
-app.use('/api/analytics', authMiddleware, analyticsRoutes);
+app.use('/api/tickets', authMiddleware, maintenanceMiddleware, ticketRoutes);
+app.use('/api/users', authMiddleware, criticalRouteMaintenanceMiddleware, userRoutes);
+app.use('/api/comments', authMiddleware, maintenanceMiddleware, commentRoutes);
+app.use('/api/notifications', authMiddleware, maintenanceMiddleware, notificationRoutes);
+app.use('/api/analytics', authMiddleware, criticalRouteMaintenanceMiddleware, analyticsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/dashboard', authMiddleware, dashboardSettingsRoutes);
-app.use('/api/dashboard-config', authMiddleware, dashboardConfigRoutes);
+app.use('/api/dashboard', authMiddleware, maintenanceMiddleware, dashboardSettingsRoutes);
+app.use('/api/dashboard-config', authMiddleware, maintenanceMiddleware, dashboardConfigRoutes);
+
+// Rutas de mantenimiento (manejo de auth interno en las rutas)
+app.use('/api/maintenance', maintenanceRoutes);
+
 // Rutas públicas
 app.use('/api/auth', authRoutes);
 
@@ -429,8 +436,12 @@ checkAndCreateTables().then(() => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
     
-    // Configurar Socket.IO para WhatsApp
+    // Configurar Socket.IO para WhatsApp y Mantenimiento
     whatsappService.setSocketIO(io);
+    maintenanceService.setSocketIO(io);
+    
+    // Configurar pool de base de datos para maintenanceService
+    maintenanceService.setPool(pool);
     
     // Inicializar servicio de WhatsApp después de que el servidor esté listo
     setTimeout(() => {

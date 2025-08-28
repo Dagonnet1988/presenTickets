@@ -495,6 +495,57 @@ const checkAndCreateTables = async () => {
       console.log("✅ Tabla 'ticket_participants' eliminada exitosamente.");
     }
 
+    // Validar y crear la tabla "maintenance_sessions" (NUEVO MÓDULO SIMPLIFICADO)
+    const maintenanceSessionsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'maintenance_sessions'
+      );
+    `);
+
+    if (!maintenanceSessionsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'maintenance_sessions' (nuevo módulo de mantenimiento)...");
+      await client.query(`
+        CREATE TABLE maintenance_sessions (
+          id SERIAL PRIMARY KEY,
+          
+          -- Información básica
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          
+          -- Control de tiempo
+          scheduled_start TIMESTAMP,
+          scheduled_end TIMESTAMP,
+          actual_start TIMESTAMP,
+          actual_end TIMESTAMP,
+          
+          -- Estado del mantenimiento (solo 3 estados simples)
+          status VARCHAR(20) DEFAULT 'inactive' CHECK (status IN ('inactive', 'scheduled', 'active')),
+          
+          -- Configuración
+          allowed_roles TEXT[] DEFAULT '{"admin"}',
+          maintenance_message TEXT DEFAULT 'Sistema en mantenimiento. Disculpe las molestias.',
+          
+          -- Auditoría
+          created_by INTEGER REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      
+      // Crear índices para performance
+      await client.query(`
+        CREATE INDEX idx_maintenance_sessions_status ON maintenance_sessions(status);
+      `);
+      await client.query(`
+        CREATE INDEX idx_maintenance_sessions_scheduled_start ON maintenance_sessions(scheduled_start);
+      `);
+      
+      console.log("✅ Tabla 'maintenance_sessions' creada exitosamente con índices optimizados.");
+    } else {
+      console.log("✅ La tabla 'maintenance_sessions' ya existe.");
+    }
+
     console.log("✅ Validación y creación de tablas completada.");
   } catch (error) {
     console.error("❌ Error al validar la base de datos:", error);

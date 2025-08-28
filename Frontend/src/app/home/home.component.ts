@@ -348,6 +348,8 @@ export class HomeComponent implements OnInit {
     switch (status) {
       case 'Creado':
         return 'status-created';
+      case 'En revisión':
+        return 'status-review';
       case 'En gestión':
         return 'status-in-progress';
       case 'Esperando respuesta del usuario':
