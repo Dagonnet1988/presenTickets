@@ -3,7 +3,7 @@
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
  * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
- * desarrollado como iniciativa personal por Diego Sánchez.
+ * desarrollado como iniciativa por Diego Sánchez.
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
  * Este software es propiedad intelectual de Diego Sánchez y su uso en
@@ -20,14 +20,47 @@ import { environment } from '../../../environments/environment';
 @Injectable({
   providedIn: 'root'
 })
-export class WhatsAppService {
+export class WhatsappService {
 
   constructor(private http: HttpClient) { }
 
   /**
-   * Obtener estado de conexión de WhatsApp
+   * Obtener estadísticas anti-bloqueo
    */
-  async getConnectionStatus(): Promise<any> {
+  async getAntiBlockStats(): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/anti-block-stats`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
+   * Obtener uso horario de mensajes
+   */
+  async getHourlyUsage(days: string): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/hourly-usage?days=${days}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
+   * Configurar límites de rate limiting
+   */
+  async configureLimits(limits: any): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/configure-limits`, limits, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
+   * Obtener estado de WhatsApp
+   */
+  async getStatus(): Promise<any> {
     const token = localStorage.getItem('token');
     const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/status`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -60,11 +93,10 @@ export class WhatsAppService {
   /**
    * Enviar mensaje de prueba
    */
-  async sendTestMessage(phoneNumber: string, message: string): Promise<any> {
+  async testMessage(phone: string): Promise<any> {
     const token = localStorage.getItem('token');
     const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/test-message`, {
-      phoneNumber,
-      message
+      phone_number: phone
     }, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
@@ -83,9 +115,9 @@ export class WhatsAppService {
   }
 
   /**
-   * Actualizar configuración del usuario
+   * Guardar configuración del usuario
    */
-  async updateUserSettings(settings: any): Promise<any> {
+  async saveUserSettings(settings: any): Promise<any> {
     const token = localStorage.getItem('token');
     const response = await this.http.put(`${environment.backendUrl}/api/whatsapp/user-settings`, settings, {
       headers: { Authorization: `Bearer ${token}` }
@@ -116,12 +148,10 @@ export class WhatsAppService {
   }
 
   /**
-   * Obtener reporte de rendimiento
+   * Generar reporte de rendimiento
    */
-  async getPerformanceReport(period: string = '30', format: string = 'json'): Promise<any> {
+  async generatePerformanceReport(period: string = '30', format: string = 'json'): Promise<any> {
     const token = localStorage.getItem('token');
-
-    // Si el formato es texto, especificar responseType como 'text'
     const options: any = {
       headers: { Authorization: `Bearer ${token}` }
     };
@@ -148,18 +178,12 @@ export class WhatsAppService {
   /**
    * Obtener historial de notificaciones
    */
-  async getNotificationHistory(params?: any): Promise<any> {
+  async getNotificationHistory(page: number = 0, limit: number = 50, search?: string): Promise<any> {
     const token = localStorage.getItem('token');
+    let queryParams = `?page=${page}&limit=${limit}`;
 
-    let queryParams = '';
-    if (params) {
-      const searchParams = new URLSearchParams();
-      if (params.limit !== undefined) searchParams.set('limit', params.limit.toString());
-      if (params.offset !== undefined) searchParams.set('offset', params.offset.toString());
-      if (params.status) searchParams.set('status', params.status);
-      if (params.user) searchParams.set('user', params.user);
-      if (params.type) searchParams.set('type', params.type);
-      queryParams = searchParams.toString() ? '?' + searchParams.toString() : '';
+    if (search && search.trim()) {
+      queryParams += `&search=${encodeURIComponent(search.trim())}`;
     }
 
     const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/history${queryParams}`, {
@@ -169,44 +193,75 @@ export class WhatsAppService {
   }
 
   /**
-   * Obtener configuraciones globales del sistema
+   * Obtener configuración global
+   */
+  async getGlobalConfig(): Promise<any> {
+    const token = localStorage.getItem('token');
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/global-settings`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).toPromise();
+    return response;
+  }
+
+  /**
+   * Obtener estado de conexión (alias para getStatus)
+   */
+  async getConnectionStatus(): Promise<any> {
+    return this.getStatus();
+  }
+
+  /**
+   * Enviar mensaje de prueba (alias para testMessage)
+   */
+  async sendTestMessage(phone: string): Promise<any> {
+    return this.testMessage(phone);
+  }
+
+  /**
+   * Actualizar configuración de usuario (alias para saveUserSettings)
+   */
+  async updateUserSettings(settings: any): Promise<any> {
+    return this.saveUserSettings(settings);
+  }
+
+  /**
+   * Obtener reporte de rendimiento (alias para generatePerformanceReport)
+   */
+  async getPerformanceReport(period: string = '30', format: string = 'json'): Promise<any> {
+    return this.generatePerformanceReport(period, format);
+  }
+
+  /**
+   * Obtener configuración del sistema (alias para getGlobalConfig)
    */
   async getSystemSettings(): Promise<any> {
-    const token = localStorage.getItem('token');
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/global-config`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).toPromise();
-    return response;
+    return this.getGlobalConfig();
   }
 
   /**
-   * Guardar configuraciones globales del sistema
+   * Guardar configuración del sistema (alias para saveGlobalConfig)
    */
   async saveSystemSettings(settings: any): Promise<any> {
+    return this.saveGlobalConfig(settings);
+  }
+
+  /**
+   * Obtener horarios laborales
+   */
+  async getBusinessHours(): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.put(`${environment.backendUrl}/api/whatsapp/global-config`, settings, {
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/business-hours`, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;
   }
 
   /**
-   * Obtener plantillas de mensajes WhatsApp
+   * Guardar configuración global
    */
-  async getTemplates(): Promise<any> {
+  async saveGlobalConfig(settings: any): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/templates`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).toPromise();
-    return response;
-  }
-
-  /**
-   * Guardar plantillas de mensajes WhatsApp
-   */
-  async saveTemplates(templates: any): Promise<any> {
-    const token = localStorage.getItem('token');
-    const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/templates`, { templates }, {
+    const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/global-settings`, settings, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;

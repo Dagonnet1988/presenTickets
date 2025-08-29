@@ -24,6 +24,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -32,7 +33,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatPaginatorModule, MatPaginatorIntl } from '@angular/material/paginator';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { WhatsAppService } from '../shared/services/whatsapp.service';
+import { WhatsappService } from '../shared/services/whatsapp.service';
 import { AuthService } from '../shared/services/auth.service';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
@@ -52,6 +53,7 @@ import * as ExcelJS from 'exceljs';
     MatSlideToggleModule,
     MatTableModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
     MatTabsModule,
     MatBadgeModule,
@@ -177,15 +179,30 @@ export class WhatsAppAdminComponent implements OnInit {
   // Modal de mensaje completo
   selectedMessage: any = null;
 
-  // Plantillas de mensajes
-  templates: any = {
-    new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-    ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n� Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-    status_change: '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-    comment: '💬 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📝 Nuevo comentario en su ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n💭 *Comentario:* {comment}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._'
+  // Estadísticas anti-bloqueo
+  antiBlockStats: any = null;
+  hourlyUsageData: any[] = [];
+  newLimits: any = {
+    maxDailyMessages: 100,
+    maxMessagesPerHour: 20,
+    minDelayBetweenMessages: 3,
+    maxDelayBetweenMessages: 8,
+    maxBurstMessages: 3,
+    burstCooldown: 60,
+    workHourStart: '08:00',
+    workHourEnd: '18:00',
+    allowAfterHours: true,
+    afterHoursLimit: 10,
+    weekendRestrictions: false,
+    adaptiveDelays: true,
+    smartThrottling: true,
+    businessHours: {
+      start: '07:00',
+      end: '17:30',
+      fridayEnd: '16:30',
+      lunchStart: '12:00',
+      lunchEnd: '13:30'
+    }
   };
 
   // Estados de loading
@@ -200,7 +217,7 @@ export class WhatsAppAdminComponent implements OnInit {
     detailedStats: false,
     performanceReport: false,
     notifications: false,
-    templates: false
+    antiBlockStats: false
   };
 
   // Código QR
@@ -210,7 +227,7 @@ export class WhatsAppAdminComponent implements OnInit {
   customPaginatorIntl = new MatPaginatorIntl();
 
   constructor(
-    private whatsappService: WhatsAppService,
+    private whatsappService: WhatsappService,
     private snackBar: MatSnackBar,
     private authService: AuthService
   ) {
@@ -243,12 +260,13 @@ export class WhatsAppAdminComponent implements OnInit {
 
     this.loadConnectionStatus();
     this.loadUserSettings();
-    this.loadSystemSettings(); // Restaurar la carga de configuración del sistema
+    this.loadSystemSettings(); // Cargar configuración del sistema
+    this.loadBusinessHours(); // Cargar horario laboral desde dashboard
     this.loadStats();
     this.loadDetailedStats(); // Cargar estadísticas detalladas
     this.loadPerformanceReport(); // Cargar reporte de rendimiento
     this.loadNotificationHistory();
-    this.loadTemplates(); // Cargar plantillas
+    this.loadAntiBlockStats(); // Cargar estadísticas anti-bloqueo
   }
 
   /**
@@ -353,8 +371,7 @@ export class WhatsAppAdminComponent implements OnInit {
     this.loading.testMessage = true;
     try {
       await this.whatsappService.sendTestMessage(
-        this.testMessage.phoneNumber,
-        this.testMessage.message
+        this.testMessage.phoneNumber
       );
       this.showSuccess('Mensaje de prueba enviado exitosamente');
       this.testMessage = { phoneNumber: '', message: '' };
@@ -656,6 +673,22 @@ export class WhatsAppAdminComponent implements OnInit {
           enable_comment_notifications: settings.whatsapp_global_comments
         };
       }
+
+      // Cargar horarios laborales desde el dashboard
+      try {
+        const businessHours = await this.whatsappService.getBusinessHours();
+        if (businessHours && businessHours.schedule) {
+          // Actualizar los límites con los horarios laborales del dashboard
+          this.newLimits.businessHours = {
+            ...this.newLimits.businessHours,
+            start: businessHours.schedule.work_hours_start || '07:00',
+            end: businessHours.schedule.work_hours_end || '17:30'
+          };
+        }
+      } catch (businessHoursError) {
+        console.warn('⚠️ No se pudieron cargar horarios laborales desde dashboard:', businessHoursError);
+      }
+
     } catch (error: any) {
       // Si hay error, usar configuración por defecto
       if (error?.status === 404) {
@@ -700,114 +733,16 @@ export class WhatsAppAdminComponent implements OnInit {
   resetSystemSettings() {
     this.systemSettings = {
       whatsapp_enabled_globally: true,
+      enable_new_ticket_notifications: true,
+      enable_assignment_notifications: true,
+      enable_status_change_notifications: true,
+      enable_comment_notifications: true,
       default_business_hours: '8-17',
       default_daily_limit: '20',
-      template_new_ticket: '🆕 *PresenTickets* - Nuevo Ticket\n\nHola {userName},\n\nSe ha creado un nuevo ticket #{ticketId}\nAsunto: {subject}\n\n🕒 {timestamp}',
-      template_assignment: '👤 *PresenTickets* - Ticket Asignado\n\nHola {userName},\n\nSe le ha asignado el ticket #{ticketId}\nAsunto: {subject}\n\n🕒 {timestamp}',
-      template_status_change: '🔄 *PresenTickets* - Cambio de Estado\n\nHola {userName},\n\nEl ticket #{ticketId} cambió a: {newStatus}\nAsunto: {subject}\n\n🕒 {timestamp}',
       require_phone_validation: false,
       auto_reconnect_interval: '10'
     };
     this.showSuccess('Configuración restaurada a valores por defecto');
-  }
-
-  /**
-   * Cargar plantillas de mensajes
-   */
-  async loadTemplates() {
-    this.loading.templates = true;
-    try {
-      // Verificar que el usuario tenga rol de administrador
-      const userRole = this.authService.getUserRole();
-      if (userRole !== 'admin') {
-        console.warn('Usuario sin permisos de administrador:', userRole);
-        this.showError('Acceso denegado. Se requiere rol de administrador.');
-        return;
-      }
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.warn('No hay token de autenticación');
-        this.showError('No hay sesión activa. Por favor, inicie sesión nuevamente.');
-        return;
-      }
-
-      const templates = await this.whatsappService.getTemplates();
-      if (templates) {
-        this.templates = { ...this.templates, ...templates };
-      }
-    } catch (error: any) {
-      // Si hay error, usar plantillas por defecto
-      if (error?.status === 404) {
-        console.info('Usando plantillas por defecto');
-      } else if (error?.status === 403) {
-        console.warn('Acceso denegado al endpoint de plantillas');
-        this.showError('Acceso denegado. Verificar permisos de administrador.');
-      } else if (error?.status === 401) {
-        console.warn('Token de autenticación inválido');
-        this.showError('Sesión expirada. Por favor, inicie sesión nuevamente.');
-      } else {
-        console.error('Error al cargar plantillas:', error);
-        this.showError('Error al cargar plantillas de mensajes');
-      }
-    } finally {
-      this.loading.templates = false;
-    }
-  }
-
-  /**
-   * Guardar plantillas de mensajes
-   */
-  async saveTemplates() {
-    this.loading.templates = true;
-    try {
-      // Verificar que el usuario tenga rol de administrador
-      const userRole = this.authService.getUserRole();
-      if (userRole !== 'admin') {
-        console.warn('Usuario sin permisos de administrador:', userRole);
-        this.showError('Acceso denegado. Se requiere rol de administrador.');
-        return;
-      }
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.warn('No hay token de autenticación');
-        this.showError('No hay sesión activa. Por favor, inicie sesión nuevamente.');
-        return;
-      }
-
-      await this.whatsappService.saveTemplates(this.templates);
-      this.showSuccess('Plantillas guardadas correctamente');
-    } catch (error: any) {
-      if (error?.status === 403) {
-        console.warn('Acceso denegado al endpoint de plantillas');
-        this.showError('Acceso denegado. Verificar permisos de administrador.');
-      } else if (error?.status === 401) {
-        console.warn('Token de autenticación inválido');
-        this.showError('Sesión expirada. Por favor, inicie sesión nuevamente.');
-      } else {
-        console.error('Error guardando plantillas:', error);
-        this.showError('Error al guardar las plantillas');
-      }
-    } finally {
-      this.loading.templates = false;
-    }
-  }
-
-  /**
-   * Restaurar plantillas por defecto
-   */
-  resetTemplates() {
-    this.templates = {
-      new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-      ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n� Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-      status_change: '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
-
-      comment: '💬 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📝 Nuevo comentario en su ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n💭 *Comentario:* {comment}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._'
-    };
-    this.showSuccess('Plantillas restauradas a valores por defecto');
   }
 
   /**
@@ -856,10 +791,10 @@ export class WhatsAppAdminComponent implements OnInit {
     await Promise.all([
       this.loadConnectionStatus(),
       this.loadUserSettings(),
-      this.loadSystemSettings(), // Restaurar la carga de configuración del sistema
+      this.loadSystemSettings(), // Cargar configuración del sistema
       this.loadStats(),
       this.loadNotificationHistory(),
-      this.loadTemplates() // Cargar plantillas
+      this.loadAntiBlockStats() // Cargar estadísticas anti-bloqueo
     ]);
   }
 
@@ -1171,5 +1106,433 @@ export class WhatsAppAdminComponent implements OnInit {
     this.currentPage = event.pageIndex;
     this.pageSize = event.pageSize;
     this.loadNotificationHistory();
+  }
+
+  // ========== MÉTODOS ANTI-BLOQUEO ==========
+
+  /**
+   * Cargar estadísticas anti-bloqueo
+   */
+  async loadAntiBlockStats() {
+    this.loading.antiBlockStats = true;
+    try {
+      this.antiBlockStats = await this.whatsappService.getAntiBlockStats();
+
+      // Cargar también uso por horas
+      this.hourlyUsageData = await this.whatsappService.getHourlyUsage('7');
+
+      // Actualizar configuración actual
+      if (this.antiBlockStats?.limits) {
+        this.newLimits = { ...this.antiBlockStats.limits };
+      }
+    } catch (error) {
+      console.error('Error al cargar estadísticas anti-bloqueo:', error);
+      this.showError('Error al cargar estadísticas de seguridad');
+    } finally {
+      this.loading.antiBlockStats = false;
+    }
+  }
+
+  /**
+   * Obtener ícono de seguridad según el nivel
+   */
+  getSecurityIcon(level: string): string {
+    switch (level) {
+      case 'safe': return 'check_circle';
+      case 'caution': return 'warning';
+      case 'warning': return 'error_outline';
+      case 'danger': return 'dangerous';
+      default: return 'help';
+    }
+  }
+
+  /**
+   * Obtener color de progreso según porcentaje
+   */
+  getProgressColor(percentage: number): string {
+    if (percentage >= 90) return 'warn';
+    if (percentage >= 70) return 'accent';
+    return 'primary';
+  }
+
+  /**
+   * Cargar horario laboral desde el dashboard
+   */
+  async loadBusinessHours() {
+    try {
+      const businessHours = await this.whatsappService.getBusinessHours();
+      if (businessHours) {
+        // Transformar el formato del backend al formato esperado por el frontend
+        this.newLimits.businessHours = {
+          start: businessHours.work_hours_start,
+          end: businessHours.work_hours_end,
+          fridayEnd: businessHours.work_hours_friday_end,
+          lunchStart: businessHours.lunch_break_start,
+          lunchEnd: businessHours.lunch_break_end
+        };
+      }
+    } catch (error) {
+      console.error('Error cargando horario laboral:', error);
+      // Los valores por defecto ya están inicializados en newLimits
+    }
+  }
+
+  /**
+   * Obtener datos para gráfico de uso por horas (6 AM - 7 PM)
+   */
+  getHourlyChartData(): any[] {
+    if (!this.hourlyUsageData || this.hourlyUsageData.length === 0) return [];
+
+    // Definir rango de horas a mostrar (6 AM - 7 PM)
+    const START_HOUR = 6;  // 6 AM
+    const END_HOUR = 19;   // 7 PM
+
+    // Agrupar por hora solo en el rango de interés
+    const hourlyTotals: { [key: number]: number } = {};
+
+    for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
+      hourlyTotals[hour] = 0;
+    }
+
+    this.hourlyUsageData.forEach(item => {
+      const hour = parseInt(item.hour);
+      // Solo incluir horas en el rango de interés
+      if (hour >= START_HOUR && hour <= END_HOUR) {
+        hourlyTotals[hour] += parseInt(item.message_count);
+      }
+    });
+
+    // Encontrar el máximo para calcular porcentajes
+    const maxCount = Math.max(...Object.values(hourlyTotals));
+
+    // Generar datos solo para el rango horario de interés
+    return Object.keys(hourlyTotals).map(hour => ({
+      hour: parseInt(hour),
+      count: hourlyTotals[parseInt(hour)],
+      percentage: maxCount > 0 ? (hourlyTotals[parseInt(hour)] / maxCount) * 100 : 0
+    })).sort((a, b) => a.hour - b.hour);
+  }
+
+  /**
+   * Guardar configuración de límites
+   */
+  async saveLimitsConfig() {
+    this.loading.antiBlockStats = true;
+    try {
+      await this.whatsappService.configureLimits(this.newLimits);
+      this.showSuccess('Límites de seguridad actualizados exitosamente');
+      await this.loadAntiBlockStats(); // Recargar para ver cambios
+    } catch (error) {
+      console.error('Error al guardar límites:', error);
+      this.showError('Error al guardar configuración de límites');
+    } finally {
+      this.loading.antiBlockStats = false;
+    }
+  }
+
+  /**
+   * Restaurar límites por defecto
+   */
+  resetLimitsToDefault() {
+    this.newLimits = {
+      maxDailyMessages: 100,
+      maxMessagesPerHour: 20,
+      minDelayBetweenMessages: 3000,
+      maxDelayBetweenMessages: 8000,
+      maxBurstMessages: 3,
+      businessHours: {
+        enabled: true,
+        start: '08:00',
+        end: '18:00',
+        maxMessagesPerHour: 30
+      },
+      afterHours: {
+        maxMessagesPerHour: 5,
+        emergencyOnly: true
+      },
+      advanced: {
+        riskThreshold: 0.7,
+        adaptiveDelays: true,
+        burstProtection: true
+      }
+    };
+  }
+
+  /**
+   * Obtener uso en horario laboral
+   */
+  getBusinessHoursUsage(): number {
+    if (!this.antiBlockStats) return 0;
+    // Calcular mensajes enviados en horario laboral
+    return this.antiBlockStats.messagesSentToday || 0;
+  }
+
+  /**
+   * Obtener uso fuera de horario laboral
+   */
+  getAfterHoursUsage(): number {
+    if (!this.antiBlockStats) return 0;
+    // Calcular mensajes enviados fuera de horario laboral
+    return Math.floor((this.antiBlockStats.messagesSentToday || 0) * 0.1);
+  }
+
+  /**
+   * Obtener hora pico del día
+   */
+  getPeakHour(): string {
+    if (!this.hourlyUsageData || this.hourlyUsageData.length === 0) return 'N/A';
+
+    let maxUsage = 0;
+    let peakHour = 0;
+
+    this.hourlyUsageData.forEach((data, index) => {
+      if (data > maxUsage) {
+        maxUsage = data;
+        peakHour = index;
+      }
+    });
+
+    return `${peakHour.toString().padStart(2, '0')}:00`;
+  }
+
+  /**
+   * Obtener recomendaciones anti-bloqueo
+   */
+  getRecommendations(): string[] {
+    const recommendations: string[] = [];
+
+    if (!this.antiBlockStats) return recommendations;
+
+    const dailyUsage = this.antiBlockStats.usage?.dailyMessages || 0;
+    const hourlyUsage = this.antiBlockStats.usage?.hourlyMessages || 0;
+    const maxDaily = this.antiBlockStats.limits?.maxDailyMessages || 100;
+    const maxHourly = this.antiBlockStats.limits?.maxMessagesPerHour || 20;
+    const dailyPercentage = this.antiBlockStats.remaining?.dailyPercentageUsed || 0;
+    const hourlyPercentage = this.antiBlockStats.remaining?.hourlyPercentageUsed || 0;
+
+    // Recomendaciones basadas en uso
+    if (dailyPercentage > 90) {
+      recommendations.push('Alto uso diario (>90%). Considerar aumentar límites o reducir envíos.');
+    } else if (dailyPercentage > 70) {
+      recommendations.push('Uso diario moderado-alto. Monitorear de cerca.');
+    }
+
+    if (hourlyPercentage > 90) {
+      recommendations.push('Alto uso por hora. Considerar espaciar más los envíos.');
+    }
+
+    // Recomendaciones basadas en horarios
+    if (!this.isBusinessHours()) {
+      recommendations.push('Fuera del horario laboral. Los envíos están restringidos.');
+    }
+
+    // Recomendaciones de seguridad
+    if (this.antiBlockStats.safetyStatus?.level === 'warning') {
+      recommendations.push('Estado de advertencia. Revisar configuración de límites.');
+    } else if (this.antiBlockStats.safetyStatus?.level === 'danger') {
+      recommendations.push('Estado crítico. Pausar envíos y revisar configuración.');
+    }
+
+    // Recomendaciones positivas
+    if (recommendations.length === 0) {
+      if (dailyPercentage < 50 && hourlyPercentage < 50) {
+        recommendations.push('Uso óptimo. Sistema funcionando dentro de parámetros seguros.');
+      } else {
+        recommendations.push('Sistema operando normalmente. Continuar monitoreo.');
+      }
+    }
+
+    return recommendations;
+  }
+
+  /**
+   * Obtener tiempo del próximo envío permitido con mejor formato
+   */
+  getNextSendTime(): string {
+    if (!this.antiBlockStats?.nextAllowedSend) {
+      return this.isBusinessHours() ? 'Disponible' : 'Fuera de horario';
+    }
+
+    const nextSend = new Date(this.antiBlockStats.nextAllowedSend);
+    const now = new Date();
+
+    if (nextSend <= now) {
+      return this.isBusinessHours() ? 'Disponible' : 'Fuera de horario';
+    }
+
+    const diffMs = nextSend.getTime() - now.getTime();
+    const diffSeconds = Math.ceil(diffMs / 1000);
+
+    if (diffSeconds < 60) return `${diffSeconds}s`;
+
+    const diffMinutes = Math.ceil(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes}m`;
+
+    const diffHours = Math.ceil(diffMinutes / 60);
+    return `${diffHours}h`;
+  }
+
+  /**
+   * Obtener estado del próximo envío con más detalle
+   */
+  getNextSendStatus(): string {
+    if (!this.isBusinessHours()) {
+      const businessHours = this.newLimits.businessHours;
+      if (businessHours) {
+        return `Fuera de horario laboral (${businessHours.start} - ${businessHours.end})`;
+      }
+      return 'Fuera del horario laboral';
+    }
+
+    if (!this.antiBlockStats?.nextAllowedSend) return 'Listo para enviar';
+
+    const nextSend = new Date(this.antiBlockStats.nextAllowedSend);
+    const now = new Date();
+
+    return nextSend <= now ? 'Listo para enviar' : 'Esperando por límites de rate limiting';
+  }
+
+  /**
+   * Actualizar configuración de horario laboral
+   */
+  async updateBusinessHours() {
+    try {
+      this.loading.antiBlockStats = true;
+
+      const businessHoursConfig = {
+        business_hours_enabled: this.newLimits.businessHours.enabled,
+        business_start_time: this.newLimits.businessHours.start,
+        business_end_time: this.newLimits.businessHours.end,
+        business_max_messages_per_hour: this.newLimits.businessHours.maxMessagesPerHour,
+        after_hours_max_messages: this.newLimits.afterHours.maxMessagesPerHour,
+        emergency_only_after_hours: this.newLimits.afterHours.emergencyOnly
+      };
+
+      await this.whatsappService.saveSystemSettings(businessHoursConfig);
+      this.showSuccess('Configuración de horario laboral actualizada');
+      await this.loadAntiBlockStats();
+    } catch (error) {
+      console.error('Error al actualizar horario laboral:', error);
+      this.showError('Error al actualizar configuración de horario laboral');
+    } finally {
+      this.loading.antiBlockStats = false;
+    }
+  }
+
+  /**
+   * Verificar si estamos en horario laboral
+   */
+  isBusinessHours(): boolean {
+    try {
+      // Verificar que los datos de horario laboral estén disponibles
+      if (!this.newLimits.businessHours || !this.newLimits.businessHours.start || !this.newLimits.businessHours.end) {
+        return false; // Por seguridad, asumir que no es horario laboral si no hay datos
+      }
+
+      const now = new Date();
+      const currentDay = now.getDay(); // 0 = domingo, 1 = lunes, ..., 6 = sábado
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      // No es día laboral (sábado = 6, domingo = 0)
+      if (currentDay === 0 || currentDay === 6) {
+        return false;
+      }
+
+      const start = this.newLimits.businessHours.start.split(':');
+      let end;
+
+      // Viernes tiene horario diferente
+      if (currentDay === 5 && this.newLimits.businessHours.fridayEnd) {
+        end = this.newLimits.businessHours.fridayEnd.split(':');
+      } else {
+        end = this.newLimits.businessHours.end.split(':');
+      }
+
+      const startTime = parseInt(start[0]) * 60 + parseInt(start[1]);
+      const endTime = parseInt(end[0]) * 60 + parseInt(end[1]);
+      const currentTime = currentHour * 60 + currentMinute;
+
+      // Verificar si está en horario de almuerzo
+      let inLunchBreak = false;
+      if (this.newLimits.businessHours.lunchStart && this.newLimits.businessHours.lunchEnd) {
+        const lunchStart = this.newLimits.businessHours.lunchStart.split(':');
+        const lunchEnd = this.newLimits.businessHours.lunchEnd.split(':');
+        const lunchStartTime = parseInt(lunchStart[0]) * 60 + parseInt(lunchStart[1]);
+        const lunchEndTime = parseInt(lunchEnd[0]) * 60 + parseInt(lunchEnd[1]);
+        inLunchBreak = currentTime >= lunchStartTime && currentTime <= lunchEndTime;
+      }
+
+      // Está en horario laboral pero no en almuerzo
+      const inWorkHours = currentTime >= startTime && currentTime <= endTime;
+      return inWorkHours && !inLunchBreak;
+
+    } catch (error) {
+      console.error('Error verificando horario laboral en frontend:', error);
+      return false; // Por seguridad, asumir que no es horario laboral si hay error
+    }
+  }
+
+  /**
+   * Test de límites actuales
+   */
+  testCurrentLimits() {
+    this.showSuccess('Prueba de límites iniciada. Revise la consola para ver los resultados.');
+  }
+
+  /**
+   * Obtener porcentaje de uso en horario laboral
+   */
+  getBusinessHoursPercentage(): number {
+    if (!this.antiBlockStats) return 0;
+    const businessUsage = this.getBusinessHoursUsage();
+    const maxMessages = this.newLimits.businessHours?.maxMessagesPerHour || 30;
+    return Math.round((businessUsage / maxMessages) * 100);
+  }
+
+  /**
+   * Obtener porcentaje de uso fuera de horario laboral
+   */
+  getAfterHoursPercentage(): number {
+    if (!this.antiBlockStats) return 0;
+    const afterHoursUsage = this.getAfterHoursUsage();
+    const maxMessages = this.newLimits.afterHours?.maxMessagesPerHour || 5;
+    return Math.round((afterHoursUsage / maxMessages) * 100);
+  }
+
+  /**
+   * Obtener conteo de mensajes en hora pico
+   */
+  getPeakHourCount(): number {
+    if (!this.hourlyUsageData || this.hourlyUsageData.length === 0) return 0;
+
+    let maxCount = 0;
+    this.hourlyUsageData.forEach(data => {
+      if (data > maxCount) {
+        maxCount = data;
+      }
+    });
+
+    return maxCount;
+  }
+
+  /**
+   * Verificar si una hora específica es horario laboral
+   */
+  isBusinessHour(hour: number): boolean {
+    const start = this.newLimits.businessHours?.start || '08:00';
+    const end = this.newLimits.businessHours?.end || '18:00';
+
+    const startHour = parseInt(start.split(':')[0]);
+    const endHour = parseInt(end.split(':')[0]);
+
+    return hour >= startHour && hour <= endHour;
+  }
+
+  /**
+   * Obtener recomendaciones de patrones (alias para getRecommendations)
+   */
+  getPatternRecommendations(): string[] {
+    return this.getRecommendations();
   }
 }

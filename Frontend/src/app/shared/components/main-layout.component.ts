@@ -33,7 +33,9 @@ import { FooterComponent } from '../../footer/footer.component';
     <div class="layout-container">
       <app-sidebar (sidebarToggled)="onSidebarToggle($event)"></app-sidebar>
       <div class="main-content" [ngClass]="{'sidebar-collapsed': isSidebarCollapsed}">
-        <router-outlet></router-outlet>
+        <div class="content-wrapper">
+          <router-outlet></router-outlet>
+        </div>
         <app-footer></app-footer>
       </div>
     </div>
@@ -42,18 +44,26 @@ import { FooterComponent } from '../../footer/footer.component';
     .layout-container {
       display: flex;
       margin-top: 80px; /* Espacio para el banner fijo */
-      height: calc(100vh - 80px);
+      min-height: calc(100vh - 80px); /* Cambiar height por min-height */
       width: 100%;
       position: relative;
-      overflow: hidden;
+      /* Remover overflow: hidden que causa el corte */
     }    .main-content {
       flex: 1;
-      padding: 24px 24px 24px 274px; /* Añadimos padding-left para compensar el sidebar fijo */
-      overflow-y: auto;
-      min-height: calc(100vh - 80px);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 24px 0 274px; /* Removemos padding-bottom para el footer */
+      min-height: calc(100vh - 80px); /* Cambiar a min-height */
       background-color: #f8f9fa;
       transition: padding 0.3s ease;
       width: 100%;
+    }
+
+    .content-wrapper {
+      flex: 1; /* Esto hace que el contenido principal ocupe el espacio disponible */
+      padding-bottom: 24px; /* Espacio interno para el contenido */
+      /* Removemos overflow-y: auto para evitar doble scroll */
+      /* El scroll lo manejará el body naturalmente */
     }
     .main-content.sidebar-collapsed {
       padding-left: 88px;
@@ -62,25 +72,34 @@ import { FooterComponent } from '../../footer/footer.component';
     /* Media queries para diseño responsive */
     @media (max-width: 992px) {
       .main-content {
-        padding: 20px;
+        padding: 20px 20px 0 20px;
+      }
+      .content-wrapper {
+        padding-bottom: 20px;
       }
     }
     @media (max-width: 768px) {
       .main-content {
-        padding: 24px;
+        padding: 24px 24px 0 24px;
       }
       .main-content.sidebar-collapsed {
         padding-left: 24px;
+      }
+      .content-wrapper {
+        padding-bottom: 24px;
       }
     }
     @media (max-width: 480px) {
       .layout-container {
         margin-top: 60px;
-        height: calc(100vh - 60px);
+        min-height: calc(100vh - 60px);
       }
       .main-content {
-        padding: 12px;
+        padding: 12px 12px 0 12px;
         min-height: calc(100vh - 60px);
+      }
+      .content-wrapper {
+        padding-bottom: 12px;
       }
     }
   `]

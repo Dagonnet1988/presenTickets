@@ -20,6 +20,7 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { createNotification } from "./notifications.js";
+import { logTicketChange, CHANGE_TYPES } from "../services/ticketHistoryService.js";
 
 const router = express.Router();
 const uploadDir = path.join(path.resolve(), "uploads");
@@ -297,6 +298,21 @@ router.post("/", (req, res) => {
         // No fallamos la operación principal si las notificaciones fallan
       }
 
+      // === NUEVO: Registrar creación del ticket en el historial ===
+      try {
+        await logTicketChange(
+          ticketId,
+          parseInt(ticketData.userId),
+          CHANGE_TYPES.TICKET_CREATED,
+          null,
+          ticketData.status,
+          `Ticket creado con estado "${ticketData.status}"`
+        );
+      } catch (historyError) {
+        console.error("Error registrando historial de creación:", historyError);
+        // No fallar la creación por error en historial
+      }
+
       res.status(201).json({ ticketId, ...ticketData });
     } catch (err) {
       console.error("Error al guardar el ticket en la base de datos:", err);
@@ -322,15 +338,23 @@ router.patch("/:id", async (req, res) => {
   const values = [];
   let index = 1;
   let prevStatus = null;
+  let prevAssignedTo = null;
+  let prevPriority = null;
 
-  // Si hay cambio de estado, obtener el estado anterior PRIMERO
-  if (status) {
-    const prevStatusResult = await pool.query(
-      "SELECT status FROM tickets WHERE id = $1",
-      [id]
-    );
-    prevStatus = prevStatusResult.rows[0]?.status;
+  // Obtener valores actuales del ticket ANTES de hacer cambios
+  const currentTicketResult = await pool.query(
+    "SELECT status, assigned_to, priority FROM tickets WHERE id = $1",
+    [id]
+  );
+  
+  if (currentTicketResult.rows.length === 0) {
+    return res.status(404).json({ message: "Ticket no encontrado" });
   }
+  
+  const currentTicket = currentTicketResult.rows[0];
+  prevStatus = currentTicket.status;
+  prevAssignedTo = currentTicket.assigned_to;
+  prevPriority = currentTicket.priority;
 
   if (priority) {
     updates.push(`priority = $${index}`);
@@ -352,17 +376,13 @@ router.patch("/:id", async (req, res) => {
     // Si se está asignando un técnico y no se especificó un estado, 
     // cambiar automáticamente a "En revisión"
     if (!status) {
-      // Verificar que el ticket no esté ya cerrado
-      const currentStatusResult = await pool.query(
-        "SELECT status FROM tickets WHERE id = $1",
-        [id]
-      );
-      const currentStatus = currentStatusResult.rows[0]?.status;
-      
-      if (currentStatus && currentStatus !== 'Cerrado' && currentStatus !== 'Resuelto') {
+      // Usar el estado actual que ya obtuvimos
+      if (prevStatus && prevStatus !== 'Cerrado' && prevStatus !== 'Resuelto') {
         updates.push(`status = $${index}`);
         values.push('En revisión');
         index++;
+        // Actualizar prevStatus para el registro de historial
+        status = 'En revisión';
       }
     }
   }
@@ -712,6 +732,78 @@ router.patch("/:id", async (req, res) => {
       } catch (notifyErr) {
         console.error("Error al enviar notificación de asignación:", notifyErr);
       }
+    }
+
+    // === NUEVO: Registrar cambios en el historial ===
+    try {
+      const userId = req.user?.userId; // Obtener ID del usuario que hace el cambio
+      
+      // Registrar cambio de estado
+      if (status && prevStatus && status !== prevStatus) {
+        // Determinar si es un cambio automático por asignación
+        const isAutomaticChange = assigned_to && !req.body.status && status === 'En revisión';
+        const description = isAutomaticChange 
+          ? `Estado cambiado automáticamente de "${prevStatus}" a "${status}" por asignación de ticket`
+          : `Estado cambiado de "${prevStatus}" a "${status}"`;
+          
+        await logTicketChange(
+          parseInt(id),
+          userId,
+          CHANGE_TYPES.STATUS_CHANGE,
+          prevStatus,
+          status,
+          description
+        );
+      }
+      
+      // Registrar cambio de asignación
+      if (assigned_to && parseInt(assigned_to) !== prevAssignedTo) {
+        // Obtener datos del usuario asignado para descripción legible
+        const assignedUserQuery = "SELECT firstname, lastname FROM users WHERE id = $1";
+        const assignedUserResult = await client.query(assignedUserQuery, [assigned_to]);
+        const assignedUserName = assignedUserResult.rows[0] 
+          ? `${assignedUserResult.rows[0].firstname} ${assignedUserResult.rows[0].lastname}`
+          : `Usuario ID ${assigned_to}`;
+        
+        // Obtener nombre del usuario anterior si existía
+        let prevAssignedUserName = 'Sin asignar';
+        if (prevAssignedTo) {
+          const prevAssignedUserResult = await client.query(assignedUserQuery, [prevAssignedTo]);
+          prevAssignedUserName = prevAssignedUserResult.rows[0] 
+            ? `${prevAssignedUserResult.rows[0].firstname} ${prevAssignedUserResult.rows[0].lastname}`
+            : `Usuario ID ${prevAssignedTo}`;
+        }
+        
+        const isFirstAssignment = !prevAssignedTo;
+        const description = isFirstAssignment 
+          ? `Ticket asignado inicialmente a ${assignedUserName}`
+          : `Ticket reasignado de ${prevAssignedUserName} a ${assignedUserName}`;
+          
+        await logTicketChange(
+          parseInt(id),
+          userId,
+          CHANGE_TYPES.ASSIGNMENT,
+          prevAssignedTo ? prevAssignedTo.toString() : null,
+          assigned_to.toString(),
+          description
+        );
+      }
+      
+      // Registrar cambio de prioridad
+      if (priority && priority !== prevPriority) {
+        await logTicketChange(
+          parseInt(id),
+          userId,
+          CHANGE_TYPES.PRIORITY_CHANGE,
+          prevPriority,
+          priority,
+          `Prioridad cambiada de "${prevPriority || 'Sin definir'}" a "${priority}"`
+        );
+      }
+      
+    } catch (historyError) {
+      console.error("Error registrando historial del ticket:", historyError);
+      // No fallar la actualización por error en historial
     }
 
     res.status(200).json({ message: "Ticket actualizado correctamente" });

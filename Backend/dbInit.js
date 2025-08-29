@@ -159,6 +159,22 @@ const checkAndCreateTables = async () => {
       } else {
         console.log("✅ La columna 'participants' ya existe en la tabla 'tickets'.");
       }
+
+      // Verificar y agregar columna updated_at si no existe
+      const updatedAtColumn = await client.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'tickets' AND column_name = 'updated_at'`
+      );
+      if (updatedAtColumn.rows.length === 0) {
+        console.log("➕ Agregando columna 'updated_at' a la tabla 'tickets'");
+        await client.query(`ALTER TABLE tickets ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+        
+        // Actualizar registros existentes para que tengan updated_at = created_at
+        await client.query(`UPDATE tickets SET updated_at = created_at WHERE updated_at IS NULL`);
+        console.log("✅ Columna 'updated_at' agregada y datos existentes actualizados.");
+      } else {
+        console.log("✅ La columna 'updated_at' ya existe en la tabla 'tickets'.");
+      }
     }
 
     // Validar y crear la tabla "comments"
@@ -402,12 +418,8 @@ const checkAndCreateTables = async () => {
         { name: 'sound_enabled', type: 'BOOLEAN DEFAULT true', description: 'Sonido habilitado' },
         { name: 'daily_limit', type: 'VARCHAR(20) DEFAULT \'unlimited\'', description: 'Límite diario' },
         { name: 'do_not_disturb', type: 'BOOLEAN DEFAULT false', description: 'Modo no molestar' },
-        { name: 'do_not_disturb_until', type: 'TIMESTAMP NULL', description: 'No molestar hasta' },
-        // Plantillas de mensajes WhatsApp
-        { name: 'whatsapp_template_new_ticket', type: 'TEXT', description: 'Plantilla para nuevos tickets' },
-        { name: 'whatsapp_template_ticket_assigned', type: 'TEXT', description: 'Plantilla para asignación de tickets' },
-        { name: 'whatsapp_template_status_change', type: 'TEXT', description: 'Plantilla para cambio de estado' },
-        { name: 'whatsapp_template_comment', type: 'TEXT', description: 'Plantilla para comentarios' }
+        { name: 'do_not_disturb_until', type: 'TIMESTAMP NULL', description: 'No molestar hasta' }
+        // Las plantillas de WhatsApp ahora son aleatorias en el backend para evitar bloqueos
       ];
 
       for (const column of newColumns) {
@@ -479,6 +491,41 @@ const checkAndCreateTables = async () => {
       console.log("✅ Tabla 'dashboard_config' creada con configuraciones por defecto.");
     } else {
       console.log("✅ La tabla 'dashboard_config' ya existe.");
+    }
+
+    // Crear tabla ticket_history para seguimiento de cambios
+    const ticketHistoryExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'ticket_history'
+      );
+    `);
+
+    if (!ticketHistoryExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'ticket_history'...");
+      await client.query(`
+        CREATE TABLE ticket_history (
+          id SERIAL PRIMARY KEY,
+          ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          change_type VARCHAR(50) NOT NULL, -- 'status_change', 'assignment', 'priority_change', 'first_response', etc.
+          old_value TEXT,
+          new_value TEXT,
+          description TEXT, -- Descripción legible del cambio
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Crear índices para mejores consultas
+      await client.query(`
+        CREATE INDEX idx_ticket_history_ticket_id ON ticket_history(ticket_id);
+        CREATE INDEX idx_ticket_history_change_type ON ticket_history(change_type);
+        CREATE INDEX idx_ticket_history_created_at ON ticket_history(created_at);
+      `);
+      
+      console.log("✅ Tabla 'ticket_history' creada con índices.");
+    } else {
+      console.log("✅ La tabla 'ticket_history' ya existe.");
     }
 
     // Eliminar tabla ticket_participants si existe (ya no se usa)

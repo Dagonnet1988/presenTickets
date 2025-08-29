@@ -605,54 +605,111 @@ async function calculateEnhancedMetrics(pool, dateRange = null, config = null, u
       const now = new Date();
       const closedAt = ticket.closed_at ? new Date(ticket.closed_at) : null;
       
-      // Calcular tiempo real de trabajo (solo estados activos)
+      // Calcular tiempo real de trabajo usando historial si está disponible
       let realWorkTime = 0;
       let responseTime = null;
       let firstTechResponse = null;
       
-      // Obtener historial de comentarios y cambios
-      const historyQuery = `
-        SELECT 
-          c.created_at,
-          c.comment,
-          u.role,
-          u.firstname,
-          u.lastname
-        FROM comments c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.ticket_id = $1
-        ORDER BY c.created_at ASC
-      `;
-      
-      const historyResult = await client.query(historyQuery, [ticket.id]);
-      const history = historyResult.rows;
-      
-      // Detectar primera respuesta técnica
-      for (const entry of history) {
-        if (entry.role === 'tech' && !firstTechResponse) {
-          firstTechResponse = new Date(entry.created_at);
-          responseTime = Math.floor((firstTechResponse - createdAt) / (1000 * 60));
-          break;
+      // MEJORADO: Intentar usar datos del historial del ticket
+      try {
+        const { calculateTimingsFromHistory } = await import('./ticketHistoryService.js');
+        const historyTimings = await calculateTimingsFromHistory(ticket.id);
+        
+        if (historyTimings) {
+          responseTime = historyTimings.firstResponseTime; // Ya calculado con tiempo laboral
+          realWorkTime = historyTimings.activeWorkTime;   // Ya calculado con tiempo laboral
+          
+          // Si no hay tiempo de respuesta del historial, intentar calcular manualmente
+          if (!responseTime) {
+            // Fallback al método anterior
+            const historyQuery = `
+              SELECT 
+                c.created_at,
+                c.comment,
+                u.role,
+                u.firstname,
+                u.lastname
+              FROM comments c
+              JOIN users u ON c.user_id = u.id
+              WHERE c.ticket_id = $1
+              ORDER BY c.created_at ASC
+            `;
+            
+            const historyResult = await client.query(historyQuery, [ticket.id]);
+            const history = historyResult.rows;
+            
+            // Detectar primera respuesta técnica
+            for (const entry of history) {
+              if (entry.role === 'tech' && !firstTechResponse) {
+                firstTechResponse = new Date(entry.created_at);
+                responseTime = calculateWorkingTime(createdAt, firstTechResponse);
+                break;
+              }
+            }
+            
+            // Si hay asignación pero no comentarios de tech, usar fecha de asignación
+            if (!firstTechResponse && ticket.assigned_to && ticket.assigned_at) {
+              firstTechResponse = new Date(ticket.assigned_at);
+              responseTime = calculateWorkingTime(createdAt, firstTechResponse);
+            }
+          }
+          
+          // Si no hay tiempo de trabajo del historial, calcular manualmente
+          if (!realWorkTime) {
+            if (activeStates.includes(ticket.status)) {
+              const workEnd = closedAt || now;
+              realWorkTime = calculateWorkingTime(createdAt, workEnd);
+            }
+          }
+        }
+      } catch (historyError) {
+        console.warn('Error calculando desde historial, usando método tradicional:', historyError);
+        
+        // Fallback completo al método anterior
+        const historyQuery = `
+          SELECT 
+            c.created_at,
+            c.comment,
+            u.role,
+            u.firstname,
+            u.lastname
+          FROM comments c
+          JOIN users u ON c.user_id = u.id
+          WHERE c.ticket_id = $1
+          ORDER BY c.created_at ASC
+        `;
+        
+        const historyResult = await client.query(historyQuery, [ticket.id]);
+        const history = historyResult.rows;
+        
+        // Detectar primera respuesta técnica
+        for (const entry of history) {
+          if (entry.role === 'tech' && !firstTechResponse) {
+            firstTechResponse = new Date(entry.created_at);
+            responseTime = calculateWorkingTime(createdAt, firstTechResponse);
+            break;
+          }
+        }
+        
+        // Si hay asignación pero no comentarios de tech, usar fecha de asignación
+        if (!firstTechResponse && ticket.assigned_to && ticket.assigned_at) {
+          firstTechResponse = new Date(ticket.assigned_at);
+          responseTime = calculateWorkingTime(createdAt, firstTechResponse);
+        }
+        
+        // Simular cálculo de tiempo real (solo estados activos)
+        if (activeStates.includes(ticket.status)) {
+          const workEnd = closedAt || now;
+          realWorkTime = calculateWorkingTime(createdAt, workEnd);
         }
       }
       
-      // Si hay asignación pero no comentarios de tech, usar fecha de asignación
-      if (!firstTechResponse && ticket.assigned_to && ticket.assigned_at) {
-        firstTechResponse = new Date(ticket.assigned_at);
-        responseTime = Math.floor((firstTechResponse - createdAt) / (1000 * 60));
-      }
-      
-      // Simular cálculo de tiempo real (solo estados activos)
-      // En una implementación completa, esto requeriría un log de cambios de estado
+      // Clasificar ticket por estado después de calcular métricas
       if (activeStates.includes(ticket.status)) {
-        const workEnd = closedAt || now;
-        realWorkTime = calculateWorkingTime(createdAt, workEnd);
         metrics.inProgressTickets++;
       } else if (pausedStates.includes(ticket.status)) {
         metrics.pausedTickets++;
       } else if (ticket.status === 'Cerrado' || ticket.status === 'Resuelto') {
-        const workEnd = closedAt || now;
-        realWorkTime = calculateWorkingTime(createdAt, workEnd);
         metrics.closedTickets++;
       } else {
         metrics.openTickets++;
@@ -677,12 +734,27 @@ async function calculateEnhancedMetrics(pool, dateRange = null, config = null, u
         }
       }
       
-      // Detectar tickets vencidos
+      // Detectar tickets vencidos - LÓGICA CORREGIDA
+      let isTicketOverdue = false;
       if (!closedAt) {
-        const timeSinceCreation = Math.floor((now - createdAt) / (1000 * 60));
-        if (timeSinceCreation > targetResponseTime && !responseTime) {
-          metrics.ticketsOverdue++;
+        // Solo considerar vencido si está en estado activo (no pausado)
+        if (activeStates.includes(ticket.status)) {
+          // Si no hay respuesta, comparar tiempo real vs tiempo objetivo de respuesta
+          if (!responseTime) {
+            const workTimeSinceCreation = calculateWorkingTime(createdAt, now);
+            if (workTimeSinceCreation > targetResponseTime) {
+              isTicketOverdue = true;
+              metrics.ticketsOverdue++;
+            }
+          } else {
+            // Si ya hay respuesta, comparar tiempo total de trabajo vs tiempo objetivo de resolución
+            if (realWorkTime > targetResolutionTime) {
+              isTicketOverdue = true;
+              metrics.ticketsOverdue++;
+            }
+          }
         }
+        // Los tickets pausados NO se consideran vencidos
       }
       
       metrics.detailed.push({
@@ -694,7 +766,7 @@ async function calculateEnhancedMetrics(pool, dateRange = null, config = null, u
         responseTime,
         createdAt: ticket.created_at,
         closedAt: ticket.closed_at,
-        isOverdue: !closedAt && Math.floor((now - createdAt) / (1000 * 60)) > targetResponseTime
+        isOverdue: isTicketOverdue
       });
     }
     

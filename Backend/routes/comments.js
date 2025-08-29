@@ -20,6 +20,7 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { createNotification } from './notifications.js';
+import { logTicketChange, CHANGE_TYPES } from '../services/ticketHistoryService.js';
 
 const router = express.Router();
 const uploadDir = path.join(path.resolve(), 'uploads');
@@ -219,6 +220,59 @@ router.post('/:ticketId', async (req, res) => {
           });
         }
       }
+
+      // === NUEVO: Registrar comentario y cambios en el historial ===
+      try {
+        // Verificar si es la primera respuesta de un técnico
+        if (userRole === 'tech') {
+          const previousTechComments = await client.query(
+            `SELECT COUNT(*) as count FROM comments c 
+             JOIN users u ON c.user_id = u.id 
+             WHERE c.ticket_id = $1 AND u.role = 'tech' AND c.id < $2`,
+            [ticketId, commentId]
+          );
+          
+          const isFirstTechResponse = parseInt(previousTechComments.rows[0].count) === 0;
+          
+          if (isFirstTechResponse) {
+            await logTicketChange(
+              parseInt(ticketId),
+              userId,
+              CHANGE_TYPES.FIRST_RESPONSE,
+              null,
+              'first_response',
+              `Primera respuesta del técnico: ${username}`
+            );
+          }
+        }
+        
+        // Registrar el comentario
+        await logTicketChange(
+          parseInt(ticketId),
+          userId,
+          CHANGE_TYPES.COMMENT_ADDED,
+          null,
+          'comment',
+          `Comentario agregado por ${username} (${userRole})`
+        );
+        
+        // Registrar cambio de estado si ocurrió
+        if (shouldUpdateStatus && newStatus) {
+          await logTicketChange(
+            parseInt(ticketId),
+            userId,
+            CHANGE_TYPES.STATUS_CHANGE,
+            currentStatus,
+            newStatus,
+            `Estado cambiado automáticamente de "${currentStatus}" a "${newStatus}" por comentario`
+          );
+        }
+        
+      } catch (historyError) {
+        console.error("Error registrando historial del comentario:", historyError);
+        // No fallar la operación por error en historial
+      }
+
       res.status(201).json(result.rows[0]);    } catch (err) {
       // Limpiar archivos subidos en caso de error de base de datos
       for (const attachment of attachments) {

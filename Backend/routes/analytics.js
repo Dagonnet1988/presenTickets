@@ -16,6 +16,7 @@
 import express from "express";
 import { pool } from "../server.js";
 import { calculateDashboardMetrics, calculateTicketTimings, calculateEnhancedMetrics } from "../services/timeCalculations.js";
+import { calculateTimingsFromHistory, getTicketHistory } from "../services/ticketHistoryService.js";
 
 const router = express.Router();
 
@@ -106,31 +107,34 @@ router.get('/tickets-by-status', requireTechOrAdmin, async (req, res) => {
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
-    // Primero obtener el total de tickets para calcular porcentajes
-    const totalQuery = `
-      SELECT COUNT(*) as total_count
+    // CORREGIDO: Calcular porcentajes solo sobre tickets ABIERTOS (no cerrados/resueltos)
+    const openTicketsQuery = `
+      SELECT COUNT(*) as open_count
       FROM tickets 
       ${whereClause}
+      ${whereConditions.length > 0 ? 'AND' : 'WHERE'} status NOT IN ('Cerrado', 'Resuelto')
     `;
     
-    const totalResult = await pool.query(totalQuery, params);
-    const totalTickets = parseInt(totalResult.rows[0].total_count);
+    const openTicketsResult = await pool.query(openTicketsQuery, params);
+    const totalOpenTickets = parseInt(openTicketsResult.rows[0].open_count);
     
     const query = `
       SELECT 
         status,
         COUNT(*) as count,
         CASE 
-          WHEN ${totalTickets} > 0 THEN ROUND((COUNT(*) * 100.0) / ${totalTickets}, 1)
+          WHEN ${totalOpenTickets} > 0 THEN ROUND((COUNT(*) * 100.0) / ${totalOpenTickets}, 1)
           ELSE 0
         END as percentage
       FROM tickets 
       ${whereClause}
+      ${whereConditions.length > 0 ? 'AND' : 'WHERE'} status NOT IN ('Cerrado', 'Resuelto')
       GROUP BY status
       ORDER BY count DESC
     `;
     
     const result = await pool.query(query, params);
+    
     res.json(result.rows);
     
   } catch (error) {
@@ -614,6 +618,42 @@ router.get('/cost-analysis', requireTechOrAdmin, async (req, res) => {
     
   } catch (error) {
     console.error('Error en análisis de costos:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Obtener métricas mejoradas de tiempo usando historial
+router.get('/enhanced-timings/:ticketId', requireTechOrAdmin, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    
+    if (isNaN(parseInt(ticketId, 10))) {
+      return res.status(400).json({ message: "ID de ticket no válido" });
+    }
+    
+    const timings = await calculateTimingsFromHistory(parseInt(ticketId));
+    res.json(timings);
+    
+  } catch (error) {
+    console.error('Error calculando métricas mejoradas:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+// Obtener historial completo de un ticket
+router.get('/ticket-history/:ticketId', requireTechOrAdmin, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    
+    if (isNaN(parseInt(ticketId, 10))) {
+      return res.status(400).json({ message: "ID de ticket no válido" });
+    }
+    
+    const history = await getTicketHistory(parseInt(ticketId));
+    res.json(history);
+    
+  } catch (error) {
+    console.error('Error obteniendo historial del ticket:', error);
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });

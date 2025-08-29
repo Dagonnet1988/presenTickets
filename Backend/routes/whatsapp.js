@@ -558,7 +558,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
 /**
  * Obtener plantillas de mensajes WhatsApp
  */
-router.get('/templates', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/global-config', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const client = await pool.connect();
     
@@ -577,7 +577,7 @@ router.get('/templates', authMiddleware, adminMiddleware, async (req, res) => {
 
     client.release();
 
-    // Si no hay plantillas o el admin no tiene configuración, devolver plantillas por defecto
+    // Obtener configuración global de WhatsApp
     if (result.rows.length === 0 || !result.rows[0].whatsapp_template_new_ticket) {
       const defaultTemplates = {
         new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
@@ -834,6 +834,107 @@ router.get('/performance-report', authMiddleware, adminMiddleware, async (req, r
     }
   } catch (error) {
     console.error('❌ Error generando reporte de rendimiento:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener estadísticas anti-bloqueo y rate limiting
+ */
+router.get('/anti-block-stats', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const stats = whatsappService.getAntiBlockStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('❌ Error obteniendo estadísticas anti-bloqueo:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener estadísticas horarias de los últimos días
+ */
+router.get('/hourly-usage', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { days = '7' } = req.query;
+    const client = await pool.connect();
+    
+    const result = await client.query(`
+      SELECT 
+        DATE(created_at) as date,
+        EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as message_count,
+        COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_count
+      FROM whatsapp_notifications 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+      GROUP BY DATE(created_at), EXTRACT(HOUR FROM created_at)
+      ORDER BY date DESC, hour DESC
+    `);
+    
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Error obteniendo estadísticas horarias:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Configurar límites de rate limiting (solo admin)
+ */
+router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { 
+      maxDailyMessages, 
+      maxMessagesPerHour, 
+      minDelayBetweenMessages, 
+      maxDelayBetweenMessages,
+      maxBurstMessages 
+    } = req.body;
+    
+    // Validar límites
+    if (maxDailyMessages && (maxDailyMessages < 1 || maxDailyMessages > 1000)) {
+      return res.status(400).json({ error: 'Límite diario debe estar entre 1 y 1000' });
+    }
+    
+    if (maxMessagesPerHour && (maxMessagesPerHour < 1 || maxMessagesPerHour > 100)) {
+      return res.status(400).json({ error: 'Límite por hora debe estar entre 1 y 100' });
+    }
+    
+    // Actualizar configuración
+    const rateLimits = whatsappService.rateLimits;
+    if (maxDailyMessages) rateLimits.maxDailyMessages = maxDailyMessages;
+    if (maxMessagesPerHour) rateLimits.maxMessagesPerHour = maxMessagesPerHour;
+    if (minDelayBetweenMessages) rateLimits.minDelayBetweenMessages = minDelayBetweenMessages;
+    if (maxDelayBetweenMessages) rateLimits.maxDelayBetweenMessages = maxDelayBetweenMessages;
+    if (maxBurstMessages) rateLimits.maxBurstMessages = maxBurstMessages;
+    
+    res.json({ 
+      message: 'Límites actualizados exitosamente',
+      newLimits: rateLimits
+    });
+  } catch (error) {
+    console.error('❌ Error configurando límites:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener horarios laborales
+ */
+router.get('/business-hours', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const businessHours = await whatsappService.getBusinessHours();
+    const isCurrentlyBusinessHours = await whatsappService.isBusinessHours();
+    
+    res.json({
+      schedule: businessHours,
+      isCurrentlyBusinessHours,
+      lastChecked: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo horarios laborales:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

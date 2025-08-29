@@ -151,7 +151,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private initializeForms() {
     // Formulario de filtros de fecha
     this.dateFilterForm = this.fb.group({
-      dateRange: ['all'], // Cambiar por defecto a mostrar todos los tickets
+      dateRange: ['month'], // Cambiar por defecto a mostrar este mes
       startDate: [null],
       endDate: [null]
     });
@@ -198,6 +198,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Cargar datos iniciales
    */
   private loadInitialData() {
+    // Aplicar filtro de mes por defecto
+    this.applyDateRange('month');
+
     this.loadMetrics();
     this.loadChartData();
     this.loadTechPerformance();
@@ -283,30 +286,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Obtener datos de estados activos para la visualización
    */
   getActiveStatusData() {
-    // Filtrar solo estados activos (no cerrados ni resueltos)
+    // Ya no necesitamos filtrar ni recalcular, el backend ya envía solo estados activos con % correctos
     const activeStatuses = this.ticketsByStatus.filter(item =>
       item.status !== 'Cerrado' && item.status !== 'Resuelto'
     );
 
-    // Usar directamente los porcentajes calculados por el backend
-    // Si no existen, calcular localmente solo para estados activos
-    if (activeStatuses.length > 0 && activeStatuses[0].percentage !== undefined) {
-      const result = activeStatuses.map(item => ({
-        status: item.status,
-        count: item.count,
-        percentage: typeof item.percentage === 'string' ? parseFloat(item.percentage) : (item.percentage || 0)
-      }));
-      return result;
-    } else {
-      // Fallback: calcular porcentajes localmente solo para estados activos
-      const total = activeStatuses.reduce((sum, item) => sum + item.count, 0);
-      const result = activeStatuses.map(item => ({
-        status: item.status,
-        count: item.count,
-        percentage: total > 0 ? (item.count / total) * 100 : 0
-      }));
-      return result;
-    }
+    // SIMPLIFICADO: El backend ya calcula porcentajes sobre tickets abiertos
+    return activeStatuses.map(item => ({
+      status: item.status,
+      count: item.count,
+      percentage: parseFloat(String(item.percentage || 0))  // Convertir a número de forma segura
+    }));
   }
 
   /**

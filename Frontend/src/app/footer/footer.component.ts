@@ -16,6 +16,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-footer',
@@ -26,6 +27,7 @@ import { Router, RouterModule } from '@angular/router';
 })
 export class FooterComponent {
   currentYear = new Date().getFullYear();
+  appVersion = environment.appVersion || '1.1';
 
   constructor(private router: Router) {}
 

@@ -65,6 +65,8 @@ const allowedOrigins = [
   'http://192.162.2.5:80',
   'http://localhost:4200',
   'http://localhost:80',
+  'http://localhost:4200', // Frontend Angular en desarrollo
+  'http://127.0.0.1:4200', // Alternativa localhost
   'file://' // Para páginas de prueba locales
 ];
 
@@ -433,7 +435,7 @@ cron.schedule('0 2 * * *', async () => {
 
 // Ejecutar la validación de tablas antes de iniciar el servidor
 checkAndCreateTables().then(() => {
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
     
     // Configurar Socket.IO para WhatsApp y Mantenimiento

@@ -22,5 +22,5 @@ export const environment = {
   maintenance: 'http://localhost:3000/api/maintenance',
   backendUrl: 'http://localhost:3000', // Agregado para adjuntos
   apiUrl: 'http://localhost:3000', // Para Socket.IO y APIs generales
-  appVersion: '1.0.6'
+  appVersion: '1.1'
 };

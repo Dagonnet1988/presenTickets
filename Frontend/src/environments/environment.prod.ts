@@ -22,5 +22,5 @@ export const environment = {
   maintenance: 'http://192.162.2.5:3000/api/maintenance',
   backendUrl: 'http://192.162.2.5:3000',
   apiUrl: 'http://192.162.2.5:3000',
-  appVersion: '1.0.6'
+  appVersion: '1.1'
 };

@@ -141,6 +141,7 @@
                 <input
                   matInput
                   [(ngModel)]="testMessage.phoneNumber"
+                  name="phoneNumber"
                   placeholder="Ej: +573001234567"
                   type="tel"
                 />
@@ -152,6 +153,7 @@
                 <textarea
                   matInput
                   [(ngModel)]="testMessage.message"
+                  name="testMessage"
                   placeholder="Escriba su mensaje de prueba..."
                   rows="4"
                 ></textarea>
@@ -199,6 +201,7 @@
               <div class="setting-item">
                 <mat-slide-toggle
                   [(ngModel)]="systemSettings.whatsapp_enabled_globally"
+                  name="whatsappEnabledGlobally"
                 >
                   <mat-icon
                     [textContent]="
@@ -222,6 +225,7 @@
               <div class="setting-item">
                 <mat-slide-toggle
                   [(ngModel)]="systemSettings.enable_new_ticket_notifications"
+                  name="enableNewTicketNotifications"
                 >
                   <mat-icon
                     [textContent]="
@@ -240,6 +244,7 @@
               <div class="setting-item">
                 <mat-slide-toggle
                   [(ngModel)]="systemSettings.enable_assignment_notifications"
+                  name="enableAssignmentNotifications"
                 >
                   <mat-icon
                     [textContent]="
@@ -261,6 +266,7 @@
                   [(ngModel)]="
                     systemSettings.enable_status_change_notifications
                   "
+                  name="enableStatusChangeNotifications"
                 >
                   <mat-icon
                     [textContent]="
@@ -280,6 +286,7 @@
               <div class="setting-item">
                 <mat-slide-toggle
                   [(ngModel)]="systemSettings.enable_comment_notifications"
+                  name="enableCommentNotifications"
                 >
                   <mat-icon
                     [textContent]="
@@ -300,7 +307,7 @@
               <div class="setting-note">
                 <mat-icon>info</mat-icon>
                 <p><strong>Nota:</strong> Esta configuración global se aplica como configuración base para el sistema.
-                Las plantillas de mensajes y configuraciones avanzadas se implementarán en una futura versión.</p>
+                Los mensajes utilizan plantillas randomizadas para evitar bloqueos por patrones repetitivos.</p>
               </div>
 
             </div>
@@ -332,166 +339,6 @@
       </div>
     </mat-tab>
 
-    <!-- Tab 4: Plantillas de Mensajes -->
-    <mat-tab label="Plantillas">
-      <div class="tab-content">
-        <mat-card>
-          <mat-card-header>
-            <mat-card-title>
-              <mat-icon>message</mat-icon>
-              Plantillas de Mensajes WhatsApp
-            </mat-card-title>
-            <mat-card-subtitle>
-              Personaliza los mensajes enviados para cada tipo de notificación
-            </mat-card-subtitle>
-          </mat-card-header>
-          <mat-card-content>
-            <div class="templates-section" *ngIf="!loading.templates">
-
-              <!-- Información de variables disponibles -->
-              <div class="template-info-card">
-                <mat-icon>info</mat-icon>
-                <div>
-                  <strong>Variables disponibles:</strong>
-                  <div class="variables-grid">
-                    <p><code>{{ '{' }}userName{{ '}' }}</code> - Nombre del usuario</p>
-                    <p><code>{{ '{' }}ticketId{{ '}' }}</code> - Número del ticket</p>
-                    <p><code>{{ '{' }}subject{{ '}' }}</code> - Asunto/Título del ticket</p>
-                    <p><code>{{ '{' }}newStatus{{ '}' }}</code> - Nuevo estado del ticket</p>
-                    <p><code>{{ '{' }}timestamp{{ '}' }}</code> - Fecha y hora actual</p>
-                    <p><code>{{ '{' }}comment{{ '}' }}</code> - Contenido del comentario</p>
-                  </div>
-                </div>
-              </div>
-
-              <mat-divider class="template-divider"></mat-divider>
-
-              <!-- Plantilla para nuevos tickets -->
-              <div class="template-item">
-                <h4>
-                  <mat-icon>add_circle</mat-icon>
-                  Nuevo Ticket
-                </h4>
-                <p class="template-description">
-                  Mensaje enviado cuando se crea un nuevo ticket en el sistema
-                </p>
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Plantilla para nuevos tickets</mat-label>
-                  <textarea
-                    matInput
-                    rows="6"
-                    [(ngModel)]="templates.new_ticket"
-                    placeholder="Escriba la plantilla para nuevos tickets..."
-                  ></textarea>
-                  <mat-icon matSuffix>add_circle</mat-icon>
-                  <mat-hint>Se enviará automáticamente cuando se cree un ticket</mat-hint>
-                </mat-form-field>
-              </div>
-
-              <!-- Plantilla para asignación de tickets -->
-              <div class="template-item">
-                <h4>
-                  <mat-icon>person</mat-icon>
-                  Asignación de Ticket
-                </h4>
-                <p class="template-description">
-                  Mensaje enviado cuando se asigna un ticket a un técnico
-                </p>
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Plantilla para asignación</mat-label>
-                  <textarea
-                    matInput
-                    rows="6"
-                    [(ngModel)]="templates.ticket_assigned"
-                    placeholder="Escriba la plantilla para asignación..."
-                  ></textarea>
-                  <mat-icon matSuffix>person</mat-icon>
-                  <mat-hint>Solo se envía si está habilitado en configuración global</mat-hint>
-                </mat-form-field>
-              </div>
-
-              <!-- Plantilla para cambio de estado -->
-              <div class="template-item">
-                <h4>
-                  <mat-icon>update</mat-icon>
-                  Cambio de Estado
-                </h4>
-                <p class="template-description">
-                  Mensaje enviado cuando cambia el estado de un ticket
-                </p>
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Plantilla para cambio de estado</mat-label>
-                  <textarea
-                    matInput
-                    rows="6"
-                    [(ngModel)]="templates.status_change"
-                    placeholder="Escriba la plantilla para cambio de estado..."
-                  ></textarea>
-                  <mat-icon matSuffix>update</mat-icon>
-                  <mat-hint>Se enviará cuando cambie: Abierto, En Progreso, Resuelto, Cerrado</mat-hint>
-                </mat-form-field>
-              </div>
-
-              <!-- Plantilla para comentarios -->
-              <div class="template-item">
-                <h4>
-                  <mat-icon>comment</mat-icon>
-                  Nuevo Comentario
-                </h4>
-                <p class="template-description">
-                  Mensaje enviado cuando se agrega un comentario a un ticket
-                </p>
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Plantilla para comentarios</mat-label>
-                  <textarea
-                    matInput
-                    rows="6"
-                    [(ngModel)]="templates.comment"
-                    placeholder="Escriba la plantilla para comentarios..."
-                  ></textarea>
-                  <mat-icon matSuffix>comment</mat-icon>
-                  <mat-hint>Se enviará cuando se agregue un comentario al ticket</mat-hint>
-                </mat-form-field>
-              </div>
-
-            </div>
-
-            <div class="loading-container" *ngIf="loading.templates">
-              <mat-spinner></mat-spinner>
-            </div>
-          </mat-card-content>
-          <mat-card-actions>
-            <button
-              mat-raised-button
-              color="primary"
-              (click)="saveTemplates()"
-              [disabled]="loading.templates"
-            >
-              <mat-icon>save</mat-icon>
-              Guardar Plantillas
-            </button>
-            <button
-              mat-button
-              (click)="resetTemplates()"
-              [disabled]="loading.templates"
-            >
-              <mat-icon>restore</mat-icon>
-              Restaurar Plantillas por Defecto
-            </button>
-            <button
-              mat-button
-              (click)="loadTemplates()"
-              [disabled]="loading.templates"
-            >
-              <mat-icon>refresh</mat-icon>
-              Recargar Plantillas
-            </button>
-          </mat-card-actions>
-        </mat-card>
-      </div>
-    </mat-tab>
-
-    <!-- Tab 5: Estadísticas -->
     <!-- Tab 5: Estadísticas Detalladas -->
     <mat-tab label="Estadísticas">
       <div class="tab-content">
@@ -500,7 +347,7 @@
           <mat-card-content>
             <mat-form-field appearance="outline">
               <mat-label>Período de análisis</mat-label>
-              <mat-select [(ngModel)]="selectedStatsPeriod" (selectionChange)="onStatsPeriodChange()">
+              <mat-select [(ngModel)]="selectedStatsPeriod" name="selectedStatsPeriod" (selectionChange)="onStatsPeriodChange()">
                 <mat-option *ngFor="let period of availablePeriods" [value]="period.value">
                   {{ period.label }}
                 </mat-option>
@@ -705,7 +552,7 @@
             <div class="stats-grid">
               <div class="stat-card" *ngFor="let stat of stats">
                 <div class="stat-header">
-                  <mat-icon [matBadge]="stat.count" matBadgeColor="primary">
+                  <mat-icon [matBadge]="stat.count" matBadgeColor="primary" aria-hidden="false">
                     <ng-container [ngSwitch]="stat.status">
                       <span *ngSwitchCase="'sent'">check_circle</span>
                       <span *ngSwitchDefault>error</span>
@@ -768,6 +615,7 @@
                 <mat-label>Filtrar por estado</mat-label>
                 <mat-select
                   [(ngModel)]="historyFilter.status"
+                  name="historyFilterStatus"
                   (selectionChange)="applyHistoryFilter()"
                 >
                   <mat-option value="">Todos</mat-option>
@@ -781,6 +629,7 @@
                 <mat-label>Filtrar por tipo</mat-label>
                 <mat-select
                   [(ngModel)]="historyFilter.type"
+                  name="historyFilterType"
                   (selectionChange)="applyHistoryFilter()"
                 >
                   <mat-option value="">Todos</mat-option>
@@ -798,6 +647,7 @@
                 <input
                   matInput
                   [(ngModel)]="historyFilter.user"
+                  name="historyFilterUser"
                   (input)="applyHistoryFilter()"
                   placeholder="Nombre de usuario"
                 />
@@ -996,6 +846,264 @@
               Exportar a Excel
             </button>
           </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Tab 7: Anti-Bloqueo y Rate Limiting -->
+    <mat-tab label="Anti-Bloqueo">
+      <div class="tab-content">
+
+        <!-- Dashboard de Métricas -->
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>security</mat-icon>
+              Monitoreo de Seguridad WhatsApp
+            </mat-card-title>
+            <mat-card-subtitle>
+              Prevención automática de bloqueos y control de límites
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="antiblock-metrics" *ngIf="antiBlockStats && !loading.antiBlockStats">
+
+              <!-- Estado General -->
+              <div class="metric-card status-card" [ngClass]="antiBlockStats.safetyStatus?.level">
+                <div class="metric-icon">
+                  <mat-icon>{{ getSecurityIcon(antiBlockStats.safetyStatus?.level) }}</mat-icon>
+                </div>
+                <div class="metric-info">
+                  <h3>{{ antiBlockStats.safetyStatus?.message || 'Sistema Operativo' }}</h3>
+                  <p>Estado del Sistema</p>
+                </div>
+              </div>
+
+              <!-- Uso Diario -->
+              <div class="metric-card">
+                <div class="metric-header">
+                  <mat-icon>today</mat-icon>
+                  <span>Mensajes Hoy</span>
+                </div>
+                <div class="metric-value">
+                  <span class="count">{{ antiBlockStats.usage?.dailyMessages || 0 }}</span>
+                  <span class="limit">/ {{ antiBlockStats.limits?.maxDailyMessages || 100 }}</span>
+                </div>
+                <mat-progress-bar
+                  mode="determinate"
+                  [value]="antiBlockStats.remaining?.dailyPercentageUsed || 0"
+                  [color]="getProgressColor(antiBlockStats.remaining?.dailyPercentageUsed)">
+                </mat-progress-bar>
+                <div class="metric-footer">
+                  {{ antiBlockStats.remaining?.dailyRemaining || 0 }} disponibles
+                </div>
+              </div>
+
+              <!-- Uso por Hora -->
+              <div class="metric-card">
+                <div class="metric-header">
+                  <mat-icon>schedule</mat-icon>
+                  <span>Mensajes esta Hora</span>
+                </div>
+                <div class="metric-value">
+                  <span class="count">{{ antiBlockStats.usage?.hourlyMessages || 0 }}</span>
+                  <span class="limit">/ {{ antiBlockStats.limits?.maxMessagesPerHour || 20 }}</span>
+                </div>
+                <mat-progress-bar
+                  mode="determinate"
+                  [value]="antiBlockStats.remaining?.hourlyPercentageUsed || 0"
+                  [color]="getProgressColor(antiBlockStats.remaining?.hourlyPercentageUsed)">
+                </mat-progress-bar>
+                <div class="metric-footer">
+                  {{ antiBlockStats.remaining?.hourlyRemaining || 0 }} disponibles
+                </div>
+              </div>
+
+              <!-- Siguiente Envío -->
+              <div class="metric-card">
+                <div class="metric-header">
+                  <mat-icon>access_time</mat-icon>
+                  <span>Próximo Envío</span>
+                </div>
+                <div class="metric-value next-send">
+                  <span class="time">{{ getNextSendTime() }}</span>
+                </div>
+                <div class="metric-footer status">
+                  {{ getNextSendStatus() }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Recomendaciones -->
+            <div class="recommendations-section" *ngIf="getRecommendations().length > 0">
+              <h4><mat-icon>lightbulb</mat-icon> Recomendaciones</h4>
+              <div class="recommendations-grid">
+                <div *ngFor="let rec of getRecommendations()" class="recommendation-item">
+                  <mat-icon>arrow_forward</mat-icon>
+                  <span>{{ rec }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loading -->
+            <div class="loading-container" *ngIf="loading.antiBlockStats">
+              <mat-spinner></mat-spinner>
+              <p>Cargando estadísticas...</p>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-raised-button color="primary" (click)="loadAntiBlockStats()">
+              <mat-icon>refresh</mat-icon>
+              Actualizar
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
+        <!-- Configuración de Límites -->
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>tune</mat-icon>
+              Configuración de Límites
+            </mat-card-title>
+            <mat-card-subtitle>
+              Ajustar parámetros de seguridad y horarios
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="config-form" *ngIf="!loading.antiBlockStats">
+
+              <div class="form-section">
+                <h4><mat-icon>settings</mat-icon> Límites de Mensajes</h4>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Máximo por día</mat-label>
+                    <input matInput type="number" [(ngModel)]="newLimits.maxDailyMessages" name="maxDailyMessages" min="1" max="1000">
+                    <mat-hint>Recomendado: 50-200 mensajes</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Máximo por hora</mat-label>
+                    <input matInput type="number" [(ngModel)]="newLimits.maxMessagesPerHour" name="maxMessagesPerHour" min="1" max="100">
+                    <mat-hint>Recomendado: 10-30 mensajes</mat-hint>
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h4><mat-icon>timer</mat-icon> Control de Timing</h4>
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Delay mínimo (segundos)</mat-label>
+                    <input matInput type="number" [(ngModel)]="newLimits.minDelayBetweenMessages" name="minDelayBetweenMessages" min="1" max="30">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Delay máximo (segundos)</mat-label>
+                    <input matInput type="number" [(ngModel)]="newLimits.maxDelayBetweenMessages" name="maxDelayBetweenMessages" min="3" max="60">
+                  </mat-form-field>
+                </div>
+
+                <div class="form-row">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Mensajes en ráfaga</mat-label>
+                    <input matInput type="number" [(ngModel)]="newLimits.maxBurstMessages" name="maxBurstMessages" min="1" max="10">
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h4><mat-icon>business</mat-icon> Horarios de Operación</h4>
+                <div class="business-hours-info">
+                  <p><mat-icon>info</mat-icon> Los horarios se configuran desde el Dashboard principal. Los mensajes solo se envían durante el horario laboral configurado.</p>
+                  <div class="current-hours" *ngIf="newLimits.businessHours">
+                    <strong>Horario actual:</strong> {{ newLimits.businessHours.start }} - {{ newLimits.businessHours.end }}
+                    <span class="status" [class.active]="isBusinessHours()" [class.inactive]="!isBusinessHours()">
+                      {{ isBusinessHours() ? '🟢 Activo' : '🔴 Inactivo' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-raised-button color="primary" (click)="saveLimitsConfig()" [disabled]="loading.antiBlockStats">
+              <mat-icon>save</mat-icon>
+              Guardar
+            </button>
+            <button mat-button (click)="resetLimitsToDefault()">
+              <mat-icon>restore</mat-icon>
+              Restaurar
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
+        <!-- Análisis de Uso por Horas -->
+        <mat-card *ngIf="hourlyUsageData && hourlyUsageData.length > 0">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>analytics</mat-icon>
+              Distribución por Horas
+            </mat-card-title>
+            <mat-card-subtitle>
+              Mensajes enviados por hora (últimos 7 días)
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+
+            <!-- Resumen -->
+            <div class="usage-summary">
+              <div class="summary-item">
+                <mat-icon>schedule</mat-icon>
+                <div class="summary-content">
+                  <div class="number">{{ getBusinessHoursUsage() }}</div>
+                  <div class="label">En Horario Laboral</div>
+                </div>
+              </div>
+
+              <div class="summary-item">
+                <mat-icon>trending_up</mat-icon>
+                <div class="summary-content">
+                  <div class="number">{{ getPeakHour() }}</div>
+                  <div class="label">Hora de Mayor Actividad</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gráfico por horas (horario laboral extendido) -->
+            <div class="hourly-chart">
+              <h4>Distribución Horaria (6:00 AM - 7:00 PM)</h4>
+
+              <!-- Leyenda -->
+              <div class="chart-legend">
+                <div class="legend-item">
+                  <div class="legend-color business-hours"></div>
+                  <span>Horario Laboral ({{ newLimits.businessHours?.start || '07:00' }} - {{ newLimits.businessHours?.end || '17:30' }})</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-color non-business"></div>
+                  <span>Fuera de Horario Laboral</span>
+                </div>
+              </div>
+
+              <div class="chart-grid">
+                <div
+                  class="hour-column"
+                  *ngFor="let hourData of getHourlyChartData(); let i = index"
+                  [class.business-hour]="isBusinessHour(hourData.hour)">
+                  <div class="hour-bar">
+                    <div
+                      class="bar-fill"
+                      [class.zero-value]="hourData.count === 0"
+                      [style.height.%]="hourData.percentage">
+                    </div>
+                    <div class="bar-value" *ngIf="hourData.count > 0">{{ hourData.count }}</div>
+                  </div>
+                  <div class="hour-label">{{ hourData.hour.toString().padStart(2, '0') }}h</div>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
         </mat-card>
       </div>
     </mat-tab>

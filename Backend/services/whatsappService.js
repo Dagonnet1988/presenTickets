@@ -46,6 +46,23 @@ class WhatsAppService {
     this.currentQRCode = null;
     this.io = null; // Referencia a Socket.IO
     
+    // Rate limiting para prevenir bloqueos de WhatsApp
+    this.lastMessageTime = 0;
+    this.messageCount = 0;
+    this.dailyMessageCount = 0;
+    this.lastResetDate = new Date().toDateString();
+    this.messageQueue = [];
+    this.processingQueue = false;
+    
+    // Configuración de límites de seguridad anti-detección
+    this.rateLimits = {
+      minDelayBetweenMessages: 3000, // 3 segundos mínimo entre mensajes
+      maxDelayBetweenMessages: 8000, // 8 segundos máximo (simular comportamiento humano)
+      maxMessagesPerHour: 20,        // Máximo 20 mensajes por hora (números nuevos)
+      maxDailyMessages: 100,         // Máximo 100 mensajes por día
+      maxBurstMessages: 3            // Máximo 3 mensajes seguidos, luego pausa larga
+    };
+    
     // Crear carpeta de autenticación si no existe
     if (!fs.existsSync(this.authFolder)) {
       fs.mkdirSync(this.authFolder, { recursive: true });
@@ -187,25 +204,115 @@ class WhatsAppService {
   }
 
   /**
-   * Enviar mensaje de WhatsApp
+   * Enviar mensaje de WhatsApp con rate limiting inteligente
    */
   async sendMessage(phoneNumber, message) {
     if (!this.isConnected || !this.socket) {
       throw new Error('WhatsApp no está conectado');
     }
 
+    // Verificar límites de seguridad
+    const canSend = await this.checkRateLimits();
+    if (!canSend) {
+      throw new Error('Límite de mensajes alcanzado. Esperando para evitar bloqueo de WhatsApp.');
+    }
+
     try {
+      // Aplicar delay aleatorio para simular comportamiento humano
+      await this.applyHumanLikeDelay();
+      
       // Formatear número de teléfono
       const formattedNumber = this.formatPhoneNumber(phoneNumber);
       
       // Enviar mensaje
       const result = await this.socket.sendMessage(formattedNumber, { text: message });
       
-      console.log(`✅ Mensaje enviado a ${phoneNumber}`);
+      // Actualizar contadores
+      this.updateMessageCounters();
+      
+      console.log(`✅ Mensaje enviado a ${phoneNumber} (Total hoy: ${this.dailyMessageCount})`);
       return result;
     } catch (error) {
       console.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Verificar límites de rate limiting
+   */
+  async checkRateLimits() {
+    const now = new Date();
+    const today = now.toDateString();
+    
+    // Resetear contador diario si es un nuevo día
+    if (this.lastResetDate !== today) {
+      this.dailyMessageCount = 0;
+      this.messageCount = 0;
+      this.lastResetDate = today;
+    }
+    
+    // Verificar límite diario
+    if (this.dailyMessageCount >= this.rateLimits.maxDailyMessages) {
+      console.warn(`⚠️ Límite diario de ${this.rateLimits.maxDailyMessages} mensajes alcanzado`);
+      return false;
+    }
+    
+    // Verificar límite por hora (últimos 60 minutos)
+    const oneHourAgo = now.getTime() - (60 * 60 * 1000);
+    if (this.lastMessageTime > oneHourAgo && this.messageCount >= this.rateLimits.maxMessagesPerHour) {
+      console.warn(`⚠️ Límite horario de ${this.rateLimits.maxMessagesPerHour} mensajes alcanzado`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Aplicar delay aleatorio para simular comportamiento humano
+   */
+  async applyHumanLikeDelay() {
+    const now = Date.now();
+    const timeSinceLastMessage = now - this.lastMessageTime;
+    
+    // Calcular delay necesario
+    let delay = 0;
+    
+    if (this.messageCount > 0 && this.messageCount % this.rateLimits.maxBurstMessages === 0) {
+      // Después de una ráfaga, pausa más larga (30-60 segundos)
+      delay = Math.random() * 30000 + 30000;
+      console.log(`⏸️ Pausa larga después de ráfaga: ${Math.round(delay/1000)}s`);
+    } else {
+      // Delay normal entre mensajes
+      const minDelay = this.rateLimits.minDelayBetweenMessages;
+      const maxDelay = this.rateLimits.maxDelayBetweenMessages;
+      delay = Math.random() * (maxDelay - minDelay) + minDelay;
+      
+      // Si el último mensaje fue hace poco, ajustar delay
+      if (timeSinceLastMessage < minDelay) {
+        delay = minDelay - timeSinceLastMessage;
+      }
+    }
+    
+    if (delay > 0) {
+      console.log(`⏳ Esperando ${Math.round(delay/1000)}s antes del próximo mensaje...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  /**
+   * Actualizar contadores de mensajes
+   */
+  updateMessageCounters() {
+    const now = Date.now();
+    this.lastMessageTime = now;
+    this.messageCount++;
+    this.dailyMessageCount++;
+    
+    // Resetear contador horario si pasó una hora
+    const oneHourAgo = now - (60 * 60 * 1000);
+    if (this.lastMessageTime < oneHourAgo) {
+      this.messageCount = 1;
     }
   }
 
@@ -301,6 +408,15 @@ class WhatsAppService {
         return false;
       }
 
+      // Verificar horario laboral
+      const inBusinessHours = await this.isBusinessHours();
+      if (!inBusinessHours) {
+        console.log(`⚠️ Notificación omitida: fuera de horario laboral`);
+        await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Envío fuera de horario laboral', null, notificationType);
+        client.release();
+        return false;
+      }
+
       const userResult = await client.query(
         'SELECT firstname, lastname, email, phone FROM users WHERE id = $1',
         [userId]
@@ -356,58 +472,12 @@ class WhatsAppService {
   }
 
   /**
-   * Formatear mensaje usando plantillas personalizadas de la base de datos
+   * Formatear mensaje usando plantillas variadas (sin personalización DB)
    */
   async formatTicketMessageFromTemplate(userName, ticketId, ticketSubject, message, notificationType, client) {
     try {
-      // Obtener plantillas del usuario administrador
-      const templateResult = await client.query(`
-        SELECT 
-          whatsapp_template_new_ticket,
-          whatsapp_template_ticket_assigned,
-          whatsapp_template_status_change,
-          whatsapp_template_comment
-        FROM user_preferences_settings ups
-        INNER JOIN users u ON ups.user_id = u.id
-        WHERE u.role = 'admin'
-        LIMIT 1
-      `);
-
-      let template = null;
-
-      // Si hay plantillas personalizadas, usarlas
-      if (templateResult.rows.length > 0) {
-        const templates = templateResult.rows[0];
-        
-        // Mapear tipo de notificación a plantilla
-        switch (notificationType) {
-          case 'nuevo_ticket':
-          case 'new_ticket':
-            template = templates.whatsapp_template_new_ticket;
-            break;
-          case 'ticket_asignado':
-          case 'ticket_assigned':
-            template = templates.whatsapp_template_ticket_assigned;
-            break;
-          case 'cambio_estado':
-          case 'status_change':
-          case 'ticket_reabierto':
-            template = templates.whatsapp_template_status_change;
-            break;
-          case 'comentario':
-          case 'comentario_user':
-          case 'comentario_tech':
-          case 'admin_comentario':
-          case 'comment':
-            template = templates.whatsapp_template_comment;
-            break;
-        }
-      }
-
-      // Si no hay plantilla personalizada, usar plantilla por defecto mejorada
-      if (!template) {
-        template = this.getDefaultTemplate(notificationType);
-      }
+      // Usar directamente las plantillas variadas sin consultar la DB
+      const template = this.getRandomTemplate(notificationType, ticketId);
 
       // Reemplazar variables en la plantilla
       const timestamp = new Date().toLocaleString('es-CO', {
@@ -425,60 +495,66 @@ class WhatsAppService {
         .replace(/{subject}/g, ticketSubject)
         .replace(/{timestamp}/g, timestamp)
         .replace(/{comment}/g, message || 'Sin comentario')
-        .replace(/{newStatus}/g, message || 'Sin estado'); // Para cambios de estado
+        .replace(/{newStatus}/g, message || 'Sin estado');
 
       return formattedMessage;
 
     } catch (error) {
-      console.error('Error al formatear mensaje con plantilla:', error);
-      // Fallback a plantilla por defecto mejorada (sin hardcodeado)
-      const defaultTemplate = this.getDefaultTemplate(notificationType);
-      const timestamp = new Date().toLocaleString('es-CO', {
-        timeZone: 'America/Bogota',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-
-      return defaultTemplate
-        .replace(/{userName}/g, userName)
-        .replace(/{ticketId}/g, ticketId)
-        .replace(/{subject}/g, 'Sin asunto')
-        .replace(/{timestamp}/g, timestamp)
-        .replace(/{comment}/g, message || 'Sin comentario')
-        .replace(/{newStatus}/g, message || 'Sin estado');
+      console.error('Error al formatear mensaje:', error);
+      // Fallback simple
+      return `Hola ${userName}, actualización en ticket #${ticketId}: ${message}`;
     }
   }
 
   /**
-   * Obtener plantilla por defecto mejorada
+   * Obtener plantilla por defecto con variaciones para evitar detección
    */
-  getDefaultTemplate(notificationType) {
-    const templates = {
-      'nuevo_ticket': '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+  getRandomTemplate(notificationType) {
+    // Plantillas múltiples para cada tipo para evitar patrones repetitivos
+    const templateVariations = {
+      'nuevo_ticket': [
+        '🆕 *Clínica La Presentación*\n\nHola {userName},\n\nSe ha registrado el ticket #{ticketId}\n📋 {subject}\n\n⏰ {timestamp}',
+        '📋 *PresenTickets*\n\n¡Hola {userName}!\n\nNuevo ticket creado: #{ticketId}\n📝 {subject}\n\n🕒 {timestamp}',
+        '🎫 *Sistema de Tickets*\n\nHola {userName},\n\nTicket #{ticketId} creado exitosamente\n📄 {subject}\n\n📅 {timestamp}'
+      ],
       
-      'ticket_asignado': '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+      'ticket_asignado': [
+        '👤 *Asignación de Ticket*\n\nHola {userName},\n\nEl ticket #{ticketId}\n📋 {subject}\n\nTiene un técnico asignado\n\n🕒 {timestamp}',
+        '🔔 *PresenTickets*\n\n{userName}, se asignó técnico al ticket:\n\n🎫 #{ticketId}\n📋 {subject}\n\n⏰ {timestamp}',
+        '📌 *Ticket Asignado*\n\nHola {userName},\n\nTicket #{ticketId} asigando a un técnico\n📄 {subject}\n\n📅 {timestamp}'
+      ],
       
-      'cambio_estado': '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+      'cambio_estado': [
+        '🔄 *Actualización de Ticket*\n\nHola {userName},\n\nTicket #{ticketId}: {newStatus}\n� {subject}\n\n⏰ {timestamp}',
+        '📈 *Estado Actualizado*\n\n{userName}, su ticket cambió a: {newStatus}\n\n🎫 #{ticketId}\n📝 {subject}\n\n🕒 {timestamp}',
+        '🔄 *PresenTickets*\n\nHola {userName},\n\nNuevo estado para #{ticketId}: {newStatus}\n📄 {subject}\n\n📅 {timestamp}'
+      ],
       
-      'comentario': '💬 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📝 Nuevo comentario en su ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n💭 *Comentario:* {comment}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._'
+      'comentario': [
+        '💬 *Nuevo Comentario*\n\nHola {userName},\n\nComentario en ticket #{ticketId}:\n"{comment}"\n\n📋 {subject}\n⏰ {timestamp}',
+        '� *PresenTickets*\n\n{userName}, nuevo comentario:\n\n💭 {comment}\n\n🎫 #{ticketId} - {subject}\n🕒 {timestamp}',
+        '� *Comentario Agregado*\n\nHola {userName},\n\n"{comment}"\n\n📄 Ticket #{ticketId}: {subject}\n📅 {timestamp}'
+      ]
     };
 
     // Mapear tipos alternativos
     const typeMapping = {
       'new_ticket': 'nuevo_ticket',
-      'ticket_assigned': 'ticket_asignado',
+      'ticket_assigned': 'ticket_asignado', 
       'status_change': 'cambio_estado',
       'ticket_reabierto': 'cambio_estado',
       'comentario_user': 'comentario',
+      'comentario_tech': 'comentario',
       'admin_comentario': 'comentario',
       'comment': 'comentario'
     };
 
     const mappedType = typeMapping[notificationType] || notificationType;
-    return templates[mappedType] || templates['comentario'];
+    const variations = templateVariations[mappedType] || templateVariations['comentario'];
+    
+    // Selección verdaderamente aleatoria (no basada en tiempo para evitar patrones)
+    const randomIndex = Math.floor(Math.random() * variations.length);
+    return variations[randomIndex];
   }
 
   /**
@@ -499,15 +575,50 @@ class WhatsAppService {
   }
 
   /**
-   * Verificar estado de conexión
+   * Verificar estado de conexión con estadísticas de uso
    */
   getConnectionStatus() {
     return {
       isConnected: this.isConnected,
       hasSocket: !!this.socket,
       timestamp: new Date().toISOString(),
-      currentQRCode: this.currentQRCode
+      currentQRCode: this.currentQRCode,
+      // Estadísticas de uso para monitoreo
+      dailyMessageCount: this.dailyMessageCount,
+      lastMessageTime: this.lastMessageTime,
+      rateLimitStatus: {
+        dailyLimit: this.rateLimits.maxDailyMessages,
+        dailyUsed: this.dailyMessageCount,
+        dailyRemaining: this.rateLimits.maxDailyMessages - this.dailyMessageCount,
+        hourlyLimit: this.rateLimits.maxMessagesPerHour,
+        hourlyUsed: this.messageCount
+      }
     };
+  }
+
+  /**
+   * Obtener recomendaciones de seguridad
+   */
+  getSecurityRecommendations() {
+    const recommendations = [];
+    
+    if (this.dailyMessageCount > this.rateLimits.maxDailyMessages * 0.8) {
+      recommendations.push('⚠️ Cerca del límite diario. Considere reducir envíos.');
+    }
+    
+    if (this.messageCount > this.rateLimits.maxMessagesPerHour * 0.9) {
+      recommendations.push('⚠️ Cerca del límite horario. Pausa recomendada.');
+    }
+    
+    if (this.dailyMessageCount === 0) {
+      recommendations.push('✅ Número listo para envíos. Comience gradualmente.');
+    }
+    
+    if (this.dailyMessageCount < 10) {
+      recommendations.push('✅ Uso conservador. Puede aumentar gradualmente.');
+    }
+    
+    return recommendations;
   }
 
   /**
@@ -676,6 +787,85 @@ class WhatsAppService {
       console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
       return [];
     }
+  }
+
+  /**
+   * Obtener estadísticas anti-bloqueo y rate limiting
+   */
+  getAntiBlockStats() {
+    const now = new Date();
+    const today = now.toDateString();
+    
+    // Resetear si es nuevo día
+    if (this.lastResetDate !== today) {
+      this.dailyMessageCount = 0;
+      this.messageCount = 0;
+      this.lastResetDate = today;
+    }
+
+    return {
+      // Límites configurados
+      limits: this.rateLimits,
+      
+      // Uso actual
+      usage: {
+        dailyMessages: this.dailyMessageCount,
+        hourlyMessages: this.messageCount,
+        lastMessageTime: this.lastMessageTime,
+        lastResetDate: this.lastResetDate
+      },
+      
+      // Capacidad restante
+      remaining: {
+        dailyRemaining: Math.max(0, this.rateLimits.maxDailyMessages - this.dailyMessageCount),
+        hourlyRemaining: Math.max(0, this.rateLimits.maxMessagesPerHour - this.messageCount),
+        dailyPercentageUsed: Math.round((this.dailyMessageCount / this.rateLimits.maxDailyMessages) * 100),
+        hourlyPercentageUsed: Math.round((this.messageCount / this.rateLimits.maxMessagesPerHour) * 100)
+      },
+      
+      // Estado de seguridad
+      safetyStatus: this.getSafetyStatus(),
+      
+      // Próximo envío permitido
+      nextAllowedSend: this.getNextAllowedSendTime(),
+      
+      // Recomendaciones
+      recommendations: this.getSecurityRecommendations()
+    };
+  }
+
+  /**
+   * Obtener estado de seguridad
+   */
+  getSafetyStatus() {
+    const dailyUsage = (this.dailyMessageCount / this.rateLimits.maxDailyMessages) * 100;
+    const hourlyUsage = (this.messageCount / this.rateLimits.maxMessagesPerHour) * 100;
+    
+    if (dailyUsage >= 90 || hourlyUsage >= 90) {
+      return { level: 'danger', message: 'Límite casi alcanzado - Alto riesgo', color: 'red' };
+    } else if (dailyUsage >= 70 || hourlyUsage >= 70) {
+      return { level: 'warning', message: 'Uso moderado - Precaución', color: 'orange' };
+    } else if (dailyUsage >= 50 || hourlyUsage >= 50) {
+      return { level: 'caution', message: 'Uso normal - Monitorear', color: 'yellow' };
+    } else {
+      return { level: 'safe', message: 'Uso seguro - OK para enviar', color: 'green' };
+    }
+  }
+
+  /**
+   * Calcular próximo momento permitido para envío
+   */
+  getNextAllowedSendTime() {
+    const now = Date.now();
+    const timeSinceLastMessage = now - this.lastMessageTime;
+    const minDelay = this.rateLimits.minDelayBetweenMessages;
+    
+    if (timeSinceLastMessage < minDelay) {
+      const waitTime = minDelay - timeSinceLastMessage;
+      return new Date(now + waitTime).toISOString();
+    }
+    
+    return new Date(now).toISOString(); // Puede enviar ahora
   }
 
   /**
@@ -995,6 +1185,105 @@ class WhatsAppService {
     if (change > 10) return `📈 Creciente (+${change.toFixed(1)}%)`;
     if (change < -10) return `📉 Decreciente (${change.toFixed(1)}%)`;
     return `➡️ Estable (${change.toFixed(1)}%)`;
+  }
+
+  /**
+   * Obtener horarios laborales desde la configuración del dashboard
+   */
+  async getBusinessHours() {
+    try {
+      const client = await pool.connect();
+      
+      const result = await client.query(`
+        SELECT config_key, config_value 
+        FROM dashboard_config 
+        WHERE config_key IN (
+          'work_hours_start', 
+          'work_hours_end', 
+          'work_hours_friday_end',
+          'lunch_break_start',
+          'lunch_break_end'
+        )
+      `);
+      
+      client.release();
+      
+      // Organizar los resultados
+      const schedule = {};
+      result.rows.forEach(row => {
+        schedule[row.config_key] = row.config_value;
+      });
+      
+      // Valores por defecto si no se encuentran en la BD
+      return {
+        work_hours_start: schedule.work_hours_start || '07:00',
+        work_hours_end: schedule.work_hours_end || '17:30',
+        work_hours_friday_end: schedule.work_hours_friday_end || '16:30',
+        lunch_break_start: schedule.lunch_break_start || '12:00',
+        lunch_break_end: schedule.lunch_break_end || '13:30'
+      };
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo horarios laborales:', error);
+      
+      // Retornar horarios por defecto en caso de error
+      return {
+        work_hours_start: '07:00',
+        work_hours_end: '17:30',
+        work_hours_friday_end: '16:30',
+        lunch_break_start: '12:00',
+        lunch_break_end: '13:30'
+      };
+    }
+  }
+
+  /**
+   * Verificar si estamos en horario laboral
+   */
+  async isBusinessHours() {
+    try {
+      const schedule = await this.getBusinessHours();
+      const now = new Date();
+      const currentDay = now.getDay(); // 0 = domingo, 1 = lunes, ..., 6 = sábado
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+      
+      // No es día laboral (sábado = 6, domingo = 0)
+      if (currentDay === 0 || currentDay === 6) {
+        return false;
+      }
+      
+      // Obtener horarios según el día
+      const startTime = this.timeToMinutes(schedule.work_hours_start);
+      let endTime;
+      
+      if (currentDay === 5) { // Viernes
+        endTime = this.timeToMinutes(schedule.work_hours_friday_end);
+      } else { // Lunes a Jueves
+        endTime = this.timeToMinutes(schedule.work_hours_end);
+      }
+      
+      // Verificar si está en horario de almuerzo
+      const lunchStart = this.timeToMinutes(schedule.lunch_break_start);
+      const lunchEnd = this.timeToMinutes(schedule.lunch_break_end);
+      
+      // Está en horario laboral pero no en almuerzo
+      const inWorkHours = currentTime >= startTime && currentTime <= endTime;
+      const inLunchBreak = currentTime >= lunchStart && currentTime <= lunchEnd;
+      
+      return inWorkHours && !inLunchBreak;
+      
+    } catch (error) {
+      console.error('❌ Error verificando horario laboral:', error);
+      return false; // Por seguridad, considerar como fuera de horario si hay error
+    }
+  }
+
+  /**
+   * Convertir tiempo en formato HH:MM a minutos desde medianoche
+   */
+  timeToMinutes(timeStr) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
   }
 
   /**
