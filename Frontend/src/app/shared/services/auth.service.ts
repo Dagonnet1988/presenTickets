@@ -40,8 +40,7 @@ export class AuthService {
         if (response.token) {
           if (this.isLocalStorageAvailable()) {
             localStorage.setItem('token', response.token);
-            console.log('✅ Token guardado, login exitoso');
-          } else {
+                      } else {
             console.error('localStorage is not available!');
           }
         }
@@ -67,7 +66,7 @@ export class AuthService {
       return true;
     } else {
       if (isDevMode()) {
-        console.log('Token expirado o inválido, removiendo del localStorage');
+        // Token expirado o inválido, remover del localStorage
       }
       localStorage.removeItem('token');
       return false;
@@ -121,7 +120,7 @@ export class AuthService {
 
       // Solo logs en modo debug si es necesario
       if (isDevMode() && payload.exp && (payload.exp - currentTime) < 300) { // Solo log si quedan menos de 5 minutos
-        console.log('⚠️ Token cerca de expirar. Tiempo restante:', payload.exp - currentTime, 'segundos');
+        // Token cerca de expirar
       }
 
       return payload.exp && payload.exp > currentTime;
@@ -181,8 +180,7 @@ export class AuthService {
 
         // DEBUG: Solo en desarrollo
         if (isDevMode()) {
-          console.log('🔍 DEBUG TOKEN:');
-          console.log('Payload:', payload);
+                    // Payload:
           console.log('Expira en:', new Date(payload.exp * 1000));
         }
         console.log('Diferencia (segundos):', payload.exp - currentTime);
@@ -203,8 +201,7 @@ export class AuthService {
       // Pequeño delay para asegurar que el localStorage esté disponible
       setTimeout(() => {
         if (this.isLoggedIn()) {
-          console.log('🔄 Usuario ya logueado detectado.');
-        }
+                  }
       }, 100);
     }
   }

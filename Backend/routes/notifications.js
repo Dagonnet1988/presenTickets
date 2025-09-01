@@ -33,7 +33,11 @@ router.get('/', authMiddleware, async (req, res) => {
     
     // Luego obtener las notificaciones no leídas (que ya no incluirán las de ID externo)
     const result = await pool.query(
-      'SELECT * FROM notifications WHERE user_id = $1 AND is_read = false ORDER BY created_at DESC',
+      `SELECT n.*, t.external_ticket_id 
+       FROM notifications n 
+       LEFT JOIN tickets t ON n.ticket_id = t.id 
+       WHERE n.user_id = $1 AND n.is_read = false 
+       ORDER BY n.created_at DESC`,
       [userId]
     );
     res.json(result.rows);
@@ -56,6 +60,22 @@ router.post('/read/:id', authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Error al marcar notificación como leída' });
+  }
+});
+
+// Marcar todas las notificaciones de un ticket como leídas
+router.post('/read-ticket/:ticketId', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const ticketId = req.params.ticketId;
+    // Solo el dueño puede marcar como leídas las notificaciones de sus tickets
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE ticket_id = $1 AND user_id = $2 AND is_read = false',
+      [ticketId, userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al marcar notificaciones del ticket como leídas' });
   }
 });
 
@@ -95,14 +115,15 @@ export async function createNotification({ user_id, type, message, ticket_id }) 
     [user_id, type, message, ticket_id]
   );
 
-
-  // Enviar notificación WhatsApp al usuario
-  try {
-    await sendWhatsAppNotification(user_id, ticket_id, message, type);
-  } catch (error) {
-    console.error('Error enviando notificación WhatsApp:', error);
-    // No fallar la operación principal si las notificaciones WhatsApp fallan
-  }
+  // Enviar notificación WhatsApp de forma asíncrona (no bloqueante)
+  // Usar setImmediate para que se ejecute después del return
+  setImmediate(async () => {
+    try {
+      await sendWhatsAppNotification(user_id, ticket_id, message, type);
+    } catch (error) {
+      console.error('Error enviando notificación WhatsApp:', error);
+    }
+  });
 }
 
 export default router;

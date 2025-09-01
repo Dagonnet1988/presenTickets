@@ -1,0 +1,83 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+-->
+
+<div class="maintenance-container">
+  <mat-card class="maintenance-card">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>build</mat-icon>
+        Control de Mantenimiento
+      </mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Estado actual -->
+      <div class="status-section">
+        <h3>Estado Actual</h3>
+        <div class="status-indicator" [ngClass]="maintenanceStatus?.is_active ? 'active' : 'inactive'">
+          <mat-icon>{{ maintenanceStatus?.is_active ? 'warning' : 'check_circle' }}</mat-icon>
+          <span>{{ maintenanceStatus?.is_active ? 'MANTENIMIENTO ACTIVO' : 'Sistema Operativo' }}</span>
+        </div>
+
+        <p *ngIf="maintenanceStatus?.message" class="current-message">
+          <strong>Mensaje:</strong> {{ maintenanceStatus.message }}
+        </p>
+      </div>
+
+      <!-- Formulario para iniciar mantenimiento -->
+      <div class="start-maintenance" *ngIf="!maintenanceStatus?.is_active">
+        <h3>Iniciar Mantenimiento</h3>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Mensaje para usuarios</mat-label>
+          <textarea
+            matInput
+            [(ngModel)]="newMessage"
+            rows="3"
+            placeholder="Ej: El sistema estará en mantenimiento por mejoras. Disculpe las molestias.">
+          </textarea>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Tiempo de cuenta atrás (segundos)</mat-label>
+          <input
+            matInput
+            type="number"
+            [(ngModel)]="countdownSeconds"
+            min="5"
+            max="300"
+            placeholder="30">
+        </mat-form-field>
+
+        <div class="actions">
+          <button
+            mat-raised-button
+            color="warn"
+            (click)="startMaintenance()"
+            [disabled]="!newMessage || !countdownSeconds">
+            <mat-icon>warning</mat-icon>
+            Iniciar Mantenimiento
+          </button>
+        </div>
+      </div>
+
+      <!-- Controles cuando está activo -->
+      <div class="stop-maintenance" *ngIf="maintenanceStatus?.is_active">
+        <h3>Mantenimiento en Curso</h3>
+        <p>El sistema está actualmente en mantenimiento. Solo administradores pueden acceder.</p>
+
+        <div class="actions">
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="stopMaintenance()">
+            <mat-icon>check</mat-icon>
+            Terminar Mantenimiento
+          </button>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

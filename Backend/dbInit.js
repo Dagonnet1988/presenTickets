@@ -566,6 +566,13 @@ const checkAndCreateTables = async () => {
           whatsapp_global_ticket_status BOOLEAN DEFAULT true,
           whatsapp_global_comments BOOLEAN DEFAULT true,
           
+          -- Configuraciones de antibloqueo WhatsApp (persistentes)
+          whatsapp_min_delay INTEGER DEFAULT 1000,     -- 1 segundo mínimo
+          whatsapp_max_delay INTEGER DEFAULT 3000,     -- 3 segundos máximo
+          whatsapp_max_hour INTEGER DEFAULT 60,        -- 60 mensajes por hora
+          whatsapp_max_daily INTEGER DEFAULT 200,      -- 200 mensajes por día
+          whatsapp_max_burst INTEGER DEFAULT 5,        -- 5 mensajes en ráfaga
+          
           -- Configuraciones de mantenimiento (futuro uso)
           maintenance_mode BOOLEAN DEFAULT false,
           maintenance_message TEXT DEFAULT 'Sistema en mantenimiento. Disculpe las molestias.',
@@ -584,69 +591,80 @@ const checkAndCreateTables = async () => {
           whatsapp_global_ticket_created,
           whatsapp_global_ticket_assigned,
           whatsapp_global_ticket_status,
-          whatsapp_global_comments
+          whatsapp_global_comments,
+          whatsapp_min_delay,
+          whatsapp_max_delay,
+          whatsapp_max_hour,
+          whatsapp_max_daily,
+          whatsapp_max_burst
         ) VALUES (
-          1, true, true, true, true, true
+          1, true, true, true, true, true, 1000, 3000, 60, 200, 5
         );
       `);
       
       console.log("✅ Tabla 'system_settings' creada exitosamente con configuración por defecto.");
     } else {
       console.log("✅ La tabla 'system_settings' ya existe.");
+      
+      // Verificar y agregar columnas de antibloqueo si no existen
+      const antiblockColumns = [
+        { name: 'whatsapp_min_delay', type: 'INTEGER DEFAULT 1000' },
+        { name: 'whatsapp_max_delay', type: 'INTEGER DEFAULT 3000' },
+        { name: 'whatsapp_max_hour', type: 'INTEGER DEFAULT 60' },
+        { name: 'whatsapp_max_daily', type: 'INTEGER DEFAULT 200' },
+        { name: 'whatsapp_max_burst', type: 'INTEGER DEFAULT 5' }
+      ];
+      
+      for (const column of antiblockColumns) {
+        const columnExists = await client.query(
+          `SELECT column_name FROM information_schema.columns
+           WHERE table_name = 'system_settings' AND column_name = $1`,
+          [column.name]
+        );
+        
+        if (columnExists.rows.length === 0) {
+          console.log(`➕ Agregando columna '${column.name}' a 'system_settings'...`);
+          await client.query(`ALTER TABLE system_settings ADD COLUMN ${column.name} ${column.type};`);
+          console.log(`✅ Columna '${column.name}' agregada exitosamente.`);
+        }
+      }
     }
 
     // ==========================================
-    // 9. TABLA MAINTENANCE_SESSIONS (Nuevo módulo)
+    // 9. TABLA MAINTENANCE_STATUS (Simplificada)
     // ==========================================
-    // Validar y crear la tabla "maintenance_sessions" (NUEVO MÓDULO SIMPLIFICADO)
-    const maintenanceSessionsTableExists = await client.query(`
+    // Eliminar tabla compleja si existe
+    await client.query(`DROP TABLE IF EXISTS maintenance_sessions CASCADE;`);
+
+    // Verificar si la tabla existe
+    const maintenanceTableExists = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables
-        WHERE table_name = 'maintenance_sessions'
+        WHERE table_name = 'maintenance_status'
       );
     `);
 
-    if (!maintenanceSessionsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'maintenance_sessions' (nuevo módulo de mantenimiento)...");
+    if (!maintenanceTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'maintenance_status' (versión simplificada)...");
       await client.query(`
-        CREATE TABLE maintenance_sessions (
+        CREATE TABLE maintenance_status (
           id SERIAL PRIMARY KEY,
-          
-          -- Información básica
-          title VARCHAR(255) NOT NULL,
-          description TEXT,
-          
-          -- Control de tiempo
-          scheduled_start TIMESTAMP,
-          scheduled_end TIMESTAMP,
-          actual_start TIMESTAMP,
-          actual_end TIMESTAMP,
-          
-          -- Estado del mantenimiento (solo 3 estados simples)
-          status VARCHAR(20) DEFAULT 'inactive' CHECK (status IN ('inactive', 'scheduled', 'active')),
-          
-          -- Configuración
-          allowed_roles TEXT[] DEFAULT '{"admin"}',
-          maintenance_message TEXT DEFAULT 'Sistema en mantenimiento. Disculpe las molestias.',
-          
-          -- Auditoría
-          created_by INTEGER REFERENCES users(id),
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
+          is_active BOOLEAN DEFAULT false,
+          message TEXT DEFAULT 'Sistema en mantenimiento. Disculpe las molestias.',
+          countdown_seconds INTEGER DEFAULT 0,
+          started_by INTEGER REFERENCES users(id),
+          started_at TIMESTAMP,
+          ended_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
         );
       `);
-      
-      // Crear índices para performance
+      // Insertar registro inicial
       await client.query(`
-        CREATE INDEX idx_maintenance_sessions_status ON maintenance_sessions(status);
+        INSERT INTO maintenance_status (is_active) VALUES (false);
       `);
-      await client.query(`
-        CREATE INDEX idx_maintenance_sessions_scheduled_start ON maintenance_sessions(scheduled_start);
-      `);
-      
-      console.log("✅ Tabla 'maintenance_sessions' creada exitosamente con índices optimizados.");
+      console.log("✅ Tabla 'maintenance_status' creada exitosamente (versión simple).");
     } else {
-      console.log("✅ La tabla 'maintenance_sessions' ya existe.");
+      console.log("✅ La tabla 'maintenance_status' ya existe.");
     }
 
     console.log("✅ Validación y creación de tablas completada.");

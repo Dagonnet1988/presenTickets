@@ -58,7 +58,7 @@ export class NotificationBellComponent {
     this.notificationService.deleteAllRead();
   }  goToTicket(notification: TicketNotification) {
     // Obtenemos el ticketId de la notificación
-    const ticketId = notification.data?.ticketId;
+    const ticketId = notification.ticket_id;
     if (!ticketId) {
       console.error('No se pudo obtener el ID del ticket de la notificación');
       return;
@@ -73,45 +73,37 @@ export class NotificationBellComponent {
       console.log('Notificación sin ID detectada, intentando sincronizar con el servidor...');
 
       // 1. Primero sincronizamos notificaciones con el servidor
-      this.notificationService.fetchUnreadNotifications()
-        .then(() => {
-          // 2. Intentamos encontrar esta notificación con ID en las actualizadas
-          const updatedNotifications = this.notificationService.getNotifications();
-          const matchingNotification = updatedNotifications.find(n =>
-            n.data?.ticketId === ticketId && n.id
-          );
+      this.notificationService.fetchUnreadNotifications();
 
-          // 3. Si encontramos la notificación con ID, la marcamos como leída
-          if (matchingNotification && matchingNotification.id) {
-            console.log('Se encontró la notificación con ID, marcando como leída:', matchingNotification);
-            this.notificationService.markAsRead(matchingNotification, () => {
-              if (isAlreadyOnTicketPage) {
-                // Si ya estamos en la página, recargamos la misma (emitimos evento)
-                window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
-              } else {
-                // Si no, navegamos al ticket
-                this.router.navigate(['/ticket', ticketId]);
-              }
-            });
-          } else {
-            // 4. Si no la encontramos (raro, pero posible), navegamos o recargamos
-            console.log('No se encontró la notificación con ID después de actualizar');
+      // 2. Después de un breve delay, buscar la notificación actualizada
+      setTimeout(() => {
+        const updatedNotifications = this.notificationService.getNotifications();
+        const matchingNotification = updatedNotifications.find(n =>
+          n.ticket_id === ticketId && n.id
+        );
+
+        // 3. Si encontramos la notificación con ID, la marcamos como leída
+        if (matchingNotification && matchingNotification.id) {
+          console.log('Se encontró la notificación con ID, marcando como leída:', matchingNotification);
+          this.notificationService.markAsRead(matchingNotification, () => {
             if (isAlreadyOnTicketPage) {
+              // Si ya estamos en la página, recargamos la misma (emitimos evento)
               window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
             } else {
+              // Si no, navegamos al ticket
               this.router.navigate(['/ticket', ticketId]);
             }
-          }
-        })
-        .catch(err => {
-          console.error('Error al sincronizar notificaciones:', err);
-          // En caso de error, navegamos o recargamos de todas formas
+          });
+        } else {
+          // 4. Si no la encontramos (raro, pero posible), navegamos o recargamos
+          console.log('No se encontró la notificación con ID después de actualizar');
           if (isAlreadyOnTicketPage) {
             window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
           } else {
             this.router.navigate(['/ticket', ticketId]);
           }
-        });
+        }
+      }, 1000);
 
       return;
     }
@@ -124,7 +116,7 @@ export class NotificationBellComponent {
           window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
         } else {
           // Si no, navegamos al ticket
-          this.router.navigate(['/ticket', notification.data.ticketId]);
+          this.router.navigate(['/ticket', notification.ticket_id]);
         }
       }, 0);
     });

@@ -127,10 +127,10 @@
     <a
       mat-list-item
       *ngIf="userRole === 'admin'"
-      routerLink="/maintenance"
+      routerLink="/maintenance-admin"
       routerLinkActive="active-link"
       [routerLinkActiveOptions]="{ exact: true }"
-      aria-label="Administración de Mantenimiento"
+      aria-label="Control de Mantenimiento"
       class="nav-item"
     >
       <mat-icon class="nav-icon">build</mat-icon>
@@ -140,7 +140,6 @@
     <!-- Enlace para "Acerca de" (todos los usuarios) -->
     <a
       mat-list-item
-      *ngIf="userRole === 'admin'"
       routerLink="/about"
       routerLinkActive="active-link"
       [routerLinkActiveOptions]="{ exact: true }"

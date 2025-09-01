@@ -256,6 +256,11 @@ router.patch('/profile/:id', async (req, res) => {
     return res.status(400).json({ message: 'ID de usuario inválido' });
   }
 
+  // Verificar que el usuario solo puede actualizar su propio perfil o que sea admin
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'No puedes editar el perfil de otro usuario' });
+  }
+
   const updates = [];
   const values = [];
   let index = 1;
@@ -285,7 +290,8 @@ router.patch('/profile/:id', async (req, res) => {
     index++;
   }
 
-  if (phone) {
+  // Solo permitir actualizar teléfono si el usuario no es de tipo 'user' o si es admin
+  if (phone && (req.user.role !== 'user' || req.user.role === 'admin')) {
     updates.push(`phone = $${index}`);
     values.push(phone);
     index++;

@@ -30,8 +30,6 @@
             ],
             "scripts": [
             ],
-            "server": "src/main.server.ts",
-            "outputMode": "static",
             "allowedCommonJsDependencies": [
               "socket.io-client",
               "engine.io-client",

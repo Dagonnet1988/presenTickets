@@ -328,7 +328,8 @@ router.post("/", (req, res) => {
 // Actualizar un ticket
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
-  const { priority, assigned_to, status, name, external_ticket_id, actorRole } = req.body;
+  const { priority, assigned_to, name, external_ticket_id, actorRole } = req.body;
+  let status = req.body.status; // Cambiar a let para poder reasignar
 
   // Validar que el ID sea un número entero
   if (isNaN(parseInt(id, 10))) {
@@ -516,17 +517,22 @@ router.patch("/:id", async (req, res) => {
     if (status) {
       
       try {
-        // Obtener detalles del ticket y destinatarios para notificaciones
-        const ticketResult = await client.query(
-          "SELECT title, user_id, assigned_to FROM tickets WHERE id = $1",
-          [id]
-        );
-        if (ticketResult.rows.length > 0) {
-          const { title, user_id, assigned_to } = ticketResult.rows[0];
-          const ticketTitle = title || "Ticket sin título";
+        // Determinar si es un cambio automático por asignación
+        const isAutomaticChange = assigned_to && !req.body.status && status === 'En revisión';
+        
+        // Solo enviar notificaciones de cambio de estado si NO es un cambio automático
+        if (!isAutomaticChange) {
+          // Obtener detalles del ticket y destinatarios para notificaciones
+          const ticketResult = await client.query(
+            "SELECT title, user_id, assigned_to FROM tickets WHERE id = $1",
+            [id]
+          );
+          if (ticketResult.rows.length > 0) {
+            const { title, user_id, assigned_to } = ticketResult.rows[0];
+            const ticketTitle = title || "Ticket sin título";
 
-          // Determinar el tipo de notificación según el estado
-          let notificationType = "cambio_estado";
+            // Determinar el tipo de notificación según el estado
+            let notificationType = "cambio_estado";
           let notificationMessage = `${ticketTitle}: estado cambiado a ${status}`;
 
           // Determinar los destinatarios según el estado
@@ -690,6 +696,7 @@ router.patch("/:id", async (req, res) => {
         } else {
           // No se encontró el ticket para enviar notificaciones
         }
+        } // Cerrar el bloque if (!isAutomaticChange)
       } catch (notifyErr) {
         console.error(
           "Error al enviar notificaciones de cambio de estado:",

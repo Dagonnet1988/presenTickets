@@ -1,59 +1,38 @@
 /**
  * PresenTickets - Sistema de Gestión de Tickets de Soporte
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
- * 
- * MIDDLEWARE DE MANTENIMIENTO - VERSIÓN SIMPLIFICADA
- * Bloquea acceso durante mantenimiento activo según roles permitidos
  */
 
-import maintenanceService from '../services/maintenanceService.js';
+import MaintenanceSimpleService from '../services/maintenanceSimpleService.js';
 
-/**
- * Middleware principal de mantenimiento
- * Bloquea el acceso si hay mantenimiento activo y el usuario no tiene permisos
- */
-export const maintenanceMiddleware = async (req, res, next) => {
+// Middleware simple para verificar mantenimiento
+export const checkMaintenance = async (req, res, next) => {
   try {
-    // Obtener estado actual del mantenimiento
-    const status = await maintenanceService.getCurrentStatus();
-    
-    // Si no hay mantenimiento activo, continuar normalmente
-    if (!status.isActive) {
+    // Permitir rutas de mantenimiento y auth siempre
+    if (req.path.startsWith('/api/maintenance') || 
+        req.path.startsWith('/api/auth') ||
+        req.method === 'OPTIONS') {
       return next();
     }
-
-    // Verificar si el usuario tiene permisos durante mantenimiento
-    const userRole = req.user?.role || 'anonymous';
-    const allowedRoles = status.allowedRoles || ['admin'];
     
-    if (allowedRoles.includes(userRole)) {
-      // Usuario tiene permisos, continuar
-      console.log(`✅ Acceso permitido durante mantenimiento - Rol: ${userRole}`);
-      return next();
+    // Verificar si está en mantenimiento
+    const isInMaintenance = await MaintenanceSimpleService.isInMaintenance();
+    
+    if (isInMaintenance) {
+      // Solo permitir acceso a admins
+      if (!req.user || req.user.role !== 'admin') {
+        return res.status(503).json({ 
+          error: 'Sistema en mantenimiento',
+          maintenance: true,
+          message: 'El sistema está temporalmente en mantenimiento. Solo administradores pueden acceder.'
+        });
+      }
     }
-
-    // Usuario no tiene permisos, bloquear acceso
-    console.log(`🚫 Acceso bloqueado durante mantenimiento - Rol: ${userRole}`);
     
-    return res.status(503).json({
-      error: 'MAINTENANCE_ACTIVE',
-      message: status.message || 'Sistema en mantenimiento',
-      maintenance: {
-        title: status.session?.title,
-        description: status.session?.description,
-        startTime: status.session?.actualStart || status.session?.scheduledStart,
-        endTime: status.endTime,
-        allowedRoles: allowedRoles,
-        userRole: userRole
-      },
-      retryAfter: status.endTime ? Math.max(0, Math.floor((new Date(status.endTime) - new Date()) / 1000)) : null
-    });
-
+    next();
   } catch (error) {
-    console.error('❌ Error en middleware de mantenimiento:', error);
-    
-    // En caso de error, permitir acceso (fail-open para evitar bloqueos totales)
-    console.warn('⚠️ Error en middleware mantenimiento - permitiendo acceso por seguridad');
+    console.error('Error en middleware de mantenimiento:', error);
+    // En caso de error, permitir acceso para evitar bloqueo total
     next();
   }
 };

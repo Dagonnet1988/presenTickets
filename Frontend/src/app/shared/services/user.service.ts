@@ -61,6 +61,11 @@ export class UserService {
     return this.http.patch<any>(`${this.apiUrlUsers}/${userId}`, user, { headers: this.getAuthHeaders() });
   }
 
+  // Método específico para actualizar perfil propio sin restricciones de admin
+  updateProfile(userId: string, profileData: any): Observable<any> {
+    return this.http.patch<any>(`${this.apiUrlUsers}/profile/${userId}`, profileData, { headers: this.getAuthHeaders() });
+  }
+
   createUser(user: any): Observable<any> {
     return this.http.post<any>(this.apiUrlUsers, user, { headers: this.getAuthHeaders() });
   }

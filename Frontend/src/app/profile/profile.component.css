@@ -1,14 +1,14 @@
 /*
  * PresenTickets - Sistema de Gestión de Tickets de Soporte
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
- * 
+ *
  * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
- * 
+ *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
- * 
+ *
  * Está prohibida la redistribución, modificación o uso no autorizado
  * de este código sin el consentimiento expreso por escrito del autor.
  */
@@ -214,4 +214,35 @@ button[mat-raised-button], button[mat-stroked-button] {
   .form-actions {
     flex-direction: column;
   }
+}
+
+/* Estilos para campos readonly */
+.readonly-field {
+  opacity: 0.7;
+}
+
+.readonly-field .mat-mdc-text-field-wrapper {
+  background-color: #f0f0f0 !important;
+}
+
+.readonly-input {
+  background-color: #f0f0f0 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+}
+
+.readonly-field .mdc-line-ripple::before,
+.readonly-field .mdc-line-ripple::after {
+  border-bottom-color: #ccc !important;
+  border-bottom-style: dashed !important;
+}
+
+.readonly-field .mat-mdc-form-field-focus-overlay {
+  display: none !important;
+}
+
+/* Estilos para hint de solo lectura */
+.readonly-field .mat-mdc-form-field-hint-wrapper {
+  color: #666;
+  font-style: italic;
 }

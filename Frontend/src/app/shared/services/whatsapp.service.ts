@@ -128,9 +128,9 @@ export class WhatsappService {
   /**
    * Obtener estadísticas
    */
-  async getStats(): Promise<any> {
+  async getStats(period: string = '7'): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/stats`, {
+    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/stats?period=${period}`, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;
@@ -176,9 +176,16 @@ export class WhatsappService {
   }
 
   /**
-   * Obtener historial de notificaciones
+   * Obtener historial de notificaciones con filtros
    */
-  async getNotificationHistory(page: number = 0, limit: number = 50, search?: string): Promise<any> {
+  async getNotificationHistory(
+    page: number = 0,
+    limit: number = 50,
+    search?: string,
+    status?: string,
+    type?: string,
+    user?: string
+  ): Promise<any> {
     const token = localStorage.getItem('token');
     let queryParams = `?page=${page}&limit=${limit}`;
 
@@ -186,7 +193,19 @@ export class WhatsappService {
       queryParams += `&search=${encodeURIComponent(search.trim())}`;
     }
 
-    const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/history${queryParams}`, {
+    if (status && status !== 'all') {
+      queryParams += `&status=${encodeURIComponent(status)}`;
+    }
+
+    if (type && type !== 'all') {
+      queryParams += `&type=${encodeURIComponent(type)}`;
+    }
+
+    if (user && user.trim()) {
+      queryParams += `&user=${encodeURIComponent(user.trim())}`;
+    }
+
+            const response = await this.http.get(`${environment.backendUrl}/api/whatsapp/history${queryParams}`, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;

@@ -49,7 +49,7 @@
           </mat-icon>
           <div>
             <b>{{ n.message || (n.type | notificationType) }}</b>
-            <div>Ticket #{{ n.data?.ticketId || 'Cargando...' }}</div>
+            <div>Ticket #{{ n.external_ticket_id || n.ticket_id || 'Cargando...' }}</div>
             <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
           </div>
         </div>

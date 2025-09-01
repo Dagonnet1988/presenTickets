@@ -55,6 +55,10 @@ export class AuthComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    // Limpiar cualquier estado previo completamente
+    this.loginError = '';
+    this.sessionExpired = false;
+
     // Si ya está logueado, redirigir al home
     if (this.authService.isLoggedIn()) {
       this.router.navigate(['/']);
@@ -88,20 +92,37 @@ export class AuthComponent implements OnInit {
 
   onSubmit(): void {
     if (this.authForm.valid) {
+      // Limpiar errores previos
+      this.loginError = '';
+
       const { username, password } = this.authForm.value;
       this.authService.login(username, password).subscribe(response => {
         if (response.message === 'Inicio de sesión exitoso') {
           // Redirigir directamente al home
           this.router.navigate(['/']);
+        } else if (response.maintenance) {
+          // Sistema en mantenimiento - redirigir a página informativa
+          this.router.navigate(['/maintenance'], {
+            queryParams: {
+              message: response.maintenanceMessage || 'Sistema en mantenimiento. Disculpe las molestias.'
+            }
+          });
         } else {
           this.loginError = response.message;
         }
       }, error => {
         console.error('Error durante el login:', error);
-        this.loginError = error.error?.message || 'Error durante el login. Por favor, inténtelo de nuevo.';
+        // Verificar si es error de mantenimiento
+        if (error.status === 503 && error.error?.maintenance) {
+          this.router.navigate(['/maintenance'], {
+            queryParams: {
+              message: error.error.maintenanceMessage || 'Sistema en mantenimiento. Disculpe las molestias.'
+            }
+          });
+        } else {
+          this.loginError = error.error?.message || 'Error durante el login. Por favor, inténtelo de nuevo.';
+        }
       });
-    } else {
-      console.log('Formulario inválido');
     }
   }
 }

@@ -35,9 +35,8 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 import dashboardSettingsRoutes from './routes/dashboardSettings.js';
 import dashboardConfigRoutes from './routes/dashboardConfig.js';
-import maintenanceRoutes from './routes/maintenance.js';
-import maintenanceService from './services/maintenanceService.js';
-import { maintenanceMiddleware, criticalRouteMaintenanceMiddleware } from './middleware/maintenanceMiddleware.js';
+import maintenanceSimpleRoutes from './routes/maintenanceSimple.js';
+import { checkMaintenance } from './middleware/maintenanceMiddleware.js';
 
 // Cargar variables de entorno según el entorno
 const ENV = process.env.NODE_ENV || 'development';
@@ -268,18 +267,30 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Rutas API protegidas with JWT
-app.use('/api/tickets', authMiddleware, maintenanceMiddleware, ticketRoutes);
-app.use('/api/users', authMiddleware, criticalRouteMaintenanceMiddleware, userRoutes);
-app.use('/api/comments', authMiddleware, maintenanceMiddleware, commentRoutes);
-app.use('/api/notifications', authMiddleware, maintenanceMiddleware, notificationRoutes);
-app.use('/api/analytics', authMiddleware, criticalRouteMaintenanceMiddleware, analyticsRoutes);
+// Rutas API protegidas with JWT y mantenimiento
+app.use('/api/tickets', authMiddleware, checkMaintenance, ticketRoutes);
+app.use('/api/users', authMiddleware, checkMaintenance, userRoutes);
+app.use('/api/comments', authMiddleware, checkMaintenance, commentRoutes);
+app.use('/api/notifications', authMiddleware, checkMaintenance, notificationRoutes);
+app.use('/api/analytics', authMiddleware, checkMaintenance, analyticsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/dashboard', authMiddleware, maintenanceMiddleware, dashboardSettingsRoutes);
-app.use('/api/dashboard-config', authMiddleware, maintenanceMiddleware, dashboardConfigRoutes);
+app.use('/api/dashboard', authMiddleware, checkMaintenance, dashboardSettingsRoutes);
+app.use('/api/dashboard-config', authMiddleware, checkMaintenance, dashboardConfigRoutes);
 
-// Rutas de mantenimiento (manejo de auth interno en las rutas)
-app.use('/api/maintenance', maintenanceRoutes);
+// Ruta pública para consultar el estado de mantenimiento
+app.get('/api/maintenance/status', async (req, res) => {
+  try {
+    const MaintenanceSimpleService = (await import('./services/maintenanceSimpleService.js')).default;
+    const status = await MaintenanceSimpleService.getStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Error obteniendo estado de mantenimiento:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Rutas de mantenimiento (protegidas - requieren autenticación)
+app.use('/api/maintenance', authMiddleware, maintenanceSimpleRoutes);
 
 // Rutas públicas
 app.use('/api/auth', authRoutes);
@@ -348,6 +359,7 @@ io.on('connection', (socket) => {
     userSockets.get(userId).add(socket.id);
     socket.data.userId = userId;
   });
+  
   socket.on('disconnect', () => {
     const userId = socket.data.userId;
     if (userId && userSockets.has(userId)) {
@@ -438,12 +450,11 @@ checkAndCreateTables().then(() => {
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
     
-    // Configurar Socket.IO para WhatsApp y Mantenimiento
+    // Configurar Socket.IO para WhatsApp
     whatsappService.setSocketIO(io);
-    maintenanceService.setSocketIO(io);
     
-    // Configurar pool de base de datos para maintenanceService
-    maintenanceService.setPool(pool);
+    // Hacer io disponible para las rutas de mantenimiento
+    app.set('io', io);
     
     // Inicializar servicio de WhatsApp después de que el servidor esté listo
     setTimeout(() => {

@@ -80,7 +80,7 @@ export class EditUserComponent implements OnInit {
     this.userService.getUser(this.userId).subscribe(
       (user) => {
         // Si el usuario no es admin, restringir la edición de roles
-        if (this.userRole !== 'admin' && user.id !== +this.userId) {
+        if (user.id !== +this.userId) {
           this.snackBar.open('No tienes permiso para editar este usuario', 'Cerrar', { duration: 3000 });
           this.router.navigate(['/']);
           return;
@@ -94,16 +94,26 @@ export class EditUserComponent implements OnInit {
         this.snackBar.open(errorMessage, 'Cerrar', { duration: 5000 }); // Mostrar un mensaje más detallado
       }
     );
-  }
-
-  // Guardar los cambios
+  }  // Guardar los cambios
   saveChanges() {
     if (this.userForm.invalid) {
       this.snackBar.open('Por favor, completa todos los campos obligatorios.', 'Cerrar', { duration: 3000 });
       return;
     }
 
-    this.userService.updateUser(this.userId, this.userForm.value).subscribe(
+    // Prevenir que usuarios con rol 'user' guarden cambios si no son el mismo usuario
+    if (this.userRole === 'user' && this.authService.getUserId() !== this.userId) {
+      this.snackBar.open('No tienes permiso para editar este usuario', 'Cerrar', { duration: 3000 });
+      return;
+    }
+
+    // Obtener los valores del formulario, incluyendo los campos deshabilitados
+    const formData = { ...this.userForm.value };
+    if (this.userForm.get('phone')?.disabled) {
+      formData.phone = this.userForm.get('phone')?.value;
+    }
+
+    this.userService.updateUser(this.userId, formData).subscribe(
       (response) => {
         const message = response?.message || 'Usuario actualizado exitosamente';
         this.snackBar.open(message, 'Cerrar', { duration: 3000 });

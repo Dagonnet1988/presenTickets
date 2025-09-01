@@ -17,6 +17,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { pool } from "../server.js";
+import MaintenanceSimpleService from "../services/maintenanceSimpleService.js";
 
 const router = express.Router();
 
@@ -50,11 +51,22 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Credenciales inválidas" });
     }
 
+    // Verificar estado de mantenimiento antes de permitir login
+    const isInMaintenance = await MaintenanceSimpleService.isInMaintenance();
+    if (isInMaintenance && user.role !== 'admin') {
+      const maintenanceStatus = await MaintenanceSimpleService.getStatus();
+      return res.status(503).json({ 
+        message: "Sistema en mantenimiento",
+        maintenance: true,
+        maintenanceMessage: maintenanceStatus.message || 'Sistema en mantenimiento. Disculpe las molestias.'
+      });
+    }
+
     // Generar JWT
     const token = jwt.sign(
       { id: user.id, username: user.firstname, role: user.role },
       process.env.JWT_SECRET || "supersecreto",
-      { expiresIn: "8h" }
+      { expiresIn: "12h" }
     );
 
     // Login exitoso

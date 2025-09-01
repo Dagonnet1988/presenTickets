@@ -1,0 +1,45 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+-->
+
+<div class="maintenance-page">
+  <div class="maintenance-container">
+    <mat-card class="maintenance-card">
+      <mat-card-content>
+        <div class="maintenance-icon">
+          <mat-icon>build</mat-icon>
+        </div>
+
+        <h1>Sistema en Mantenimiento</h1>
+
+        <p class="message">
+          {{ maintenanceMessage || 'El sistema está temporalmente en mantenimiento. Disculpe las molestias.' }}
+        </p>
+
+        <div class="status-check">
+          <mat-spinner diameter="24" *ngIf="isChecking"></mat-spinner>
+          <span>Verificando estado del sistema...</span>
+        </div>
+
+        <div class="actions">
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="checkStatus()"
+            [disabled]="isChecking">
+            <mat-icon>refresh</mat-icon>
+            Verificar Estado
+          </button>
+
+          <button
+            mat-stroked-button
+            (click)="logout()">
+            <mat-icon>logout</mat-icon>
+            Cerrar Sesión
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

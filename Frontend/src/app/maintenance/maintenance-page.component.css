@@ -1,0 +1,88 @@
+/*
+ * PresenTickets - Sistema de Gestión de Tickets de Soporte
+ * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+ */
+
+.maintenance-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.maintenance-container {
+  max-width: 600px;
+  width: 100%;
+}
+
+.maintenance-card {
+  text-align: center;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.maintenance-icon {
+  margin-bottom: 24px;
+}
+
+.maintenance-icon mat-icon {
+  font-size: 72px;
+  width: 72px;
+  height: 72px;
+  color: #ff9800;
+}
+
+h1 {
+  color: #424242;
+  margin-bottom: 24px;
+  font-weight: 300;
+}
+
+.message {
+  font-size: 16px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  padding: 16px;
+  background-color: #fff3e0;
+  border-radius: 8px;
+  border-left: 4px solid #ff9800;
+}
+
+.status-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  color: #666;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  min-width: 160px;
+}
+
+@media (max-width: 600px) {
+  .maintenance-page {
+    padding: 16px;
+  }
+
+  .maintenance-card {
+    padding: 24px 16px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: center;
+  }
+}

@@ -38,6 +38,8 @@ import { AuthService } from '../shared/services/auth.service';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
 import * as ExcelJS from 'exceljs';
+import { PLATFORM_ID, Inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 
 @Component({
   selector: 'app-whatsapp-admin',
@@ -173,7 +175,8 @@ export class WhatsAppAdminComponent implements OnInit {
   historyFilter = {
     status: '',
     user: '',
-    type: ''
+    type: '',
+    search: ''
   };
 
   // Modal de mensaje completo
@@ -229,7 +232,8 @@ export class WhatsAppAdminComponent implements OnInit {
   constructor(
     private whatsappService: WhatsappService,
     private snackBar: MatSnackBar,
-    private authService: AuthService
+    private authService: AuthService,
+    @Inject(PLATFORM_ID) private platformId: Object
   ) {
     // Configurar etiquetas del paginador para mensajes
     this.customPaginatorIntl.itemsPerPageLabel = 'Mensajes por página:';
@@ -244,6 +248,13 @@ export class WhatsAppAdminComponent implements OnInit {
       return `${startIndex + 1} – ${endIndex} de ${length}`;
     };
 
+    // Solo inicializar Socket.IO en el navegador
+    if (isPlatformBrowser(this.platformId)) {
+      this.initializeSocket();
+    }
+  }
+
+  private initializeSocket() {
     // Inicializar Socket.IO
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
@@ -609,25 +620,25 @@ export class WhatsAppAdminComponent implements OnInit {
   async loadNotificationHistory() {
     this.loading.notifications = true;
     try {
-      // Pasar parámetros de paginación al backend (convertir page/size a limit/offset)
-      const params: any = {
-        limit: this.pageSize,
-        offset: this.currentPage * this.pageSize
-      };
+      // Calcular page y offset
+      const page = this.currentPage;
+      const limit = this.pageSize;
 
-      // Agregar filtros si están definidos
-      if (this.historyFilter.status) {
-        params.status = this.historyFilter.status;
-      }
-      if (this.historyFilter.user) {
-        params.user = this.historyFilter.user;
-      }
-      if (this.historyFilter.type) {
-        params.type = this.historyFilter.type;
-      }
+      // Extraer filtros
+      const search = this.historyFilter.search || '';
+      const status = this.historyFilter.status || 'all';
+      const type = this.historyFilter.type || 'all';
+      const user = this.historyFilter.user || '';
 
-      // Ahora todos los filtros se aplican en el backend
-      const response = await this.whatsappService.getNotificationHistory(params);
+            // Llamar al servicio con parámetros individuales
+      const response = await this.whatsappService.getNotificationHistory(
+        page,
+        limit,
+        search,
+        status,
+        type,
+        user
+      );
 
       // Verificar si la respuesta tiene la nueva estructura con metadata
       if (response && typeof response === 'object' && response.data) {
@@ -817,7 +828,8 @@ export class WhatsAppAdminComponent implements OnInit {
     this.historyFilter = {
       status: '',
       user: '',
-      type: ''
+      type: '',
+      search: ''
     };
     this.applyHistoryFilter();
   }
@@ -1013,6 +1025,7 @@ export class WhatsAppAdminComponent implements OnInit {
       case 'comentario':
       case 'comentario_user':
       case 'comentario_tech':
+      case 'comentario_admin':
       case 'admin_comentario':
       case 'comment':
         return 'comment';
@@ -1055,6 +1068,8 @@ export class WhatsAppAdminComponent implements OnInit {
         return 'Comentario Usuario';
       case 'comentario_tech':
         return 'Comentario Técnico';
+      case 'comentario_admin':
+        return 'Comentario Admin';
       case 'admin_comentario':
         return 'Comentario Admin';
       case 'test_message':
@@ -1089,6 +1104,7 @@ export class WhatsAppAdminComponent implements OnInit {
       case 'comentario':
       case 'comentario_user':
       case 'comentario_tech':
+      case 'comentario_admin':
       case 'admin_comentario':
       case 'comment':
         return 'type-comment';

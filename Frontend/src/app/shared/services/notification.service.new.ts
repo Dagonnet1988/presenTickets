@@ -52,21 +52,20 @@ export class NotificationService {
     });
 
     this.socket.on('connect', () => {
-      const userId = this.authService.getUserId();
+            const userId = this.authService.getUserId();
       if (userId) {
-        this.socket.emit('register', String(userId));
+                this.socket.emit('register', String(userId));
         this.fetchUnreadNotifications();
         this.checkMaintenanceStatus();
       }
     });
 
     this.socket.on('disconnect', () => {
-      // Manejador de desconexión
-    });
+          });
 
     // Listener para eventos de mantenimiento
     this.socket.on('maintenance-countdown', (data: { message: string; countdownSeconds: number }) => {
-      this.ngZone.run(() => {
+            this.ngZone.run(() => {
         this.maintenanceSubject.next({
           active: false,
           message: data.message,
@@ -76,7 +75,7 @@ export class NotificationService {
     });
 
     this.socket.on('maintenance-start', () => {
-      this.ngZone.run(() => {
+            this.ngZone.run(() => {
         this.maintenanceSubject.next({
           active: true
         });
@@ -84,7 +83,7 @@ export class NotificationService {
     });
 
     this.socket.on('maintenance-ended', () => {
-      this.ngZone.run(() => {
+            this.ngZone.run(() => {
         this.maintenanceSubject.next({
           active: false,
           countdown: 0
@@ -110,12 +109,10 @@ export class NotificationService {
         const current = this.notificationsSubject.value;
         const currentTicketId = this.getCurrentTicketIdFromUrl();
 
-        // Extraer ticketId correctamente del objeto de notificación en tiempo real
-        const notificationTicketId = notification.data?.ticketId || notification.ticket_id;
-
-        if (currentTicketId === notificationTicketId) {
+        if (currentTicketId === notification.ticket_id) {
           if (notification.id) {
             this.markSingleNotificationAsRead(notification.id.toString()).subscribe({
+              next: () => {},
               error: (error) => console.error('Error marcando notificación como leída:', error)
             });
           }
@@ -123,30 +120,16 @@ export class NotificationService {
             window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
           }, 100);
         } else {
-          // Adaptar la notificación en tiempo real al formato esperado
-          const adaptedNotification: TicketNotification = {
-            id: notification.id,
-            ticket_id: notificationTicketId,
-            external_ticket_id: notification.data?.external_ticket_id,
-            type: notification.type,
-            message: notification.message,
-            data: notification.data,
-            timestamp: new Date(),
-            read: false
-          };
-
-          const newNotifications = [...current, adaptedNotification];
+          const newNotifications = [...current, notification];
           this.notificationsSubject.next(newNotifications);
         }
 
         if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            const ticketId = notification.data?.ticketId || notification.ticket_id;
-            const externalTicketId = notification.data?.external_ticket_id || notification.external_ticket_id;
-            new Notification(`Nuevo comentario en Ticket #${externalTicketId || ticketId}`, {
+            new Notification(`Nuevo comentario en Ticket #${notification.external_ticket_id}`, {
               body: notification.message,
               icon: '/favicon.ico',
-              tag: `ticket-${ticketId}`,
+              tag: `ticket-${notification.ticket_id}`,
               badge: '/favicon.ico'
             });
           } catch (error) {
@@ -175,7 +158,7 @@ export class NotificationService {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    this.http.get<TicketNotification[]>(`${environment.backendUrl}/api/notifications`, {
+    this.http.get<TicketNotification[]>(`${environment.backendUrl}/api/notifications/unread`, {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: (notifications) => {

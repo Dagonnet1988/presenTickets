@@ -55,8 +55,7 @@ router.post('/connect', authMiddleware, adminMiddleware, async (req, res) => {
     // Configurar callback para conexión
     whatsappService.onConnection((connected) => {
       if (connected) {
-        console.log('✅ WhatsApp conectado exitosamente');
-      }
+              }
     });
 
     // Inicializar conexión
@@ -345,7 +344,8 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
  */
 router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const stats = await whatsappService.getNotificationStats();
+    const { period = '7' } = req.query; // Respetar filtro del frontend
+    const stats = await whatsappService.getNotificationStats(period);
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
@@ -358,32 +358,36 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { limit = 50, offset = 0, status, user, type } = req.query;
+    const { limit = 50, offset = 0, page = 0, status, user, type, search } = req.query;
     const client = await pool.connect();
     
-    // Construir condiciones WHERE dinámicamente para aplicar dentro de la consulta
+    // Calcular offset basado en page si se proporciona page en lugar de offset
+    const actualOffset = page ? parseInt(page) * parseInt(limit) : parseInt(offset);
+    
+    // Construir condiciones WHERE dinámicamente
     let whereConditions = [];
     let queryParams = [];
     let paramIndex = 1;
     
-    // Agregar condiciones de filtro
-    if (status) {
+    // Filtro por estado
+    if (status && status !== 'all') {
       whereConditions.push(`wn.status = $${paramIndex}`);
       queryParams.push(status);
       paramIndex++;
     }
     
-    if (user) {
+    // Filtro por usuario (búsqueda en nombre)
+    if (user && user.trim() !== '') {
       whereConditions.push(`(u.firstname ILIKE $${paramIndex} OR u.lastname ILIKE $${paramIndex} OR (u.firstname || ' ' || u.lastname) ILIKE $${paramIndex})`);
-      queryParams.push(`%${user}%`);
+      queryParams.push(`%${user.trim()}%`);
       paramIndex++;
     }
     
-    if (type) {
-      // Usar tipos normalizados para el filtro
-      const normalizedType = type;
+    // Filtro por tipo de mensaje
+    if (type && type !== 'all') {
+      const normalizedType = type.toLowerCase().trim();
       if (normalizedType === 'comentario') {
-        whereConditions.push(`wn.notification_type IN ('comentario_user', 'comentario_tech', 'admin_comentario', 'comment')`);
+        whereConditions.push(`wn.notification_type IN ('comentario_user', 'comentario_tech', 'comentario_admin', 'admin_comentario', 'comment')`);
       } else if (normalizedType === 'nuevo_ticket') {
         whereConditions.push(`wn.notification_type IN ('new_ticket', 'nuevo_ticket')`);
       } else if (normalizedType === 'ticket_asignado') {
@@ -391,15 +395,27 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
       } else if (normalizedType === 'cambio_estado') {
         whereConditions.push(`wn.notification_type IN ('status_change', 'cambio_estado', 'ticket_reabierto')`);
       } else {
-        whereConditions.push(`wn.notification_type = $${paramIndex}`);
-        queryParams.push(type);
+        whereConditions.push(`wn.notification_type ILIKE $${paramIndex}`);
+        queryParams.push(`%${type}%`);
         paramIndex++;
       }
     }
     
+    // Búsqueda general (en mensaje, asunto del ticket, teléfono)
+    if (search && search.trim() !== '') {
+      whereConditions.push(`(
+        wn.message ILIKE $${paramIndex} OR 
+        wn.phone_number ILIKE $${paramIndex} OR 
+        t.title ILIKE $${paramIndex} OR
+        wn.error_message ILIKE $${paramIndex}
+      )`);
+      queryParams.push(`%${search.trim()}%`);
+      paramIndex++;
+    }
+    
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
-    // Query base con filtros aplicados DENTRO de la consulta
+    // Query base con filtros aplicados
     const baseQuery = `
       SELECT 
         wn.id,
@@ -416,7 +432,7 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
         u.phone,
         t.title as ticket_subject,
         CASE 
-          WHEN wn.notification_type IN ('comentario_user', 'comentario_tech', 'admin_comentario', 'comment') THEN 'comentario'
+          WHEN wn.notification_type IN ('comentario_user', 'comentario_tech', 'comentario_admin', 'admin_comentario', 'comment') THEN 'comentario'
           WHEN wn.notification_type IN ('new_ticket', 'nuevo_ticket') THEN 'nuevo_ticket'
           WHEN wn.notification_type IN ('ticket_assigned', 'ticket_asignado') THEN 'ticket_asignado'
           WHEN wn.notification_type IN ('status_change', 'cambio_estado', 'ticket_reabierto') THEN 'cambio_estado'
@@ -428,14 +444,14 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
       ${whereClause}
     `;
     
-    // Primero obtener el count total con filtros
+    // Obtener count total con filtros
     const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) filtered_messages`;
     const countResult = await client.query(countQuery, queryParams);
     const totalCount = parseInt(countResult.rows[0].total);
     
-    // Luego obtener los datos paginados con filtros
+    // Obtener datos paginados con filtros
     const dataQuery = `${baseQuery} ORDER BY wn.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    queryParams.push(limit, offset);
+    queryParams.push(limit, actualOffset);
     const result = await client.query(dataQuery, queryParams);
 
     client.release();
@@ -444,8 +460,14 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
     res.json({
       data: result.rows,
       total: totalCount,
-      page: Math.floor(offset / limit) + 1,
-      limit: limit
+      page: Math.floor(actualOffset / limit) + 1,
+      limit: parseInt(limit),
+      filters: {
+        status: status || 'all',
+        user: user || '',
+        type: type || 'all',
+        search: search || ''
+      }
     });
   } catch (error) {
     console.error('❌ Error obteniendo historial WhatsApp:', error);
@@ -547,7 +569,6 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     }
 
     // 3. ENVIAR NOTIFICACIÓN SI TODAS LAS VERIFICACIONES PASAN
-    console.log(`✅ Enviando notificación ${notificationType} a usuario ${userId} para ticket ${ticketId}`);
     return await whatsappService.sendTicketNotification(userId, ticketId, message, notificationType);
   } catch (error) {
     console.error('❌ Error enviando notificación WhatsApp:', error);
@@ -881,7 +902,7 @@ router.get('/hourly-usage', authMiddleware, adminMiddleware, async (req, res) =>
 });
 
 /**
- * Configurar límites de rate limiting (solo admin)
+ * Configurar límites de rate limiting (solo admin) - PERSISTENTE EN BD
  */
 router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -902,20 +923,64 @@ router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, re
       return res.status(400).json({ error: 'Límite por hora debe estar entre 1 y 100' });
     }
     
-    // Actualizar configuración
-    const rateLimits = whatsappService.rateLimits;
-    if (maxDailyMessages) rateLimits.maxDailyMessages = maxDailyMessages;
-    if (maxMessagesPerHour) rateLimits.maxMessagesPerHour = maxMessagesPerHour;
-    if (minDelayBetweenMessages) rateLimits.minDelayBetweenMessages = minDelayBetweenMessages;
-    if (maxDelayBetweenMessages) rateLimits.maxDelayBetweenMessages = maxDelayBetweenMessages;
-    if (maxBurstMessages) rateLimits.maxBurstMessages = maxBurstMessages;
+    if (minDelayBetweenMessages && minDelayBetweenMessages < 500) {
+      return res.status(400).json({ error: 'Delay mínimo debe ser al menos 500ms' });
+    }
     
-    res.json({ 
-      message: 'Límites actualizados exitosamente',
-      newLimits: rateLimits
-    });
+    if (maxDelayBetweenMessages && maxDelayBetweenMessages > 30000) {
+      return res.status(400).json({ error: 'Delay máximo no puede exceder 30 segundos' });
+    }
+    
+    // Actualizar configuración en memoria
+    const rateLimits = whatsappService.rateLimits;
+    if (maxDailyMessages !== undefined) rateLimits.maxDailyMessages = maxDailyMessages;
+    if (maxMessagesPerHour !== undefined) rateLimits.maxMessagesPerHour = maxMessagesPerHour;
+    if (minDelayBetweenMessages !== undefined) rateLimits.minDelayBetweenMessages = minDelayBetweenMessages;
+    if (maxDelayBetweenMessages !== undefined) rateLimits.maxDelayBetweenMessages = maxDelayBetweenMessages;
+    if (maxBurstMessages !== undefined) rateLimits.maxBurstMessages = maxBurstMessages;
+    
+    // Persistir en base de datos
+    const saved = await whatsappService.saveAntiBlockConfigToDB();
+    
+    if (saved) {
+      res.json({ 
+        message: 'Límites actualizados y guardados exitosamente en base de datos',
+        newLimits: rateLimits,
+        persistent: true
+      });
+    } else {
+      res.json({ 
+        message: 'Límites actualizados en memoria pero error al guardar en BD',
+        newLimits: rateLimits,
+        persistent: false,
+        warning: 'Los cambios se perderán al reiniciar el servidor'
+      });
+    }
   } catch (error) {
     console.error('❌ Error configurando límites:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener configuración actual de límites de antibloqueo
+ */
+router.get('/get-limits', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const rateLimits = whatsappService.rateLimits;
+    res.json({
+      message: 'Configuración actual de límites',
+      limits: rateLimits,
+      info: {
+        minDelayBetweenMessages: 'Delay mínimo entre mensajes (ms)',
+        maxDelayBetweenMessages: 'Delay máximo entre mensajes (ms)',
+        maxMessagesPerHour: 'Máximo mensajes por hora',
+        maxDailyMessages: 'Máximo mensajes por día',
+        maxBurstMessages: 'Máximo mensajes en ráfaga'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error obteniendo límites:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

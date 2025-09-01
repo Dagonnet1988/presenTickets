@@ -13,3 +13,11 @@
 -->
 
 <router-outlet></router-outlet>
+
+<!-- Countdown flotante de mantenimiento -->
+<app-maintenance-countdown
+  [show]="showCountdown"
+  [countdown]="countdownSeconds"
+  [message]="countdownMessage"
+  (dismiss)="onCountdownDismiss()">
+</app-maintenance-countdown>

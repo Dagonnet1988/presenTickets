@@ -54,18 +54,109 @@ class WhatsAppService {
     this.messageQueue = [];
     this.processingQueue = false;
     
-    // Configuración de límites de seguridad anti-detección
+    // Configuración de límites de seguridad anti-detección (CARGADOS DESDE BD)
     this.rateLimits = {
-      minDelayBetweenMessages: 3000, // 3 segundos mínimo entre mensajes
-      maxDelayBetweenMessages: 8000, // 8 segundos máximo (simular comportamiento humano)
-      maxMessagesPerHour: 20,        // Máximo 20 mensajes por hora (números nuevos)
-      maxDailyMessages: 100,         // Máximo 100 mensajes por día
-      maxBurstMessages: 3            // Máximo 3 mensajes seguidos, luego pausa larga
+      minDelayBetweenMessages: 1000, // Se cargará desde BD
+      maxDelayBetweenMessages: 3000, // Se cargará desde BD
+      maxMessagesPerHour: 60,        // Se cargará desde BD
+      maxDailyMessages: 200,         // Se cargará desde BD
+      maxBurstMessages: 5            // Se cargará desde BD
     };
+    
+    // NO cargar configuración aquí - se hará después cuando pool esté disponible
     
     // Crear carpeta de autenticación si no existe
     if (!fs.existsSync(this.authFolder)) {
       fs.mkdirSync(this.authFolder, { recursive: true });
+    }
+  }
+
+  /**
+   * Inicializar servicio WhatsApp (debe llamarse después de que pool esté disponible)
+   */
+  async initialize() {
+    try {
+      // Cargar configuración de antibloqueo desde BD
+      await this.loadAntiBlockConfigFromDB();
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error inicializando servicio WhatsApp:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Cargar configuración de antibloqueo desde la base de datos
+   */
+  async loadAntiBlockConfigFromDB() {
+    try {
+      // Verificar que pool esté disponible
+      if (!pool) {
+        return;
+      }
+
+      const client = await pool.connect();
+      const result = await client.query(`
+        SELECT 
+          whatsapp_min_delay,
+          whatsapp_max_delay,
+          whatsapp_max_hour,
+          whatsapp_max_daily,
+          whatsapp_max_burst
+        FROM system_settings 
+        WHERE id = 1
+      `);
+      
+      if (result.rows.length > 0) {
+        const config = result.rows[0];
+        this.rateLimits.minDelayBetweenMessages = config.whatsapp_min_delay || 1000;
+        this.rateLimits.maxDelayBetweenMessages = config.whatsapp_max_delay || 3000;
+        this.rateLimits.maxMessagesPerHour = config.whatsapp_max_hour || 60;
+        this.rateLimits.maxDailyMessages = config.whatsapp_max_daily || 200;
+        this.rateLimits.maxBurstMessages = config.whatsapp_max_burst || 5;
+      }
+      
+      client.release();
+    } catch (error) {
+      console.error('❌ Error cargando configuración de antibloqueo desde BD:', error);
+    }
+  }
+
+  /**
+   * Guardar configuración de antibloqueo en la base de datos
+   */
+  async saveAntiBlockConfigToDB() {
+    try {
+      // Verificar que pool esté disponible
+      if (!pool) {
+        console.error('❌ Pool de BD no disponible para guardar configuración');
+        return false;
+      }
+
+      const client = await pool.connect();
+      await client.query(`
+        UPDATE system_settings SET
+          whatsapp_min_delay = $1,
+          whatsapp_max_delay = $2,
+          whatsapp_max_hour = $3,
+          whatsapp_max_daily = $4,
+          whatsapp_max_burst = $5,
+          updated_at = NOW()
+        WHERE id = 1
+      `, [
+        this.rateLimits.minDelayBetweenMessages,
+        this.rateLimits.maxDelayBetweenMessages,
+        this.rateLimits.maxMessagesPerHour,
+        this.rateLimits.maxDailyMessages,
+        this.rateLimits.maxBurstMessages
+      ]);
+      
+            client.release();
+      return true;
+    } catch (error) {
+      console.error('❌ Error guardando configuración de antibloqueo en BD:', error);
+      return false;
     }
   }
 
@@ -83,18 +174,15 @@ class WhatsAppService {
     try {
       // Verificar si ya hay una sesión activa
       if (this.isConnected && this.socket) {
-        console.log('⚠️ WhatsApp ya está conectado');
-        return;
+                return;
       }
 
       // Verificar si ya se está inicializando
       if (this.isInitializing) {
-        console.log('⚠️ WhatsApp ya se está inicializando, esperando...');
-        return;
+                return;
       }
 
-      console.log('🔄 Iniciando servicio WhatsApp...');
-      this.isInitializing = true;
+            this.isInitializing = true;
       
       // Configurar estado de autenticación
       const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
@@ -117,8 +205,7 @@ class WhatsAppService {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr && !this.isConnected) {
-          console.log('📱 Nuevo código QR generado');
-          this.generateQRCode(qr);
+                    this.generateQRCode(qr);
         }
         
         if (connection === 'close') {
@@ -126,13 +213,10 @@ class WhatsAppService {
             ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
             : true;
           
-          console.log('🔌 Conexión cerrada, reconectando...', shouldReconnect);
-          
-          // Si es un error 401 (Unauthorized), limpiar completamente la sesión
+                    // Si es un error 401 (Unauthorized), limpiar completamente la sesión
           if (lastDisconnect?.error instanceof Boom && 
               lastDisconnect.error.output.statusCode === 401) {
-            console.log('🧹 Sesión expirada - Limpiando archivos...');
-            await this.forceCleanAuthFolder();
+                        await this.forceCleanAuthFolder();
             this.isConnected = false;
             this.currentQRCode = null;
             
@@ -156,8 +240,7 @@ class WhatsAppService {
             setTimeout(() => this.initialize(), 5000);
           }
         } else if (connection === 'open') {
-          console.log('✅ WhatsApp conectado exitosamente');
-          this.isConnected = true;
+                    this.isConnected = true;
           this.currentQRCode = null;
           this.isInitializing = false; // Limpiar bandera al conectar exitosamente
           
@@ -230,8 +313,7 @@ class WhatsAppService {
       // Actualizar contadores
       this.updateMessageCounters();
       
-      console.log(`✅ Mensaje enviado a ${phoneNumber} (Total hoy: ${this.dailyMessageCount})`);
-      return result;
+            return result;
     } catch (error) {
       console.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error);
       throw error;
@@ -279,10 +361,9 @@ class WhatsAppService {
     let delay = 0;
     
     if (this.messageCount > 0 && this.messageCount % this.rateLimits.maxBurstMessages === 0) {
-      // Después de una ráfaga, pausa más larga (30-60 segundos)
-      delay = Math.random() * 30000 + 30000;
-      console.log(`⏸️ Pausa larga después de ráfaga: ${Math.round(delay/1000)}s`);
-    } else {
+      // Después de una ráfaga, pausa moderada (10-20 segundos) - Reducido de 30-60s
+      delay = Math.random() * 10000 + 10000;
+          } else {
       // Delay normal entre mensajes
       const minDelay = this.rateLimits.minDelayBetweenMessages;
       const maxDelay = this.rateLimits.maxDelayBetweenMessages;
@@ -295,8 +376,7 @@ class WhatsAppService {
     }
     
     if (delay > 0) {
-      console.log(`⏳ Esperando ${Math.round(delay/1000)}s antes del próximo mensaje...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
@@ -368,8 +448,7 @@ class WhatsAppService {
 
       // Verificar si WhatsApp está habilitado globalmente
       if (!globalConfig.whatsapp_global_enabled) {
-        console.log('⚠️ Notificaciones WhatsApp deshabilitadas globalmente');
-        await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Notificaciones WhatsApp deshabilitadas globalmente', null, notificationType);
+                await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Notificaciones WhatsApp deshabilitadas globalmente', null, notificationType);
         client.release();
         return false;
       }
@@ -525,9 +604,9 @@ class WhatsAppService {
       ],
       
       'cambio_estado': [
-        '🔄 *Actualización de Ticket*\n\nHola {userName},\n\nTicket #{ticketId}: {newStatus}\n� {subject}\n\n⏰ {timestamp}',
+        '🔄 *Actualización de Ticket*\n\nHola {userName},\n\nTicket #{ticketId}: {newStatus}\n 📄 {subject}\n\n⏰ {timestamp}',
         '📈 *Estado Actualizado*\n\n{userName}, su ticket cambió a: {newStatus}\n\n🎫 #{ticketId}\n📝 {subject}\n\n🕒 {timestamp}',
-        '🔄 *PresenTickets*\n\nHola {userName},\n\nNuevo estado para #{ticketId}: {newStatus}\n📄 {subject}\n\n📅 {timestamp}'
+        '🔄 *PresenTickets*\n\nHola {userName},\n\nNuevo estado para #{ticketId}: {newStatus}\n\n📅 {timestamp}'
       ],
       
       'comentario': [
@@ -545,6 +624,7 @@ class WhatsAppService {
       'ticket_reabierto': 'cambio_estado',
       'comentario_user': 'comentario',
       'comentario_tech': 'comentario',
+      'comentario_admin': 'comentario',
       'admin_comentario': 'comentario',
       'comment': 'comentario'
     };
@@ -626,9 +706,7 @@ class WhatsAppService {
    */
   async disconnect() {
     try {
-      console.log('🔌 Desconectando WhatsApp...');
-      
-      // Limpiar estado de conexión inmediatamente
+            // Limpiar estado de conexión inmediatamente
       this.isConnected = false;
       this.currentQRCode = null;
       
@@ -664,8 +742,7 @@ class WhatsAppService {
         });
       }
       
-      console.log('✅ WhatsApp desconectado correctamente');
-    } catch (error) {
+          } catch (error) {
       console.error('❌ Error durante desconexión:', error);
       // Limpiar de todas formas
       this.socket = null;
@@ -680,9 +757,7 @@ class WhatsAppService {
    */
   async reconnect() {
     try {
-      console.log('🔄 Reconectando WhatsApp...');
-      
-      // Primero desconectar si existe conexión
+            // Primero desconectar si existe conexión
       await this.disconnect();
       
       // Esperar un momento antes de reconectar
@@ -719,9 +794,7 @@ class WhatsAppService {
    */
   async forceCleanAuthFolder() {
     try {
-      console.log('🧹 Limpiando archivos de autenticación...');
-      
-      if (fs.existsSync(this.authFolder)) {
+            if (fs.existsSync(this.authFolder)) {
         const files = fs.readdirSync(this.authFolder);
         
         for (const file of files) {
@@ -746,8 +819,7 @@ class WhatsAppService {
         // Recrear la carpeta vacía
         fs.rmSync(this.authFolder, { recursive: true, force: true });
         fs.mkdirSync(this.authFolder, { recursive: true });
-        console.log('✅ Archivos de autenticación eliminados');
-      } else {
+              } else {
         // Crear la carpeta si no existe
         fs.mkdirSync(this.authFolder, { recursive: true });
       }
@@ -768,24 +840,84 @@ class WhatsAppService {
   /**
    * Obtener estadísticas de notificaciones
    */
-  async getNotificationStats() {
+  async getNotificationStats(period = '7') {
     try {
       const client = await pool.connect();
-      const result = await client.query(`
+      
+      // Validar período
+      const validPeriods = ['7', '30', '90', '365'];
+      const days = validPeriods.includes(period) ? period : '7';
+      
+      // Obtener totales por estado (respetando el período)
+      const totalsResult = await client.query(`
+        SELECT 
+          status,
+          COUNT(*) as count
+        FROM whatsapp_notifications 
+        WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        GROUP BY status
+        ORDER BY status
+      `);
+      
+      // Obtener tendencias por día
+      const trendsResult = await client.query(`
         SELECT 
           status,
           COUNT(*) as count,
-          DATE(created_at) as date
+          TO_CHAR(created_at, 'YYYY-MM-DD') as date,
+          TO_CHAR(created_at, 'DD/MM') as date_formatted
         FROM whatsapp_notifications 
-        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY status, DATE(created_at)
+        WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        GROUP BY status, DATE(created_at), TO_CHAR(created_at, 'YYYY-MM-DD'), TO_CHAR(created_at, 'DD/MM')
         ORDER BY date DESC
       `);
+      
       client.release();
-      return result.rows;
+      
+      // Procesar datos para el frontend
+      const stats = {
+        period: `${days} días`,
+        totals: {
+          sent: 0,
+          failed: 0,
+          pending: 0
+        },
+        trends: trendsResult.rows,
+        lastUpdate: new Date().toLocaleString('es-ES', { 
+          timeZone: 'America/Bogota',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
+      
+      // Agrupar totales por estado
+      totalsResult.rows.forEach(row => {
+        switch(row.status) {
+          case 'sent':
+            stats.totals.sent = parseInt(row.count);
+            break;
+          case 'failed':
+            stats.totals.failed = parseInt(row.count);
+            break;
+          case 'pending':
+            stats.totals.pending = parseInt(row.count);
+            break;
+        }
+      });
+      
+      return stats;
     } catch (error) {
       console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
-      return [];
+      return {
+        period: '7 días',
+        totals: { sent: 0, failed: 0, pending: 0 },
+        trends: [],
+        lastUpdate: new Date().toLocaleString('es-ES'),
+        error: 'Error al cargar estadísticas'
+      };
     }
   }
 

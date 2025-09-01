@@ -31,22 +31,29 @@ import { MainLayoutComponent } from './shared/components/main-layout.component';
 import { AboutComponent } from './about/about.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { WhatsAppAdminComponent } from './whatsapp-admin/whatsapp-admin.component';
-import { MaintenanceComponent } from './maintenance/maintenance.component';
+import { MaintenanceSimpleComponent } from './maintenance/maintenance-simple.component';
+import { MaintenancePageComponent } from './maintenance/maintenance-page.component';
+import { MaintenanceGuard } from './shared/guards/maintenance.guard';
 
 export const routes: Routes = [
+  // Ruta pública de mantenimiento (sin autenticación)
+  { path: 'maintenance', component: MaintenancePageComponent },
+
   {
     path: '',
     component: MainLayoutComponent,
-    canActivate: [AuthGuard],
-    children: [      { path: '', component: HomeComponent, pathMatch: 'full'},
+    canActivate: [AuthGuard, MaintenanceGuard],
+    children: [
+      { path: '', component: HomeComponent, pathMatch: 'full'},
       { path: 'dashboard', component: DashboardComponent, canActivate: [TechOrAdminGuard] },
       { path: 'profile', component: ProfileComponent },
       { path: 'create-ticket', component: CreateTicketComponent },
       { path: 'ticket/:id', component: DetailsTicketComponent },
-      { path: 'create-user', component: CreateUserComponent, canActivate: [AdminGuard] },      { path: 'manage-users', component: ManageUsersComponent, canActivate: [AdminGuard] },
+      { path: 'create-user', component: CreateUserComponent, canActivate: [AdminGuard] },
+      { path: 'manage-users', component: ManageUsersComponent, canActivate: [AdminGuard] },
       { path: 'edit-user/:id', component: EditUserComponent, canActivate: [AdminGuard] },
       { path: 'whatsapp-admin', component: WhatsAppAdminComponent, canActivate: [AdminGuard] },
-      { path: 'maintenance', component: MaintenanceComponent, canActivate: [AdminGuard] },
+      { path: 'maintenance-admin', component: MaintenanceSimpleComponent, canActivate: [AdminGuard] },
       { path: 'about', component: AboutComponent },
     ]
   },

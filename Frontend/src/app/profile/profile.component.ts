@@ -47,11 +47,15 @@ export class ProfileComponent implements OnInit {
   userForm!: FormGroup;
   passwordForm!: FormGroup;
   passwordChangeMode = false;
+  userRole: string = '';
+  isPhoneReadonly: boolean = false;
 
   constructor(private userService: UserService, private authService: AuthService, private fb: FormBuilder, private snackBar: MatSnackBar) {}
 
   ngOnInit(): void {
     this.userID = this.authService.getUserId() || '';
+    this.userRole = this.authService.getUserRole() || '';
+    this.isPhoneReadonly = this.userRole === 'user';
     this.initForms();
     this.getUserData();
   }
@@ -77,6 +81,16 @@ export class ProfileComponent implements OnInit {
         lastname: data.lastname,
         phone: data.phone
       });
+
+      // Actualizar el estado de readonly del teléfono basado en el rol del usuario
+      this.isPhoneReadonly = data.role === 'user';
+
+      // Deshabilitar el campo teléfono si es readonly
+      if (this.isPhoneReadonly) {
+        this.userForm.get('phone')?.disable();
+      } else {
+        this.userForm.get('phone')?.enable();
+      }
     });
   }
 
@@ -85,8 +99,23 @@ export class ProfileComponent implements OnInit {
       this.snackBar.open('Datos inválidos', 'Cerrar', { duration: 3000 });
       return;
     }
-    this.userService.updateUser(this.userID, this.userForm.value).subscribe(response => {
-      this.snackBar.open('Perfil actualizado', 'Cerrar', { duration: 3000 });
+
+    // Preparar los datos para enviar
+    let profileData = { ...this.userForm.value };
+
+    // Si el campo teléfono está deshabilitado, incluir el valor original
+    if (this.isPhoneReadonly && this.user?.phone) {
+      profileData.phone = this.user.phone;
+    }
+
+    this.userService.updateProfile(this.userID, profileData).subscribe({
+      next: (response) => {
+        this.snackBar.open('Perfil actualizado', 'Cerrar', { duration: 3000 });
+      },
+      error: (error) => {
+        console.error('Error updating profile:', error);
+        this.snackBar.open('Error al actualizar el perfil', 'Cerrar', { duration: 3000 });
+      }
     });
   }
 
@@ -99,9 +128,15 @@ export class ProfileComponent implements OnInit {
       this.snackBar.open('La contraseña debe tener al menos 6 caracteres.', 'Cerrar', { duration: 3000 });
       return;
     }
-    this.userService.updateUser(this.userID, { password: this.passwordForm.value.password }).subscribe(response => {
-      this.snackBar.open('Contraseña actualizada', 'Cerrar', { duration: 3000 });
-      this.passwordChangeMode = false;
+    this.userService.updateProfile(this.userID, { password: this.passwordForm.value.password }).subscribe({
+      next: (response) => {
+        this.snackBar.open('Contraseña actualizada', 'Cerrar', { duration: 3000 });
+        this.passwordChangeMode = false;
+      },
+      error: (error) => {
+        console.error('Error updating password:', error);
+        this.snackBar.open('Error al actualizar la contraseña', 'Cerrar', { duration: 3000 });
+      }
     });
   }
 
