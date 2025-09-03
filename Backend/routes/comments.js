@@ -1,14 +1,14 @@
 /**
  * PresenTickets - Sistema de Gestión de Tickets de Soporte
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
- * 
+ *
  * Este archivo es parte de PresenTickets, un sistema de gestión de tickets
  * desarrollado como iniciativa personal por Diego Sánchez.
- * 
+ *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
- * Este software es propiedad intelectual de Diego Sánchez y su uso en 
+ * Este software es propiedad intelectual de Diego Sánchez y su uso en
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
- * 
+ *
  * Está prohibida la redistribución, modificación o uso no autorizado
  * de este código sin el consentimiento expreso por escrito del autor.
  */
@@ -42,9 +42,9 @@ router.post('/:ticketId', async (req, res) => {
   const { ticketId } = req.params;
     try {
     // Configuración de formidable con límites y timeouts
-    const form = formidable({ 
-      multiples: true, 
-      uploadDir: './uploads', 
+    const form = formidable({
+      multiples: true,
+      uploadDir: './uploads',
       keepExtensions: true,
       maxFileSize: 50 * 1024 * 1024, // 50MB máximo por archivo
       maxTotalFileSize: 100 * 1024 * 1024, // 100MB total
@@ -71,9 +71,9 @@ router.post('/:ticketId', async (req, res) => {
         } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
           return res.status(400).json({ message: 'Archivo no esperado en la solicitud.' });
         } else {
-          return res.status(400).json({ 
-            message: 'Error al procesar la solicitud', 
-            details: err.message 
+          return res.status(400).json({
+            message: 'Error al procesar la solicitud',
+            details: err.message
           });
         }
       }
@@ -92,26 +92,26 @@ router.post('/:ticketId', async (req, res) => {
     let attachments = [];
     try {      if (Object.keys(files).length > 0) {
         attachments = Object.values(files).flat().map((file, index) => {
-          
+
           if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
           }
-          
+
           if (!fs.existsSync(file.filepath)) {
             throw new Error(`Archivo temporal no encontrado: ${file.originalFilename}`);
           }
-          
+
           // Validar tamaño del archivo
           if (file.size > 50 * 1024 * 1024) {
             throw new Error(`Archivo demasiado grande: ${file.originalFilename} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
           }
-          
+
           const ext = path.extname(file.originalFilename || '');
           const baseName = path.basename(file.originalFilename || `file_${Date.now()}`, ext);
           const sanitizedFileName = sanitizeFileName(baseName);
           const uniqueFileName = `${sanitizedFileName}_${uuidv4()}${ext}`;
           const newPath = path.join(uploadDir, uniqueFileName);
-          
+
           // Limpiar archivo existente si existe
           if (fs.existsSync(newPath)) {
             fs.unlinkSync(newPath);
@@ -121,7 +121,7 @@ router.post('/:ticketId', async (req, res) => {
           } catch (error) {
             throw new Error(`No se pudo guardar el archivo: ${file.originalFilename}`);
           }
-          
+
           return {
             name: file.originalFilename,
             url: `/uploads/${uniqueFileName}`,
@@ -129,9 +129,9 @@ router.post('/:ticketId', async (req, res) => {
           };
         });
       }    } catch (fileError) {
-      return res.status(400).json({ 
-        message: 'Error al procesar archivos adjuntos', 
-        details: fileError.message 
+      return res.status(400).json({
+        message: 'Error al procesar archivos adjuntos',
+        details: fileError.message
       });
     }    const client = await pool.connect();
     try {
@@ -154,11 +154,11 @@ router.post('/:ticketId', async (req, res) => {
       const ticketUserId = ticketResult.rows[0]?.user_id;
       const ticketTitle = ticketResult.rows[0]?.title || '';
       const currentStatus = ticketResult.rows[0]?.status;
-      
+
       const userResult = await client.query('SELECT role, firstname, username FROM users WHERE id = $1', [userId]);
       const userRole = userResult.rows[0]?.role;
       const username = userResult.rows[0]?.firstname || userResult.rows[0]?.username || 'Usuario';
-      
+
       // --- LÓGICA SIMPLIFICADA: SIEMPRE NOTIFICAR CUANDO HAY COMENTARIOS ---
       let recipients = [];
       let notificationType = 'nuevo_comentario';
@@ -181,7 +181,7 @@ router.post('/:ticketId', async (req, res) => {
         // Usuario comenta: notificar al técnico asignado y cambiar estado si es necesario
         if (assignedTo && assignedTo !== userId) recipients.push(assignedTo);
         notificationType = 'comentario_user';
-        
+
         // Cambiar estado solo si el ticket está en ciertos estados
         if (currentStatus === 'Creado' || currentStatus === 'Esperando respuesta del usuario') {
           shouldUpdateStatus = true;
@@ -199,24 +199,25 @@ router.post('/:ticketId', async (req, res) => {
 
       // SIEMPRE enviar notificaciones si hay destinatarios
       if (recipients.length > 0) {
-        // Notificación en tiempo real (campana)
+        // Notificación en tiempo real (campana) - sin contenido del comentario
         emitTicketNotification(notificationType, {
           ticketId,
           commentId,
           userId,
           username,
           title: ticketTitle,
-          message: message || '[Archivo adjunto]',
+          message: 'Se agregó un nuevo comentario', // Mensaje genérico para la campana
           createdAt: new Date()
         }, recipients);
 
-        // Notificación persistente + push notification
+        // Notificación persistente + push notification 
         for (const recipientId of recipients) {
           await createNotification({
             user_id: recipientId,
             type: notificationType,
-            message: message || 'Archivo adjunto sin comentario', // Usar el contenido real del comentario
-            ticket_id: ticketId
+            message: 'Se agregó un nuevo comentario', // Mensaje genérico para la campana
+            ticket_id: ticketId,
+            whatsapp_message: message // Contenido real del comentario para WhatsApp
           });
         }
       }
@@ -226,14 +227,14 @@ router.post('/:ticketId', async (req, res) => {
         // Verificar si es la primera respuesta de un técnico
         if (userRole === 'tech') {
           const previousTechComments = await client.query(
-            `SELECT COUNT(*) as count FROM comments c 
-             JOIN users u ON c.user_id = u.id 
+            `SELECT COUNT(*) as count FROM comments c
+             JOIN users u ON c.user_id = u.id
              WHERE c.ticket_id = $1 AND u.role = 'tech' AND c.id < $2`,
             [ticketId, commentId]
           );
-          
+
           const isFirstTechResponse = parseInt(previousTechComments.rows[0].count) === 0;
-          
+
           if (isFirstTechResponse) {
             await logTicketChange(
               parseInt(ticketId),
@@ -245,7 +246,7 @@ router.post('/:ticketId', async (req, res) => {
             );
           }
         }
-        
+
         // Registrar el comentario
         await logTicketChange(
           parseInt(ticketId),
@@ -255,7 +256,7 @@ router.post('/:ticketId', async (req, res) => {
           'comment',
           `Comentario agregado por ${username} (${userRole})`
         );
-        
+
         // Registrar cambio de estado si ocurrió
         if (shouldUpdateStatus && newStatus) {
           await logTicketChange(
@@ -267,7 +268,7 @@ router.post('/:ticketId', async (req, res) => {
             `Estado cambiado automáticamente de "${currentStatus}" a "${newStatus}" por comentario`
           );
         }
-        
+
       } catch (historyError) {
         console.error("Error registrando historial del comentario:", historyError);
         // No fallar la operación por error en historial
@@ -285,9 +286,9 @@ router.post('/:ticketId', async (req, res) => {
           // Error de limpieza no crítico
         }
       }
-      
-      res.status(500).json({ 
-        message: 'Error al crear el comentario', 
+
+      res.status(500).json({
+        message: 'Error al crear el comentario',
         details: process.env.NODE_ENV === 'development' ? err.message : 'Error interno del servidor'
       });    } finally {
       client.release();
@@ -295,8 +296,8 @@ router.post('/:ticketId', async (req, res) => {
   });
     } catch (globalError) {
     if (!res.headersSent) {
-      res.status(500).json({ 
-        message: 'Error interno del servidor', 
+      res.status(500).json({
+        message: 'Error interno del servidor',
         details: process.env.NODE_ENV === 'development' ? globalError.message : 'Error inesperado'
       });
     }

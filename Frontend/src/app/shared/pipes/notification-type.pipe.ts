@@ -20,7 +20,9 @@ export class NotificationTypePipe implements PipeTransform {  transform(type: st
     switch (type) {
       case 'nuevo_ticket': return 'Nuevo Ticket';
       case 'comentario_user': return 'Nuevo Comentario';
-      case 'comentario_tech': return 'Nuevo Comentario';
+      case 'comentario_tech': return 'Nuevo Comentario';  
+      case 'comentario_admin': return 'Nuevo Comentario';
+      case 'nuevo_comentario': return 'Nuevo Comentario';
       case 'admin_comentario': return 'Nuevo Comentario';
       case 'admin_estado_ticket': return 'Nuevo estado de Ticket';
       case 'ticket_cerrado': return 'Ticket Cerrado';

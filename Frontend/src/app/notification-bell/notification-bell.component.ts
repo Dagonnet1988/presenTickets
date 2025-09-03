@@ -31,12 +31,18 @@ import { NotificationTypePipe } from '../shared/pipes/notification-type.pipe';
 })
 export class NotificationBellComponent {
   notifications: TicketNotification[] = [];
+  unreadNotifications: TicketNotification[] = [];
   unreadCount = 0;
 
   constructor(private notificationService: NotificationService, private router: Router) {
     this.notificationService.notifications$.subscribe((n) => {
+      console.log('🔔 Notificaciones recibidas en bell component:', n);
       this.notifications = n;
-      this.unreadCount = n.filter((x) => !x.read).length;
+      // Filtrar solo las notificaciones no leídas para mostrar en la campana
+      this.unreadNotifications = n.filter((x) => !(x.read || (x as any).is_read));
+      this.unreadCount = this.unreadNotifications.length;
+      console.log('🔔 Notificaciones no leídas:', this.unreadNotifications.length);
+      console.log('🔔 Icono debería estar visible:', this.unreadCount > 0 ? 'SÍ' : 'NO');
     });
   }
 

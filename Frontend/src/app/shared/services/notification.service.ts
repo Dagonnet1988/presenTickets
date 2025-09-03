@@ -19,6 +19,7 @@ export interface TicketNotification {
   type: string;
   data: any;
   read?: boolean;
+  is_read?: boolean; // Campo del backend
   timestamp?: Date;
   message?: string;
 }
@@ -42,6 +43,19 @@ export class NotificationService {
     // Solo inicializar Socket.IO en el navegador, no en SSR
     if (isPlatformBrowser(this.platformId)) {
       this.initializeSocket();
+      // Cargar notificaciones inmediatamente si ya hay token
+      this.initializeNotifications();
+    }
+  }
+
+  private initializeNotifications() {
+    // Intentar cargar notificaciones si el usuario ya está autenticado
+    const token = localStorage.getItem('token');
+    const userId = this.authService.getUserId();
+
+    if (token && userId) {
+      // Cargar notificaciones inmediatamente
+      this.fetchUnreadNotifications();
     }
   }
 
@@ -169,17 +183,29 @@ export class NotificationService {
     return this.notificationsSubject.value;
   }
 
+  // Método público para forzar la carga inicial de notificaciones
+  initializeNotificationsForUser() {
+    if (isPlatformBrowser(this.platformId)) {
+      this.fetchUnreadNotifications();
+    }
+  }
+
   fetchUnreadNotifications() {
     if (!isPlatformBrowser(this.platformId)) return;
 
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    this.http.get<TicketNotification[]>(`${environment.backendUrl}/api/notifications`, {
+    this.http.get<any[]>(`${environment.backendUrl}/api/notifications`, {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: (notifications) => {
-        this.notificationsSubject.next(notifications);
+        // Transformar is_read a read para compatibilidad con el frontend
+        const transformedNotifications = notifications.map(n => ({
+          ...n,
+          read: n.is_read || n.read || false
+        }));
+        this.notificationsSubject.next(transformedNotifications);
       },
       error: (error) => {
         if (isDevMode()) {
@@ -197,7 +223,12 @@ export class NotificationService {
     }).subscribe({
       next: () => {
         const current = this.notificationsSubject.value;
-        const updated = current.filter(n => n.id !== notification.id);
+        // En lugar de eliminar, marcar como leída para mantener el historial
+        const updated = current.map(n =>
+          n.id === notification.id
+            ? { ...n, read: true, is_read: true }
+            : n
+        );
         this.notificationsSubject.next(updated);
         if (callback) callback();
       },
@@ -210,7 +241,10 @@ export class NotificationService {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     }).subscribe({
       next: () => {
-        this.notificationsSubject.next([]);
+        // Actualizar el estado local: marcar todas las notificaciones como leídas
+        const current = this.notificationsSubject.value;
+        const updatedNotifications = current.map(n => ({ ...n, read: true, is_read: true }));
+        this.notificationsSubject.next(updatedNotifications);
       },
       error: (error) => console.error('Error marcando todas las notificaciones como leídas:', error)
     });

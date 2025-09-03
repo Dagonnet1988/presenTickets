@@ -21,6 +21,9 @@ import MaintenanceSimpleService from "../services/maintenanceSimpleService.js";
 
 const router = express.Router();
 
+// Set para trackear errores de JWT y evitar logs repetitivos
+const errorLog = new Set();
+
 // Login
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -100,7 +103,13 @@ export function authMiddleware(req, res, next) {
     req.user = decoded;
     next();
   } catch (err) {
-    console.error("Token verification failed:", err.message);
+    // Solo loggear errores únicos para evitar spam
+    if (!errorLog.has(err.message)) {
+      console.error("Token verification failed:", err.message);
+      errorLog.add(err.message);
+      // Limpiar el cache cada 10 minutos
+      setTimeout(() => errorLog.delete(err.message), 10 * 60 * 1000);
+    }
     return res.status(401).json({ message: "Token inválido o expirado" });
   }
 }

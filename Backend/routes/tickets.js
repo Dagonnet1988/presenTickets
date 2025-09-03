@@ -1123,7 +1123,12 @@ router.get('/:ticketId/available-users', canViewTicket, async (req, res) => {
         params.push(`%${search}%`);
       }
       
-      query += ` ORDER BY u.firstname, u.lastname LIMIT 20`;
+      // Limitar solo si no hay búsqueda, o aumentar el límite para búsqueda
+      if (search) {
+        query += ` ORDER BY u.firstname, u.lastname LIMIT 100`;
+      } else {
+        query += ` ORDER BY u.firstname, u.lastname LIMIT 50`;
+      }
       
       const result = await client.query(query, params);
       

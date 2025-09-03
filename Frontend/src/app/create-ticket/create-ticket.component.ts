@@ -13,7 +13,7 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -56,7 +56,8 @@ export class CreateTicketComponent implements OnInit {
     private router: Router,
     private ticketService: TicketService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -157,5 +158,57 @@ export class CreateTicketComponent implements OnInit {
 
   removeAttachment(index: number): void {
     this.attachments.splice(index, 1);
+  }
+
+  // Función para manejar el pegado en el textarea
+  onPaste(event: ClipboardEvent): void {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+
+    const items = clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      // Verificar si es una imagen
+      if (item.type.startsWith('image/')) {
+        event.preventDefault(); // Prevenir el pegado normal
+
+        const file = item.getAsFile();
+        if (file) {
+          // Generar un nombre único para la imagen pegada
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const extension = this.getFileExtensionFromMimeType(file.type);
+          const fileName = `pasted-image-${timestamp}.${extension}`;
+
+          // Crear un nuevo archivo con el nombre personalizado
+          const renamedFile = new File([file], fileName, { type: file.type });
+
+          // Agregar a la lista de archivos adjuntos
+          this.attachments.push(renamedFile);
+
+          // Actualizar la vista
+          this.cdr.markForCheck();
+
+          // Mostrar notificación
+          this.snackBar.open('Imagen agregada como adjunto', 'Cerrar', {
+            duration: 2000,
+          });
+        }
+      }
+    }
+  }
+
+  // Función para obtener la extensión de archivo desde el tipo MIME
+  getFileExtensionFromMimeType(mimeType: string): string {
+    const mimeToExtension: { [key: string]: string } = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/bmp': 'bmp',
+      'image/tiff': 'tiff'
+    };
+    return mimeToExtension[mimeType] || 'png';
   }
 }

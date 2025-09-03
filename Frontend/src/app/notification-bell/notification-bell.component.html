@@ -21,12 +21,12 @@
   <div class="notification-menu-container">    <div class="notification-header">
       <span style="font-weight: 500; color: #333;">Notificaciones</span>
       <button mat-button color="primary" style="font-size: 0.8em; min-width: 0;"
-      (click)="$event.stopPropagation(); markAllAsRead()" *ngIf="notifications.length > 0">
+      (click)="$event.stopPropagation(); markAllAsRead()" *ngIf="unreadNotifications.length > 0">
         <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
         Marcar todas como leídas
       </button>
-    </div>    <ng-container *ngIf="notifications.length > 0; else noNotifications">
-      <div *ngFor="let n of notifications | slice:0:8"
+    </div>    <ng-container *ngIf="unreadNotifications.length > 0; else noNotifications">
+      <div *ngFor="let n of unreadNotifications | slice:0:8"
            class="notification-item"           [class.status-change]="n.type === 'cambio_estado'"
            [class.reopened]="n.type === 'ticket_reabierto'"
            [class.new-notification]="!n.id"
@@ -49,7 +49,7 @@
           </mat-icon>
           <div>
             <b>{{ n.message || (n.type | notificationType) }}</b>
-            <div>Ticket #{{ n.external_ticket_id || n.ticket_id || 'Cargando...' }}</div>
+            <div>Ticket #{{ n.ticket_id || 'Cargando...' }}</div>
             <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
           </div>
         </div>

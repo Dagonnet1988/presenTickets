@@ -76,8 +76,15 @@ class WhatsAppService {
    */
   async initialize() {
     try {
+      
       // Cargar configuración de antibloqueo desde BD
       await this.loadAntiBlockConfigFromDB();
+      
+      // Sincronizar contadores con datos reales de la BD
+      await this.syncCountersWithDB();
+      
+      // Inicializar conexión de WhatsApp automáticamente
+      await this.initializeConnection();
       
       return true;
     } catch (error) {
@@ -170,19 +177,10 @@ class WhatsAppService {
   /**
    * Inicializar conexión con WhatsApp
    */
-  async initialize() {
+  async initializeConnection() {
     try {
-      // Verificar si ya hay una sesión activa
-      if (this.isConnected && this.socket) {
-                return;
-      }
-
-      // Verificar si ya se está inicializando
-      if (this.isInitializing) {
-                return;
-      }
-
-            this.isInitializing = true;
+      
+      this.isInitializing = true;
       
       // Configurar estado de autenticación
       const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
@@ -195,8 +193,35 @@ class WhatsAppService {
         browser: ['PresenTickets', 'Chrome', '1.0.0'],
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
+        retryRequestDelayMs: 1000,
+        maxMsgRetryCount: 3,
         getMessage: async (key) => {
           return { conversation: 'Hello!' };
+        }
+      });
+
+      // Manejar errores de sesión y contadores de mensajes
+      this.socket.ev.on('CB:call', (data) => {
+        // Ignorar llamadas para evitar logs innecesarios
+      });
+
+      // Manejar errores de descifrado y sesión
+      this.socket.ev.process(async (events) => {
+        if (events['messages.upsert']) {
+          const { messages } = events['messages.upsert'];
+          for (const msg of messages) {
+            try {
+              // Procesar mensaje normalmente
+            } catch (error) {
+              if (error.message?.includes('MessageCounterError') || 
+                  error.message?.includes('Key used already') ||
+                  error.message?.includes('Failed to decrypt')) {
+                console.log('🔄 Error de sesión detectado, limpiando sesión corrupta...');
+                await this.handleSessionError();
+                return;
+              }
+            }
+          }
         }
       });
 
@@ -237,7 +262,7 @@ class WhatsAppService {
           this.isInitializing = false; // Limpiar la bandera cuando se desconecte
           
           if (shouldReconnect) {
-            setTimeout(() => this.initialize(), 5000);
+            setTimeout(() => this.initializeConnection(), 5000);
           }
         } else if (connection === 'open') {
                     this.isConnected = true;
@@ -265,7 +290,7 @@ class WhatsAppService {
     } catch (error) {
       console.error('❌ Error al inicializar WhatsApp:', error);
       this.isInitializing = false; // Limpiar bandera en caso de error
-      setTimeout(() => this.initialize(), 10000);
+      setTimeout(() => this.initializeConnection(), 10000);
     }
   }
 
@@ -321,29 +346,75 @@ class WhatsAppService {
   }
 
   /**
+   * Sincronizar contadores con base de datos real
+   */
+  async syncCountersWithDB() {
+    try {
+      if (!pool) {
+        console.warn('⚠️ Pool de BD no disponible para sincronizar contadores');
+        return;
+      }
+
+      const client = await pool.connect();
+      const now = new Date();
+      
+      // Usar zona horaria de Colombia para las consultas
+      const colombiaTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Bogota"}));
+      const today = colombiaTime.toISOString().split('T')[0]; // YYYY-MM-DD
+      const oneHourAgo = new Date(colombiaTime.getTime() - (60 * 60 * 1000));
+
+      // Contar mensajes enviados hoy desde la base de datos (zona horaria Colombia)
+      const dailyResult = await client.query(`
+        SELECT COUNT(*) as count 
+        FROM whatsapp_notifications 
+        WHERE status = 'sent' 
+        AND DATE(created_at AT TIME ZONE 'America/Bogota') = $1
+      `, [today]);
+
+      // Contar mensajes enviados en la última hora desde la base de datos
+      const hourlyResult = await client.query(`
+        SELECT COUNT(*) as count 
+        FROM whatsapp_notifications 
+        WHERE status = 'sent' 
+        AND created_at >= $1
+      `, [oneHourAgo]);
+
+      // Actualizar contadores en memoria con datos reales de la BD
+      this.dailyMessageCount = parseInt(dailyResult.rows[0].count) || 0;
+      this.messageCount = parseInt(hourlyResult.rows[0].count) || 0;
+      this.lastResetDate = today;
+      
+      client.release();
+    } catch (error) {
+      console.error('❌ Error sincronizando contadores con BD:', error);
+    }
+  }
+
+  /**
    * Verificar límites de rate limiting
    */
   async checkRateLimits() {
+    // Sincronizar contadores con la base de datos real antes de verificar límites
+    await this.syncCountersWithDB();
+    
     const now = new Date();
     const today = now.toDateString();
     
-    // Resetear contador diario si es un nuevo día
+    // El reset se hace en syncCountersWithDB(), pero mantenemos esta verificación por seguridad
     if (this.lastResetDate !== today) {
-      this.dailyMessageCount = 0;
-      this.messageCount = 0;
       this.lastResetDate = today;
+      // Los contadores ya se actualizaron en syncCountersWithDB()
     }
     
     // Verificar límite diario
     if (this.dailyMessageCount >= this.rateLimits.maxDailyMessages) {
-      console.warn(`⚠️ Límite diario de ${this.rateLimits.maxDailyMessages} mensajes alcanzado`);
+      console.warn(`⚠️ Límite diario de ${this.rateLimits.maxDailyMessages} mensajes alcanzado (actual: ${this.dailyMessageCount})`);
       return false;
     }
     
-    // Verificar límite por hora (últimos 60 minutos)
-    const oneHourAgo = now.getTime() - (60 * 60 * 1000);
-    if (this.lastMessageTime > oneHourAgo && this.messageCount >= this.rateLimits.maxMessagesPerHour) {
-      console.warn(`⚠️ Límite horario de ${this.rateLimits.maxMessagesPerHour} mensajes alcanzado`);
+    // Verificar límite por hora
+    if (this.messageCount >= this.rateLimits.maxMessagesPerHour) {
+      console.warn(`⚠️ Límite horario de ${this.rateLimits.maxMessagesPerHour} mensajes alcanzado (actual: ${this.messageCount})`);
       return false;
     }
     
@@ -386,14 +457,11 @@ class WhatsAppService {
   updateMessageCounters() {
     const now = Date.now();
     this.lastMessageTime = now;
+    
+    // Solo incrementar contadores en memoria 
+    // (la sincronización real con BD se hace en checkRateLimits)
     this.messageCount++;
     this.dailyMessageCount++;
-    
-    // Resetear contador horario si pasó una hora
-    const oneHourAgo = now - (60 * 60 * 1000);
-    if (this.lastMessageTime < oneHourAgo) {
-      this.messageCount = 1;
-    }
   }
 
   /**
@@ -592,27 +660,27 @@ class WhatsAppService {
     // Plantillas múltiples para cada tipo para evitar patrones repetitivos
     const templateVariations = {
       'nuevo_ticket': [
-        '🆕 *Clínica La Presentación*\n\nHola {userName},\n\nSe ha registrado el ticket #{ticketId}\n📋 {subject}\n\n⏰ {timestamp}',
-        '📋 *PresenTickets*\n\n¡Hola {userName}!\n\nNuevo ticket creado: #{ticketId}\n📝 {subject}\n\n🕒 {timestamp}',
-        '🎫 *Sistema de Tickets*\n\nHola {userName},\n\nTicket #{ticketId} creado exitosamente\n📄 {subject}\n\n📅 {timestamp}'
+        '🆕 *Clínica La Presentación*\n─────────────────\n 📋 NUEVO TICKET     \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📄 Asunto: {subject}\n⏰ Creado: {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
+        '📋 *PresenTickets*\n════════════════\n🆕 TICKET REGISTRADO\n════════════════\n\n¡Hola {userName}!\n\n🎫 #{ticketId} - {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
+        '🎫 *Sistema de Tickets*\n━━━━━━━━━━━━━━━━\n  📋 TICKET CREADO   \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ Ticket #{ticketId} registrado\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
       ],
       
       'ticket_asignado': [
-        '👤 *Asignación de Ticket*\n\nHola {userName},\n\nEl ticket #{ticketId}\n📋 {subject}\n\nTiene un técnico asignado\n\n🕒 {timestamp}',
-        '🔔 *PresenTickets*\n\n{userName}, se asignó técnico al ticket:\n\n🎫 #{ticketId}\n📋 {subject}\n\n⏰ {timestamp}',
-        '📌 *Ticket Asignado*\n\nHola {userName},\n\nTicket #{ticketId} asigando a un técnico\n📄 {subject}\n\n📅 {timestamp}'
+        '👤 *Asignación de Ticket*\n─────────────────\n 🔧 TÉCNICO ASIGNADO \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📋 {subject}\n👨‍💻 Un técnico fue asignado\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
+        '🔔 *PresenTickets*\n════════════════\n👤 TICKET ASIGNADO\n════════════════\n\n{userName}, se asignó técnico:\n\n🎫 #{ticketId}\n📋 {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
+        '📌 *Ticket Asignado*\n━━━━━━━━━━━━━━━━\n 🔧 TÉCNICO ASIGNADO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ Ticket #{ticketId} asignado\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
       ],
       
       'cambio_estado': [
-        '🔄 *Actualización de Ticket*\n\nHola {userName},\n\nTicket #{ticketId}: {newStatus}\n 📄 {subject}\n\n⏰ {timestamp}',
-        '📈 *Estado Actualizado*\n\n{userName}, su ticket cambió a: {newStatus}\n\n🎫 #{ticketId}\n📝 {subject}\n\n🕒 {timestamp}',
-        '🔄 *PresenTickets*\n\nHola {userName},\n\nNuevo estado para #{ticketId}: {newStatus}\n\n📅 {timestamp}'
+        '🔄 *Actualización de Ticket*\n─────────────────\n 📊 CAMBIO DE ESTADO \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📈 Estado: {newStatus}\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
+        '📈 *Estado Actualizado*\n════════════════\n🔄 TICKET ACTUALIZADO\n════════════════\n\n{userName}, nuevo estado:\n\n🎫 #{ticketId}: {newStatus}\n📝 {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
+        '🔄 *PresenTickets*\n━━━━━━━━━━━━━━━━\n 📊 ESTADO CAMBIADO  \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ #{ticketId}: {newStatus}\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
       ],
       
       'comentario': [
-        '💬 *Nuevo Comentario*\n\nHola {userName},\n\nComentario en ticket #{ticketId}:\n"{comment}"\n\n📋 {subject}\n⏰ {timestamp}',
-        '� *PresenTickets*\n\n{userName}, nuevo comentario:\n\n💭 {comment}\n\n🎫 #{ticketId} - {subject}\n🕒 {timestamp}',
-        '� *Comentario Agregado*\n\nHola {userName},\n\n"{comment}"\n\n📄 Ticket #{ticketId}: {subject}\n📅 {timestamp}'
+        '💬 *Nuevo Comentario*\n─────────────────\n 💭 COMENTARIO NUEVO \n─────────────────\n\nHola {userName},\n\n💬 "Mensaje: {comment}"\n🎫 Ticket: #{ticketId}\n📋 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
+        '💭 *PresenTickets*\n════════════════\n💬 NUEVO COMENTARIO\n════════════════\n\n{userName}, comentario agregado:\n\n💭 "Mensaje: {comment}"\n🎫 #{ticketId} - {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
+        '💭 *Comentario Agregado*\n━━━━━━━━━━━━━━━━\n 💬 NUEVO COMENTARIO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n💭 "Mensaje: {comment}"\n📄 Ticket #{ticketId}: {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
       ]
     };
 
@@ -655,25 +723,128 @@ class WhatsAppService {
   }
 
   /**
+   * Obtener límites de rate limiting actuales
+   */
+  getRateLimits() {
+    return this.rateLimits;
+  }
+
+  /**
    * Verificar estado de conexión con estadísticas de uso
    */
-  getConnectionStatus() {
+  async getConnectionStatus() {
+    // Sincronizar contadores con la BD antes de devolver el estado
+    await this.syncCountersWithDB();
+    
+    const now = new Date();
+    const lastResetFormatted = this.lastResetDate || 'No establecido';
+    const lastMessageFormatted = this.lastMessageTime ? new Date(this.lastMessageTime).toLocaleString('es-CO') : 'Nunca';
+    
     return {
       isConnected: this.isConnected,
       hasSocket: !!this.socket,
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
       currentQRCode: this.currentQRCode,
-      // Estadísticas de uso para monitoreo
+      // Estadísticas de uso para monitoreo (sincronizadas con BD)
       dailyMessageCount: this.dailyMessageCount,
       lastMessageTime: this.lastMessageTime,
+      lastResetDate: lastResetFormatted,
+      lastMessageFormatted: lastMessageFormatted,
       rateLimitStatus: {
         dailyLimit: this.rateLimits.maxDailyMessages,
         dailyUsed: this.dailyMessageCount,
         dailyRemaining: this.rateLimits.maxDailyMessages - this.dailyMessageCount,
         hourlyLimit: this.rateLimits.maxMessagesPerHour,
-        hourlyUsed: this.messageCount
+        hourlyUsed: this.messageCount,
+        hourlyRemaining: this.rateLimits.maxMessagesPerHour - this.messageCount
+      },
+      sync: {
+        note: 'Contadores sincronizados con BD en cada verificación de límites'
       }
     };
+  }
+
+  /**
+   * Obtener estadísticas detalladas del historial de WhatsApp
+   */
+  async getWhatsAppStats() {
+    try {
+      if (!pool) {
+        return { error: 'Pool de BD no disponible' };
+      }
+
+      const client = await pool.connect();
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000));
+
+      // Estadísticas de hoy
+      const todayStats = await client.query(`
+        SELECT 
+          status,
+          COUNT(*) as count,
+          notification_type
+        FROM whatsapp_notifications 
+        WHERE DATE(created_at) = $1
+        GROUP BY status, notification_type
+        ORDER BY status, notification_type
+      `, [today]);
+
+      // Estadísticas de la última hora
+      const hourlyStats = await client.query(`
+        SELECT 
+          status,
+          COUNT(*) as count,
+          notification_type
+        FROM whatsapp_notifications 
+        WHERE created_at >= $1
+        GROUP BY status, notification_type
+        ORDER BY status, notification_type
+      `, [oneHourAgo]);
+
+      // Últimos 10 mensajes para verificación
+      const recentMessages = await client.query(`
+        SELECT 
+          id,
+          user_id,
+          ticket_id,
+          status,
+          notification_type,
+          phone_number,
+          created_at,
+          SUBSTRING(message, 1, 50) as message_preview
+        FROM whatsapp_notifications 
+        WHERE DATE(created_at) = $1
+        ORDER BY created_at DESC
+        LIMIT 10
+      `, [today]);
+
+      client.release();
+
+      return {
+        today: {
+          date: today,
+          byStatus: todayStats.rows,
+          total: todayStats.rows.reduce((sum, row) => sum + parseInt(row.count), 0),
+          sent: todayStats.rows.filter(row => row.status === 'sent').reduce((sum, row) => sum + parseInt(row.count), 0)
+        },
+        lastHour: {
+          since: oneHourAgo.toLocaleString('es-CO'),
+          byStatus: hourlyStats.rows,
+          total: hourlyStats.rows.reduce((sum, row) => sum + parseInt(row.count), 0),
+          sent: hourlyStats.rows.filter(row => row.status === 'sent').reduce((sum, row) => sum + parseInt(row.count), 0)
+        },
+        recentMessages: recentMessages.rows,
+        memoryCounters: {
+          dailyMessageCount: this.dailyMessageCount,
+          hourlyMessageCount: this.messageCount,
+          lastMessageTime: this.lastMessageTime ? new Date(this.lastMessageTime).toLocaleString('es-CO') : 'Nunca'
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas de WhatsApp:', error);
+      return { error: error.message };
+    }
   }
 
   /**
@@ -764,7 +935,7 @@ class WhatsAppService {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Inicializar nueva conexión
-      await this.initialize();
+      await this.initializeConnection();
       
     } catch (error) {
       console.error('❌ Error durante reconexión:', error);

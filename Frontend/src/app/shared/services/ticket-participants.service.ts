@@ -63,8 +63,12 @@ export class TicketParticipantsService {
   /**
    * Obtener usuarios disponibles para agregar como participantes
    */
-  getAvailableUsers(ticketId: number): Observable<AvailableUser[]> {
-    return this.http.get<AvailableUser[]>(`${this.apiUrl}/${ticketId}/available-users`);
+  getAvailableUsers(ticketId: number, search?: string): Observable<AvailableUser[]> {
+    let params = '';
+    if (search && search.trim()) {
+      params = `?search=${encodeURIComponent(search.trim())}`;
+    }
+    return this.http.get<AvailableUser[]>(`${this.apiUrl}/${ticketId}/available-users${params}`);
   }
 
   /**

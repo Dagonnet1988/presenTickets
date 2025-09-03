@@ -79,6 +79,21 @@ router.post('/read-ticket/:ticketId', authMiddleware, async (req, res) => {
   }
 });
 
+// Marcar todas las notificaciones del usuario como leídas
+router.post('/read-all', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
+      [userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error al marcar todas las notificaciones como leídas:', err);
+    res.status(500).json({ error: 'Error al marcar todas las notificaciones como leídas' });
+  }
+});
+
 // Eliminar todas las notificaciones leídas del usuario autenticado
 router.delete('/read/all', authMiddleware, async (req, res) => {
   try {
@@ -109,17 +124,20 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 // Crear notificación (uso interno, no expuesto al frontend)
-export async function createNotification({ user_id, type, message, ticket_id }) {
+export async function createNotification({ user_id, type, message, ticket_id, whatsapp_message }) {
   await pool.query(
     'INSERT INTO notifications (user_id, type, message, ticket_id) VALUES ($1, $2, $3, $4)',
     [user_id, type, message, ticket_id]
   );
 
   // Enviar notificación WhatsApp de forma asíncrona (no bloqueante)
+  // Usar el contenido real del comentario para WhatsApp si está disponible
+  const whatsappContent = whatsapp_message || message;
+  
   // Usar setImmediate para que se ejecute después del return
   setImmediate(async () => {
     try {
-      await sendWhatsAppNotification(user_id, ticket_id, message, type);
+      await sendWhatsAppNotification(user_id, ticket_id, whatsappContent, type);
     } catch (error) {
       console.error('Error enviando notificación WhatsApp:', error);
     }

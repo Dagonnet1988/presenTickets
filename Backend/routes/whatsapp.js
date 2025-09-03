@@ -33,10 +33,95 @@ const adminMiddleware = (req, res, next) => {
  */
 router.get('/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const status = whatsappService.getConnectionStatus();
+    const status = await whatsappService.getConnectionStatus();
     res.json(status);
   } catch (error) {
     console.error('❌ Error obteniendo estado WhatsApp:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener estadísticas detalladas de WhatsApp
+ */
+router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const stats = await whatsappService.getWhatsAppStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * Obtener estadísticas anti-bloqueo (endpoint específico para el frontend)
+ */
+router.get('/anti-block-stats', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const status = await whatsappService.getConnectionStatus();
+    const stats = await whatsappService.getWhatsAppStats();
+    
+    // Obtener límites reales desde el servicio
+    const serviceLimits = whatsappService.getRateLimits() || {};
+    
+    // Formatear datos para el frontend
+    const dailyUsed = status.dailyMessageCount || 0;
+    const hourlyUsed = status.rateLimitStatus?.hourlyUsed || 0;
+    const dailyLimit = status.rateLimitStatus?.dailyLimit || serviceLimits.maxDailyMessages || 200;
+    const hourlyLimit = status.rateLimitStatus?.hourlyLimit || serviceLimits.maxMessagesPerHour || 60;
+    
+    const antiBlockStats = {
+      usage: {
+        dailyMessages: dailyUsed,
+        hourlyMessages: hourlyUsed
+      },
+      limits: {
+        dailyLimit: dailyLimit,
+        hourlyLimit: hourlyLimit,
+        maxDailyMessages: dailyLimit,  // Para compatibilidad con frontend
+        maxMessagesPerHour: hourlyLimit,  // Para compatibilidad con frontend
+        minDelay: serviceLimits.minDelayBetweenMessages || 1000,
+        maxDelay: serviceLimits.maxDelayBetweenMessages || 3000,
+        minDelayBetweenMessages: Math.round((serviceLimits.minDelayBetweenMessages || 1000) / 1000), // Convertir a segundos
+        maxDelayBetweenMessages: Math.round((serviceLimits.maxDelayBetweenMessages || 3000) / 1000), // Convertir a segundos
+        maxBurstMessages: serviceLimits.maxBurstMessages || 5,  // Cambiado de burstLimit a maxBurstMessages
+        burstLimit: serviceLimits.maxBurstMessages || 5        // Mantener también burstLimit para compatibilidad
+      },
+      remaining: {
+        daily: Math.max(0, dailyLimit - dailyUsed),
+        hourly: Math.max(0, hourlyLimit - hourlyUsed),
+        dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
+        hourlyRemaining: Math.max(0, hourlyLimit - hourlyUsed),
+        dailyPercentageUsed: dailyLimit > 0 ? Math.round((dailyUsed / dailyLimit) * 100) : 0,
+        hourlyPercentageUsed: hourlyLimit > 0 ? Math.round((hourlyUsed / hourlyLimit) * 100) : 0
+      },
+      safetyStatus: {
+        level: dailyUsed > dailyLimit * 0.9 ? 'danger' :
+               dailyUsed > dailyLimit * 0.7 ? 'warning' :
+               dailyUsed > dailyLimit * 0.5 ? 'caution' : 'safe',
+        message: dailyUsed > dailyLimit * 0.9 ? 'Límite crítico alcanzado' :
+                 dailyUsed > dailyLimit * 0.7 ? 'Acercándose al límite' :
+                 dailyUsed > dailyLimit * 0.5 ? 'Uso moderado' : 'Uso seguro'
+      },
+      messagesSentToday: dailyUsed,
+      securityLevel: dailyUsed > 150 ? 'warning' : 
+                     dailyUsed > 100 ? 'caution' : 'safe',
+      lastSync: status.lastResetDate || 'No sincronizado',
+      lastMessageTime: status.lastMessageFormatted || 'Nunca',
+      dbStats: stats,
+      timing: {
+        minDelay: serviceLimits.minDelayBetweenMessages || 1000,
+        maxDelay: serviceLimits.maxDelayBetweenMessages || 3000,
+        burstSize: serviceLimits.maxBurstMessages || 5,
+        dailyLimit: dailyLimit,
+        hourlyLimit: hourlyLimit
+      }
+    };
+
+    res.json(antiBlockStats);
+  } catch (error) {
+    console.error('❌ Error obteniendo estadísticas anti-bloqueo:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
@@ -59,7 +144,7 @@ router.post('/connect', authMiddleware, adminMiddleware, async (req, res) => {
     });
 
     // Inicializar conexión
-    await whatsappService.initialize();
+    await whatsappService.initializeConnection();
 
     res.json({ 
       success: true, 
@@ -906,6 +991,7 @@ router.get('/hourly-usage', authMiddleware, adminMiddleware, async (req, res) =>
  */
 router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    
     const { 
       maxDailyMessages, 
       maxMessagesPerHour, 
@@ -933,11 +1019,13 @@ router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, re
     
     // Actualizar configuración en memoria
     const rateLimits = whatsappService.rateLimits;
+    
     if (maxDailyMessages !== undefined) rateLimits.maxDailyMessages = maxDailyMessages;
     if (maxMessagesPerHour !== undefined) rateLimits.maxMessagesPerHour = maxMessagesPerHour;
     if (minDelayBetweenMessages !== undefined) rateLimits.minDelayBetweenMessages = minDelayBetweenMessages;
     if (maxDelayBetweenMessages !== undefined) rateLimits.maxDelayBetweenMessages = maxDelayBetweenMessages;
     if (maxBurstMessages !== undefined) rateLimits.maxBurstMessages = maxBurstMessages;
+    
     
     // Persistir en base de datos
     const saved = await whatsappService.saveAntiBlockConfigToDB();

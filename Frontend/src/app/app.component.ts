@@ -50,6 +50,11 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    // Inicializar notificaciones si el usuario está logueado
+    if (this.authService.getUserId()) {
+      this.notificationService.initializeNotificationsForUser();
+    }
+
     // Escuchar eventos de mantenimiento
     this.notificationService.maintenance$
       .pipe(takeUntil(this.destroy$))

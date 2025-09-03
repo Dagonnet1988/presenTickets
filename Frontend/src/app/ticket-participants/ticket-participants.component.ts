@@ -2,14 +2,14 @@
  * PresenTickets - Sistema de Gestión de Tickets de Soporte
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  *
- * Componente de Gestión de Participantes de Tickets 
+ * Componente de Gestión de Participantes de Tickets
  *
  * Uso autorizado únicamente según los términos del acuerdo de licencia.
  * Este software es propiedad intelectual de Diego Sánchez y su uso en
  * Clínica La Presentación está regido por un acuerdo de licencia no exclusiva.
  */
 
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -23,10 +23,10 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { 
-  TicketParticipantsService, 
-  TicketParticipant, 
-  AvailableUser 
+import {
+  TicketParticipantsService,
+  TicketParticipant,
+  AvailableUser
 } from '../shared/services/ticket-participants.service';
 import { AuthService } from '../shared/services/auth.service';
 
@@ -54,8 +54,8 @@ import { AuthService } from '../shared/services/auth.service';
       <div class="participants-header">
         <mat-icon>group</mat-icon>
         <span class="header-title">Participantes ({{ participants.length }})</span>
-        <button 
-          mat-icon-button 
+        <button
+          mat-icon-button
           *ngIf="canManageParticipants()"
           (click)="showAddForm = !showAddForm"
           matTooltip="Agregar participante"
@@ -67,18 +67,18 @@ import { AuthService } from '../shared/services/auth.service';
       <!-- Lista compacta de participantes -->
       <div class="participants-chips" *ngIf="participants.length > 0">
         <mat-chip-listbox class="participants-chip-list">
-          <mat-chip-option 
-            *ngFor="let participant of participants" 
+          <mat-chip-option
+            *ngFor="let participant of participants"
             class="participant-chip"
             [style.backgroundColor]="getRoleColor(participant.role)"
             [matTooltip]="getTooltipText(participant)">
-            
+
             <mat-icon matChipAvatar>person</mat-icon>
-            
+
             {{ participant.full_name }}
-            
-            <mat-icon 
-              matChipRemove 
+
+            <mat-icon
+              matChipRemove
               *ngIf="canManageParticipants()"
               (click)="removeParticipant(participant)">
               close
@@ -94,19 +94,30 @@ import { AuthService } from '../shared/services/auth.service';
 
       <!-- Formulario compacto para agregar -->
       <div class="add-form-compact" *ngIf="showAddForm && canManageParticipants()">
+        <!-- Campo de búsqueda -->
+        <div class="search-row">
+          <mat-form-field appearance="outline" class="search-field">
+            <mat-label>Buscar usuario</mat-label>
+            <input matInput
+                   [(ngModel)]="searchText"
+                   (ngModelChange)="onSearchChange()"
+                   placeholder="Nombre, apellido o email...">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+        </div>
+
         <div class="form-row-compact">
           <mat-form-field appearance="outline" class="user-field">
-            <mat-label>Usuario</mat-label>
+            <mat-label>Usuario ({{ availableUsers.length }} disponibles)</mat-label>
             <mat-select [(value)]="selectedUserId">
               <mat-option *ngFor="let user of availableUsers" [value]="user.id">
-                {{ user.full_name }}
+                {{ user.full_name }} - {{ user.role }}
               </mat-option>
             </mat-select>
           </mat-form-field>
 
-
-          <button 
-            mat-mini-fab 
+          <button
+            mat-mini-fab
             color="primary"
             (click)="addParticipant()"
             [disabled]="!selectedUserId || isLoading"
@@ -178,6 +189,14 @@ import { AuthService } from '../shared/services/auth.service';
       border-top: 1px solid rgba(0,0,0,0.12);
     }
 
+    .search-row {
+      margin-bottom: 12px;
+    }
+
+    .search-field {
+      width: 100%;
+    }
+
     .form-row-compact {
       display: flex;
       gap: 8px;
@@ -213,12 +232,14 @@ import { AuthService } from '../shared/services/auth.service';
     }
   `]
 })
-export class TicketParticipantsComponent implements OnInit {
+export class TicketParticipantsComponent implements OnInit, OnDestroy {
   @Input() ticketId!: number;
 
   participants: TicketParticipant[] = [];
   availableUsers: AvailableUser[] = [];
   selectedUserId: number | null = null;
+  searchText: string = '';
+  private searchTimeout: any;
   isLoading = false;
   showAddForm = false;
   private isLoadingParticipants = false;
@@ -237,6 +258,13 @@ export class TicketParticipantsComponent implements OnInit {
     }
   }
 
+  ngOnDestroy() {
+    // Limpiar timeout para evitar memory leaks
+    if (this.searchTimeout) {
+      clearTimeout(this.searchTimeout);
+    }
+  }
+
   /**
    * Cargar participantes del ticket
    */
@@ -244,7 +272,7 @@ export class TicketParticipantsComponent implements OnInit {
     if (this.isLoadingParticipants) {
       return;
     }
-    
+
     this.isLoadingParticipants = true;
     this.participantsService.getParticipants(this.ticketId).subscribe({
       next: (participants) => {
@@ -264,8 +292,8 @@ export class TicketParticipantsComponent implements OnInit {
   /**
    * Cargar usuarios disponibles para agregar
    */
-  loadAvailableUsers() {
-    this.participantsService.getAvailableUsers(this.ticketId).subscribe({
+  loadAvailableUsers(search?: string) {
+    this.participantsService.getAvailableUsers(this.ticketId, search).subscribe({
       next: (users) => {
         this.availableUsers = users;
       },
@@ -273,6 +301,25 @@ export class TicketParticipantsComponent implements OnInit {
         console.error('Error cargando usuarios disponibles:', error);
       }
     });
+  }
+
+  /**
+   * Manejar cambios en el campo de búsqueda con debounce
+   */
+  onSearchChange() {
+    // Limpiar el timeout anterior
+    if (this.searchTimeout) {
+      clearTimeout(this.searchTimeout);
+    }
+
+    // Crear nuevo timeout para evitar demasiadas consultas
+    this.searchTimeout = setTimeout(() => {
+      this.loadAvailableUsers(this.searchText);
+      // Resetear la selección si hay búsqueda activa
+      if (this.searchText && this.selectedUserId) {
+        this.selectedUserId = null;
+      }
+    }, 300); // 300ms de delay
   }
 
   /**
@@ -285,14 +332,14 @@ export class TicketParticipantsComponent implements OnInit {
 
     this.isLoading = true;
     this.participantsService.addParticipant(
-      this.ticketId, 
+      this.ticketId,
       this.selectedUserId
     ).subscribe({
       next: (response) => {
         this.snackBar.open('Participante agregado correctamente', 'Cerrar', {
           duration: 3000
         });
-        
+
         // Agregar el participante a la lista local para evitar recarga completa
         if (response.participant) {
           this.participants.push({
@@ -303,9 +350,9 @@ export class TicketParticipantsComponent implements OnInit {
             email: ''
           });
         }
-        
-        // Solo recargar usuarios disponibles
-        this.loadAvailableUsers();
+
+        // Solo recargar usuarios disponibles manteniendo la búsqueda
+        this.loadAvailableUsers(this.searchText);
         this.selectedUserId = null;
         this.showAddForm = false;
         this.isLoading = false;
@@ -330,12 +377,12 @@ export class TicketParticipantsComponent implements OnInit {
           this.snackBar.open('Participante removido correctamente', 'Cerrar', {
             duration: 3000
           });
-          
+
           // Remover del array local para evitar recarga completa
           this.participants = this.participants.filter(p => p.user_id !== participant.user_id);
-          
-          // Solo recargar usuarios disponibles
-          this.loadAvailableUsers();
+
+          // Solo recargar usuarios disponibles manteniendo la búsqueda
+          this.loadAvailableUsers(this.searchText);
         },
         error: (error) => {
           console.error('Error removiendo participante:', error);
@@ -361,7 +408,7 @@ export class TicketParticipantsComponent implements OnInit {
   getRoleColor(userRole: string): string {
     const colors: { [key: string]: string } = {
       'admin': '#e91e63',
-      'tech': '#4CAF50', 
+      'tech': '#4CAF50',
       'user': '#2196F3'
     };
     return colors[userRole] || '#757575';

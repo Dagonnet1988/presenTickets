@@ -24,6 +24,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../shared/services/auth.service';
+import { NotificationService } from '../shared/services/notification.service';
 
 @Component({
   selector: 'app-auth',
@@ -51,7 +52,8 @@ export class AuthComponent implements OnInit {
     private router: Router,
     private authService: AuthService,
     private route: ActivatedRoute,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -98,6 +100,11 @@ export class AuthComponent implements OnInit {
       const { username, password } = this.authForm.value;
       this.authService.login(username, password).subscribe(response => {
         if (response.message === 'Inicio de sesión exitoso') {
+          // Inicializar notificaciones después del login exitoso
+          setTimeout(() => {
+            this.notificationService.initializeNotificationsForUser();
+          }, 1000);
+
           // Redirigir directamente al home
           this.router.navigate(['/']);
         } else if (response.maintenance) {

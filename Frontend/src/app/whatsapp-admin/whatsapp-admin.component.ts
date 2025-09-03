@@ -1137,7 +1137,7 @@ export class WhatsAppAdminComponent implements OnInit {
       // Cargar también uso por horas
       this.hourlyUsageData = await this.whatsappService.getHourlyUsage('7');
 
-      // Actualizar configuración actual
+      // Actualizar configuración actual - NO convertir delays, ya están en segundos
       if (this.antiBlockStats?.limits) {
         this.newLimits = { ...this.antiBlockStats.limits };
       }
@@ -1235,7 +1235,14 @@ export class WhatsAppAdminComponent implements OnInit {
   async saveLimitsConfig() {
     this.loading.antiBlockStats = true;
     try {
-      await this.whatsappService.configureLimits(this.newLimits);
+      // El backend espera delays en milisegundos, convertir solo esos campos
+      const limitsToSend = {
+        ...this.newLimits,
+        minDelayBetweenMessages: this.newLimits.minDelayBetweenMessages * 1000,
+        maxDelayBetweenMessages: this.newLimits.maxDelayBetweenMessages * 1000
+      };
+
+      await this.whatsappService.configureLimits(limitsToSend);
       this.showSuccess('Límites de seguridad actualizados exitosamente');
       await this.loadAntiBlockStats(); // Recargar para ver cambios
     } catch (error) {
