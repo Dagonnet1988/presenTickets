@@ -15,6 +15,7 @@
 
 export const environment = {
   production: false,
+  enableDebugLogs: true, // Activar logs de debug en desarrollo
   auth: 'http://localhost:3000/api/auth',
   user: 'http://localhost:3000/api/users',
   ticket: 'http://localhost:3000/api/tickets',

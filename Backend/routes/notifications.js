@@ -14,7 +14,7 @@
  */
 
 import express from 'express';
-import { pool } from '../server.js';
+import { pool } from '../db.js';
 import { authMiddleware } from './auth.js';
 import { sendWhatsAppNotification } from './whatsapp.js';
 

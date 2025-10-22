@@ -13,6 +13,80 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
+/* Selector de método de autenticación */
+.auth-method-selector {
+  margin-bottom: 20px;
+}
+
+.auth-method-selector mat-form-field {
+  width: 100%;
+  max-width: 300px;
+}
+
+/* Contenedor de autenticación por teléfono */
+.phone-auth-container {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+.phone-auth-container h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 1.1em;
+}
+
+.phone-step {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.phone-step.waiting {
+  text-align: center;
+  align-items: center;
+}
+
+.waiting-icon {
+  font-size: 48px;
+  color: #ff9800;
+  margin-bottom: 10px;
+}
+
+.success-icon {
+  font-size: 48px;
+  color: #4caf50;
+  margin-bottom: 10px;
+}
+
+.code-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.code-actions button {
+  flex: 1;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .phone-step {
+    align-items: stretch;
+  }
+
+  .code-actions {
+    flex-direction: column;
+  }
+
+  .code-actions button {
+    width: 100%;
+  }
+}
+
 .whatsapp-admin-container {
   padding: 20px;
   max-width: 1200px;

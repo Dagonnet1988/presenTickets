@@ -14,7 +14,7 @@
  */
 
 import express from "express";
-import { pool } from "../server.js";
+import { pool } from "../db.js";
 import { calculateDashboardMetrics, calculateTicketTimings, calculateEnhancedMetrics } from "../services/timeCalculations.js";
 import { calculateTimingsFromHistory, getTicketHistory } from "../services/ticketHistoryService.js";
 

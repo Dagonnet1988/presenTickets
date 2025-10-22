@@ -34,6 +34,7 @@ Frontend/.env.*
 # WhatsApp Auth (credenciales y sesiones)
 Backend/whatsapp_auth/
 **/whatsapp_auth/
+**/whatsapp_auth_web/
 
 # Uploads (archivos de usuarios)
 Backend/uploads/

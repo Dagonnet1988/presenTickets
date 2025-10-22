@@ -18,38 +18,43 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import pkg from 'pg';
 import mime from 'mime';
 import helmet from 'helmet';
-import authRoutes, { authMiddleware } from './routes/auth.js';
-import ticketRoutes from './routes/tickets.js';
-import userRoutes from './routes/users.js';
-import commentRoutes from './routes/comments.js';
-import notificationRoutes from './routes/notifications.js';
-import analyticsRoutes from './routes/analytics.js';
-import whatsappRoutes from './routes/whatsapp.js';
-import whatsappService from './services/whatsappService.js';
+import { pool } from './db.js';
+import { authMiddleware } from './routes/auth.js';
+import whatsappService from './services/whatsappWebService.js';
 import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
-import dashboardSettingsRoutes from './routes/dashboardSettings.js';
-import dashboardConfigRoutes from './routes/dashboardConfig.js';
-import maintenanceSimpleRoutes from './routes/maintenanceSimple.js';
 import { checkMaintenance } from './middleware/maintenanceMiddleware.js';
 
 // Cargar variables de entorno según el entorno
+// Solo cargar archivos .env si NO estamos en producción usando PM2
 const ENV = process.env.NODE_ENV || 'development';
-const envPath = `.env.${ENV}`;
 
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-  console.log(`✅ Variables de entorno cargadas desde ${envPath}`);
+if (!process.env.pm_id) {
+  // No estamos usando PM2, cargar desde archivos .env
+  
+  // Primero intentar cargar .env general (si existe)
+  if (fs.existsSync('.env')) {
+    dotenv.config({ path: '.env' });
+    console.log('✅ Variables de entorno base cargadas desde .env');
+  }
+
+  // Luego cargar el archivo específico del entorno
+  const envPath = `.env.${ENV}`;
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: true });
+    console.log(`✅ Variables de entorno específicas cargadas desde ${envPath}`);
+  } else if (!fs.existsSync('.env')) {
+    console.warn(`⚠️ No se encontró archivo .env ni ${envPath}. Usando variables de entorno del sistema.`);
+  }
 } else {
-  console.warn(`⚠️ Archivo de configuración ${envPath} no encontrado. Usando variables de entorno predeterminadas.`);
+  // Usando PM2, las variables de entorno ya están cargadas
+  console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables de entorno cargadas desde ecosystem.config`);
 }
 
-const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -153,28 +158,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configuración de la conexión a PostgreSQL
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'presentickets',
-  password: process.env.DB_PASSWORD || 'postgres',
-  port: process.env.DB_PORT || 5432,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
-});
-
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error(`❌ Error al conectar a la base de datos (${ENV}):`, err.stack);
-  } else {
-    console.log(`✅ Conexión exitosa a la base de datos (${ENV})`);
-    release();
-  }
-});
-
-// Exportar pool para usarlo en otros módulos
-export { pool };
-
 // Servir archivos estáticos (subidas de archivos) con headers para permitir miniaturas cross-origin
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' http://localhost:4200 data:");
@@ -267,76 +250,91 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Rutas API protegidas with JWT y mantenimiento
-app.use('/api/tickets', authMiddleware, checkMaintenance, ticketRoutes);
-app.use('/api/users', authMiddleware, checkMaintenance, userRoutes);
-app.use('/api/comments', authMiddleware, checkMaintenance, commentRoutes);
-app.use('/api/notifications', authMiddleware, checkMaintenance, notificationRoutes);
-app.use('/api/analytics', authMiddleware, checkMaintenance, analyticsRoutes);
-app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/dashboard', authMiddleware, checkMaintenance, dashboardSettingsRoutes);
-app.use('/api/dashboard-config', authMiddleware, checkMaintenance, dashboardConfigRoutes);
+// Función asíncrona para configurar las rutas después de las exports
+async function setupRoutes() {
+  // Importar las rutas dinámicamente
+  const authRoutes = (await import('./routes/auth.js')).default;
+  const ticketRoutes = (await import('./routes/tickets.js')).default;
+  const userRoutes = (await import('./routes/users.js')).default;
+  const commentRoutes = (await import('./routes/comments.js')).default;
+  const notificationRoutes = (await import('./routes/notifications.js')).default;
+  const analyticsRoutes = (await import('./routes/analytics.js')).default;
+  const whatsappRoutes = (await import('./routes/whatsapp.js')).default;
+  const dashboardSettingsRoutes = (await import('./routes/dashboardSettings.js')).default;
+  const dashboardConfigRoutes = (await import('./routes/dashboardConfig.js')).default;
+  const maintenanceSimpleRoutes = (await import('./routes/maintenanceSimple.js')).default;
 
-// Ruta pública para consultar el estado de mantenimiento
-app.get('/api/maintenance/status', async (req, res) => {
-  try {
-    const MaintenanceSimpleService = (await import('./services/maintenanceSimpleService.js')).default;
-    const status = await MaintenanceSimpleService.getStatus();
-    res.json(status);
-  } catch (error) {
-    console.error('Error obteniendo estado de mantenimiento:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
+  // Rutas públicas
+  app.use('/api/auth', authRoutes);
 
-// Rutas de mantenimiento (protegidas - requieren autenticación)
-app.use('/api/maintenance', authMiddleware, maintenanceSimpleRoutes);
-
-// Rutas públicas
-app.use('/api/auth', authRoutes);
-
-// Manejo de rutas no encontradas
-app.use((req, res, next) => {
-  res.status(404).json({ message: 'Ruta no encontrada' });
-});
-
-// Manejo de errores globales
-app.use((err, req, res, next) => {
-  const localTime = new Date().toLocaleString('es-CO', { 
-    timeZone: 'America/Bogota',
-    year: 'numeric',
-    month: '2-digit', 
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
+  // Ruta pública para consultar el estado de mantenimiento
+  app.get('/api/maintenance/status', async (req, res) => {
+    try {
+      const MaintenanceSimpleService = (await import('./services/maintenanceSimpleService.js')).default;
+      const status = await MaintenanceSimpleService.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error('Error obteniendo estado de mantenimiento:', error);
+      res.status(500).json({ error: 'Error interno del servidor' });
+    }
   });
-  
-  console.error(`❌ [${localTime}] ERROR GLOBAL:`, {
-    message: err.message,
-    stack: err.stack,
-    method: req.method,
-    url: req.url,
-    headers: req.headers,
-    body: req.body ? 'Presente' : 'Ausente'
+
+  // Rutas API protegidas with JWT y mantenimiento
+  app.use('/api/tickets', authMiddleware, checkMaintenance, ticketRoutes);
+  app.use('/api/users', authMiddleware, checkMaintenance, userRoutes);
+  app.use('/api/comments', authMiddleware, checkMaintenance, commentRoutes);
+  app.use('/api/notifications', authMiddleware, checkMaintenance, notificationRoutes);
+  app.use('/api/analytics', authMiddleware, checkMaintenance, analyticsRoutes);
+  app.use('/api/whatsapp', whatsappRoutes);
+  app.use('/api/dashboard', authMiddleware, checkMaintenance, dashboardSettingsRoutes);
+  app.use('/api/dashboard-config', authMiddleware, checkMaintenance, dashboardConfigRoutes);
+
+  // Rutas de mantenimiento (protegidas - requieren autenticación)
+  app.use('/api/maintenance', authMiddleware, maintenanceSimpleRoutes);
+
+  // Manejo de rutas no encontradas (debe estar al final)
+  app.use((req, res, next) => {
+    res.status(404).json({ message: 'Ruta no encontrada' });
   });
-  
-  // Si es un error CORS, no reiniciar el servidor
-  if (err.message && err.message.includes('CORS')) {
-    return res.status(403).json({ 
-      error: 'Error de CORS', 
-      message: err.message 
+
+  // Manejo de errores globales
+  app.use((err, req, res, next) => {
+    const localTime = new Date().toLocaleString('es-CO', { 
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
-  }
-  
-  // Para otros errores, enviar respuesta genérica
-  if (!res.headersSent) {
-    res.status(500).json({ 
-      error: 'Error interno del servidor',
-      timestamp: localTime
+    
+    console.error(`❌ [${localTime}] ERROR GLOBAL:`, {
+      message: err.message,
+      stack: err.stack,
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+      body: req.body ? 'Presente' : 'Ausente'
     });
-  }
-});
+    
+    // Si es un error CORS, no reiniciar el servidor
+    if (err.message && err.message.includes('CORS')) {
+      return res.status(403).json({ 
+        error: 'Error de CORS', 
+        message: err.message 
+      });
+    }
+    
+    // Para otros errores, enviar respuesta genérica
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error interno del servidor',
+        timestamp: localTime
+      });
+    }
+  });
+}
 
 // --- SOCKET.IO para notificaciones en tiempo real ---
 const httpServer = createServer(app);
@@ -446,7 +444,11 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 // Ejecutar la validación de tablas antes de iniciar el servidor
-checkAndCreateTables().then(() => {
+checkAndCreateTables().then(async () => {
+  // Configurar las rutas primero (después de que las exports estén disponibles)
+  await setupRoutes();
+  console.log('✅ Rutas configuradas exitosamente');
+  
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT} (WebSocket enabled) in ${ENV} mode`);
     
@@ -458,7 +460,7 @@ checkAndCreateTables().then(() => {
     
     // Inicializar servicio de WhatsApp después de que el servidor esté listo
     setTimeout(() => {
-      console.log('� Configurando servicio de WhatsApp desde servidor...');
+      console.log('🔄 Configurando servicio de WhatsApp desde servidor...');
       whatsappService.initialize().catch(err => {
         console.error('❌ Error al inicializar WhatsApp:', err);
       });
@@ -484,11 +486,20 @@ process.on('uncaughtException', (err) => {
     name: err.name
   });
   
-  // No terminar el proceso inmediatamente, dar tiempo para log
-  setTimeout(() => {
-    console.error(`⚠️ [${localTime}] Reiniciando servidor debido a error crítico...`);
-    process.exit(1);
-  }, 1000);
+  // Solo reiniciar si es un error crítico de base de datos o Express
+  const isCriticalError = err.message?.includes('ECONNREFUSED') ||
+                          err.message?.includes('listen EADDRINUSE') ||
+                          err.code === 'EADDRINUSE';
+  
+  if (isCriticalError) {
+    console.error(`⚠️ [${localTime}] Error crítico detectado. Reiniciando servidor...`);
+    setTimeout(() => {
+      process.exit(1);
+    }, 1000);
+  } else {
+    console.warn(`⚠️ [${localTime}] Error no crítico. El servidor continúa ejecutándose.`);
+    // NO reiniciar el servidor por errores de WhatsApp/Puppeteer
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -502,6 +513,22 @@ process.on('unhandledRejection', (reason, promise) => {
     second: '2-digit'
   });
   
+  // Filtrar errores conocidos de WhatsApp Web que no son críticos
+  const reasonStr = reason?.message || reason?.toString() || '';
+  
+  if (reasonStr.includes('EBUSY') && reasonStr.includes('chrome_debug.log')) {
+    // Error conocido de whatsapp-web.js en Windows al cerrar sesión
+    console.warn(`⚠️ [${localTime}] Advertencia conocida de WhatsApp Web (Windows):`, reasonStr);
+    console.log('ℹ️ Archivos de Chrome bloqueados temporalmente. Esto no afecta la funcionalidad.');
+    return; // No registrar como error crítico
+  }
+  
+  if (reasonStr.includes('EBUSY') || reasonStr.includes('resource busy')) {
+    console.warn(`⚠️ [${localTime}] Recurso temporalmente bloqueado:`, reasonStr);
+    return; // No registrar como error crítico
+  }
+  
+  // Para otros errores, registrarlos normalmente
   console.error(`🚫 [${localTime}] PROMESA RECHAZADA NO MANEJADA:`, {
     reason: reason,
     promise: promise

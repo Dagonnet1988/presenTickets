@@ -32,6 +32,7 @@
             </mat-card-title>
           </mat-card-header>
           <mat-card-content>
+
             <div class="connection-status">
               <div class="status-item">
                 <mat-icon
@@ -69,20 +70,26 @@
                 ></span>
               </div>
 
+              <div class="status-item" *ngIf="connectionStatus.authMethod">
+                <mat-icon>login</mat-icon>
+                <span>Método: {{ connectionStatus.authMethod === 'qr' ? 'QR' : 'Teléfono' }}</span>
+              </div>
+
               <div class="status-item" *ngIf="connectionStatus.timestamp">
                 <mat-icon>access_time</mat-icon>
                 <span>Última actualización: Hace un momento</span>
               </div>
             </div>
 
-            <!-- Código QR -->
+            <!-- Autenticación por QR -->
             <div class="qr-container" *ngIf="qrCode">
               <h3>Escanea el código QR con WhatsApp:</h3>
               <div class="qr-code">
-                <img [src]="getQRCodeUrl(qrCode)" alt="Código QR WhatsApp" />
+                <img [src]="qrCodeUrl || getQRCodeUrl(qrCode)" alt="Código QR WhatsApp" />
               </div>
               <p>Abre WhatsApp en tu teléfono y escanea este código QR</p>
             </div>
+
           </mat-card-content>
           <mat-card-actions>
             <button

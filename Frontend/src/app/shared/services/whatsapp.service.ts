@@ -93,11 +93,13 @@ export class WhatsappService {
   /**
    * Enviar mensaje de prueba
    */
-  async testMessage(phone: string): Promise<any> {
+  async testMessage(phone: string, message?: string): Promise<any> {
     const token = localStorage.getItem('token');
-    const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/test-message`, {
-      phone_number: phone
-    }, {
+    const payload: any = { phoneNumber: phone };
+    if (message) {
+      payload.message = message;
+    }
+    const response = await this.http.post(`${environment.backendUrl}/api/whatsapp/test-message`, payload, {
       headers: { Authorization: `Bearer ${token}` }
     }).toPromise();
     return response;
@@ -232,8 +234,8 @@ export class WhatsappService {
   /**
    * Enviar mensaje de prueba (alias para testMessage)
    */
-  async sendTestMessage(phone: string): Promise<any> {
-    return this.testMessage(phone);
+  async sendTestMessage(phone: string, message?: string): Promise<any> {
+    return this.testMessage(phone, message);
   }
 
   /**
@@ -285,4 +287,5 @@ export class WhatsappService {
     }).toPromise();
     return response;
   }
+
 }

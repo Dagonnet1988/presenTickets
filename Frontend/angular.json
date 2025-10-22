@@ -68,6 +68,11 @@
                 "xlsx",
                 "exceljs"
               ],
+              "optimization": {
+                "scripts": true,
+                "styles": true,
+                "fonts": true
+              },
               "budgets": [
                 {
                   "type": "initial",

@@ -15,6 +15,7 @@
 
 export const environment = {
   production: true,
+  enableDebugLogs: false, // Desactivar logs de debug en producción
   auth: 'http://192.162.2.5:3000/api/auth',
   user: 'http://192.162.2.5:3000/api/users',
   ticket: 'http://192.162.2.5:3000/api/tickets',
@@ -24,3 +25,11 @@ export const environment = {
   apiUrl: 'http://192.162.2.5:3000',
   appVersion: '1.1'
 };
+
+// Eliminar console.log, console.debug, console.warn en producción
+if (typeof window !== 'undefined') {
+  (window as any)['console']['log'] = () => {};
+  (window as any)['console']['debug'] = () => {};
+  (window as any)['console']['warn'] = () => {};
+  // Mantener console.error para errores críticos
+}

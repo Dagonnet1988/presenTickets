@@ -36,13 +36,10 @@ export class NotificationBellComponent {
 
   constructor(private notificationService: NotificationService, private router: Router) {
     this.notificationService.notifications$.subscribe((n) => {
-      console.log('🔔 Notificaciones recibidas en bell component:', n);
       this.notifications = n;
       // Filtrar solo las notificaciones no leídas para mostrar en la campana
       this.unreadNotifications = n.filter((x) => !(x.read || (x as any).is_read));
       this.unreadCount = this.unreadNotifications.length;
-      console.log('🔔 Notificaciones no leídas:', this.unreadNotifications.length);
-      console.log('🔔 Icono debería estar visible:', this.unreadCount > 0 ? 'SÍ' : 'NO');
     });
   }
 

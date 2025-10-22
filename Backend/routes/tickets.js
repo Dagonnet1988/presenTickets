@@ -14,7 +14,8 @@
  */
 
 import express from "express";
-import { pool, emitTicketNotification, io } from "../server.js";
+import { pool } from "../db.js";
+import { emitTicketNotification, io } from "../server.js";
 import formidable from "formidable";
 import path from "path";
 import fs from "fs";

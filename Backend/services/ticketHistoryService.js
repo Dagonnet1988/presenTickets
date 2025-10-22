@@ -5,7 +5,7 @@
  * Servicio para gestión del historial de cambios de tickets
  */
 
-import { pool } from '../server.js';
+import { pool } from '../db.js';
 
 /**
  * Registrar un cambio en el historial del ticket

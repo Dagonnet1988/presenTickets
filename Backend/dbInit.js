@@ -14,7 +14,7 @@
  */
 
 import pkg from 'pg';
-import { pool } from './server.js';
+import { pool } from './db.js';
 
 const { Pool } = pkg;
 const createDatabaseIfNotExists = async () => {

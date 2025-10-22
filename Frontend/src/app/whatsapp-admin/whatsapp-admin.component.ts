@@ -225,6 +225,8 @@ export class WhatsAppAdminComponent implements OnInit {
 
   // Código QR
   qrCode: string | null = null;
+  qrCodeUrl: string | null = null;
+
 
   // Configuración personalizada del paginador
   customPaginatorIntl = new MatPaginatorIntl();
@@ -287,6 +289,7 @@ export class WhatsAppAdminComponent implements OnInit {
     // Escuchar código QR
     this.socket.on('whatsapp-qr-code', (data: any) => {
       this.qrCode = data.qrCode;
+      this.qrCodeUrl = data.qrUrl;
     });
 
     // Escuchar cambios de estado de conexión
@@ -329,6 +332,7 @@ export class WhatsAppAdminComponent implements OnInit {
   async connectWhatsApp() {
     this.loading.connect = true;
     this.qrCode = null;
+
     try {
       const result = await this.whatsappService.connect();
       if (result.success) {
@@ -352,6 +356,7 @@ export class WhatsAppAdminComponent implements OnInit {
       this.loading.connect = false;
     }
   }
+
 
   /**
    * Desconectar WhatsApp
@@ -382,7 +387,8 @@ export class WhatsAppAdminComponent implements OnInit {
     this.loading.testMessage = true;
     try {
       await this.whatsappService.sendTestMessage(
-        this.testMessage.phoneNumber
+        this.testMessage.phoneNumber,
+        this.testMessage.message
       );
       this.showSuccess('Mensaje de prueba enviado exitosamente');
       this.testMessage = { phoneNumber: '', message: '' };

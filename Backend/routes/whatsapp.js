@@ -14,9 +14,9 @@
  */
 
 import express from 'express';
-import { pool } from '../server.js';
+import { pool } from '../db.js';
 import { authMiddleware } from './auth.js';
-import whatsappService from '../services/whatsappService.js';
+import whatsappWebService from '../services/whatsappWebService.js';
 
 const router = express.Router();
 
@@ -33,7 +33,7 @@ const adminMiddleware = (req, res, next) => {
  */
 router.get('/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const status = await whatsappService.getConnectionStatus();
+    const status = await whatsappWebService.getConnectionStatus();
     res.json(status);
   } catch (error) {
     console.error('❌ Error obteniendo estado WhatsApp:', error);
@@ -46,7 +46,7 @@ router.get('/status', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const stats = await whatsappService.getWhatsAppStats();
+    const stats = await whatsappWebService.getWhatsAppStats();
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
@@ -59,11 +59,11 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/anti-block-stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const status = await whatsappService.getConnectionStatus();
-    const stats = await whatsappService.getWhatsAppStats();
-    
+    const status = await whatsappWebService.getConnectionStatus();
+    const stats = await whatsappWebService.getWhatsAppStats();
+
     // Obtener límites reales desde el servicio
-    const serviceLimits = whatsappService.getRateLimits() || {};
+    const serviceLimits = whatsappWebService.getRateLimits() || {};
     
     // Formatear datos para el frontend
     const dailyUsed = status.dailyMessageCount || 0;
@@ -131,38 +131,53 @@ router.get('/anti-block-stats', authMiddleware, adminMiddleware, async (req, res
  */
 router.post('/connect', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    // Configurar callback para QR code
-    let qrCodeData = null;
-    whatsappService.onQRCode((qr) => {
-      qrCodeData = qr;
-    });
+    console.log('🚀 Iniciando conexión WhatsApp Web desde endpoint...');
 
-    // Configurar callback para conexión
-    whatsappService.onConnection((connected) => {
-      if (connected) {
-              }
-    });
+    // Verificar si ya está inicializando
+    if (whatsappWebService.isInitializing) {
+      return res.status(409).json({
+        error: 'WhatsApp ya se está inicializando. Espera a que termine.'
+      });
+    }
 
-    // Inicializar conexión
-    await whatsappService.initializeConnection();
+    // Verificar si ya está conectado
+    if (whatsappWebService.isReady) {
+      return res.json({
+        success: true,
+        message: 'WhatsApp Web ya está conectado',
+        alreadyConnected: true
+      });
+    }
 
-    res.json({ 
-      success: true, 
-      message: 'Iniciando conexión WhatsApp',
-      qrCode: qrCodeData 
-    });
+    // Inicializar conexión WhatsApp Web
+    const success = await whatsappWebService.initialize();
+
+    if (success) {
+      console.log('✅ Inicialización de WhatsApp Web exitosa');
+      res.json({
+        success: true,
+        message: 'Iniciando conexión WhatsApp Web. Espera el código QR.'
+      });
+    } else {
+      console.error('❌ Error en la inicialización de WhatsApp Web');
+      res.status(500).json({ error: 'Error al inicializar WhatsApp Web' });
+    }
   } catch (error) {
     console.error('❌ Error iniciando WhatsApp:', error);
-    res.status(500).json({ error: 'Error al iniciar WhatsApp' });
+    res.status(500).json({
+      error: 'Error al iniciar WhatsApp',
+      details: error.message
+    });
   }
 });
+
 
 /**
  * Desconectar WhatsApp
  */
 router.post('/disconnect', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await whatsappService.disconnect();
+    await whatsappWebService.disconnect();
     res.json({ success: true, message: 'WhatsApp desconectado exitosamente' });
   } catch (error) {
     console.error('❌ Error desconectando WhatsApp:', error);
@@ -175,7 +190,7 @@ router.post('/disconnect', authMiddleware, adminMiddleware, async (req, res) => 
  */
 router.post('/reconnect', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await whatsappService.reconnect();
+    await whatsappWebService.reconnect();
     res.json({ success: true, message: 'Reconexión WhatsApp iniciada exitosamente' });
   } catch (error) {
     console.error('❌ Error reconectando WhatsApp:', error);
@@ -190,11 +205,14 @@ router.post('/test-message', authMiddleware, adminMiddleware, async (req, res) =
   try {
     const { phoneNumber, message } = req.body;
 
-    if (!phoneNumber || !message) {
-      return res.status(400).json({ error: 'Número de teléfono y mensaje son requeridos' });
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Número de teléfono es requerido' });
     }
 
-    const result = await whatsappService.sendMessage(phoneNumber, message);
+    // Si no hay mensaje personalizado, usar uno por defecto
+    const messageToSend = message || 'Mensaje de prueba desde PresenTickets';
+
+    const result = await whatsappWebService.sendMessage(phoneNumber, messageToSend);
     res.json({ success: true, message: 'Mensaje enviado exitosamente', result });
   } catch (error) {
     console.error('❌ Error enviando mensaje de prueba:', error);
@@ -430,7 +448,7 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
 router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { period = '7' } = req.query; // Respetar filtro del frontend
-    const stats = await whatsappService.getNotificationStats(period);
+    const stats = await whatsappWebService.getNotificationStats(period);
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
@@ -566,23 +584,23 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
 export async function sendWhatsAppNotification(userId, ticketId, message, notificationType) {
   try {
     const client = await pool.connect();
-    
+
     // 1. VERIFICAR CONFIGURACIÓN GLOBAL DEL SISTEMA PRIMERO
     const globalSettingsResult = await client.query(`
-      SELECT 
+      SELECT
         whatsapp_global_enabled,
         whatsapp_global_ticket_created,
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
         whatsapp_global_comments
-      FROM system_settings 
+      FROM system_settings
       WHERE id = 1
     `);
 
     // Si existe configuración global, verificarla
     if (globalSettingsResult.rows.length > 0) {
       const globalSettings = globalSettingsResult.rows[0];
-      
+
       // Verificar si WhatsApp está globalmente deshabilitado
       if (!globalSettings.whatsapp_global_enabled) {
         console.log(`⚠️ WhatsApp está globalmente deshabilitado`);
@@ -610,7 +628,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
 
     // 2. VERIFICAR CONFIGURACIÓN DEL USUARIO
     const settingsResult = await client.query(`
-      SELECT 
+      SELECT
         u.phone,
         COALESCE(ups.whatsapp_enabled, true) as whatsapp_enabled,
         COALESCE(ups.whatsapp_ticket_created, true) as whatsapp_ticket_created,
@@ -654,7 +672,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     }
 
     // 3. ENVIAR NOTIFICACIÓN SI TODAS LAS VERIFICACIONES PASAN
-    return await whatsappService.sendTicketNotification(userId, ticketId, message, notificationType);
+    return await whatsappWebService.sendTicketNotification(userId, ticketId, message, notificationType);
   } catch (error) {
     console.error('❌ Error enviando notificación WhatsApp:', error);
     return false;
@@ -876,7 +894,7 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Período inválido. Usar: 7, 15, 30, 60, 90 días' });
     }
     
-    const stats = await whatsappService.getDetailedStats(period);
+    const stats = await whatsappWebService.getDetailedStats(period);
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas WhatsApp:', error);
@@ -889,7 +907,7 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/stats/simple', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const stats = await whatsappService.getNotificationStats();
+    const stats = await whatsappWebService.getNotificationStats();
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas simples WhatsApp:', error);
@@ -903,14 +921,14 @@ router.get('/stats/simple', authMiddleware, adminMiddleware, async (req, res) =>
 router.get('/performance-report', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { period = '30', format = 'json' } = req.query;
-    
+
     // Validar período
     const validPeriods = ['7', '15', '30', '60', '90'];
     if (!validPeriods.includes(period)) {
       return res.status(400).json({ error: 'Período inválido. Usar: 7, 15, 30, 60, 90 días' });
     }
-    
-    const report = await whatsappService.generatePerformanceReport(period);
+
+    const report = await whatsappWebService.generatePerformanceReport(period);
     
     if (format === 'text') {
       // Retornar reporte en formato texto para visualización
@@ -949,7 +967,7 @@ router.get('/performance-report', authMiddleware, adminMiddleware, async (req, r
  */
 router.get('/anti-block-stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const stats = whatsappService.getAntiBlockStats();
+    const stats = whatsappWebService.getAntiBlockStats();
     res.json(stats);
   } catch (error) {
     console.error('❌ Error obteniendo estadísticas anti-bloqueo:', error);
@@ -991,53 +1009,53 @@ router.get('/hourly-usage', authMiddleware, adminMiddleware, async (req, res) =>
  */
 router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    
-    const { 
-      maxDailyMessages, 
-      maxMessagesPerHour, 
-      minDelayBetweenMessages, 
+
+    const {
+      maxDailyMessages,
+      maxMessagesPerHour,
+      minDelayBetweenMessages,
       maxDelayBetweenMessages,
-      maxBurstMessages 
+      maxBurstMessages
     } = req.body;
-    
+
     // Validar límites
     if (maxDailyMessages && (maxDailyMessages < 1 || maxDailyMessages > 1000)) {
       return res.status(400).json({ error: 'Límite diario debe estar entre 1 y 1000' });
     }
-    
+
     if (maxMessagesPerHour && (maxMessagesPerHour < 1 || maxMessagesPerHour > 100)) {
       return res.status(400).json({ error: 'Límite por hora debe estar entre 1 y 100' });
     }
-    
+
     if (minDelayBetweenMessages && minDelayBetweenMessages < 500) {
       return res.status(400).json({ error: 'Delay mínimo debe ser al menos 500ms' });
     }
-    
+
     if (maxDelayBetweenMessages && maxDelayBetweenMessages > 30000) {
       return res.status(400).json({ error: 'Delay máximo no puede exceder 30 segundos' });
     }
-    
+
     // Actualizar configuración en memoria
-    const rateLimits = whatsappService.rateLimits;
-    
+    const rateLimits = whatsappWebService.rateLimits;
+
     if (maxDailyMessages !== undefined) rateLimits.maxDailyMessages = maxDailyMessages;
     if (maxMessagesPerHour !== undefined) rateLimits.maxMessagesPerHour = maxMessagesPerHour;
     if (minDelayBetweenMessages !== undefined) rateLimits.minDelayBetweenMessages = minDelayBetweenMessages;
     if (maxDelayBetweenMessages !== undefined) rateLimits.maxDelayBetweenMessages = maxDelayBetweenMessages;
     if (maxBurstMessages !== undefined) rateLimits.maxBurstMessages = maxBurstMessages;
-    
-    
+
+
     // Persistir en base de datos
-    const saved = await whatsappService.saveAntiBlockConfigToDB();
-    
+    const saved = await whatsappWebService.saveAntiBlockConfigToDB();
+
     if (saved) {
-      res.json({ 
+      res.json({
         message: 'Límites actualizados y guardados exitosamente en base de datos',
         newLimits: rateLimits,
         persistent: true
       });
     } else {
-      res.json({ 
+      res.json({
         message: 'Límites actualizados en memoria pero error al guardar en BD',
         newLimits: rateLimits,
         persistent: false,
@@ -1055,7 +1073,7 @@ router.post('/configure-limits', authMiddleware, adminMiddleware, async (req, re
  */
 router.get('/get-limits', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const rateLimits = whatsappService.rateLimits;
+    const rateLimits = whatsappWebService.getRateLimits();
     res.json({
       message: 'Configuración actual de límites',
       limits: rateLimits,
@@ -1078,9 +1096,9 @@ router.get('/get-limits', authMiddleware, adminMiddleware, async (req, res) => {
  */
 router.get('/business-hours', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const businessHours = await whatsappService.getBusinessHours();
-    const isCurrentlyBusinessHours = await whatsappService.isBusinessHours();
-    
+    const businessHours = await whatsappWebService.getBusinessHours();
+    const isCurrentlyBusinessHours = await whatsappWebService.isBusinessHours();
+
     res.json({
       schedule: businessHours,
       isCurrentlyBusinessHours,

@@ -16,7 +16,7 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { pool } from "../server.js";
+import { pool } from "../db.js";
 import MaintenanceSimpleService from "../services/maintenanceSimpleService.js";
 
 const router = express.Router();

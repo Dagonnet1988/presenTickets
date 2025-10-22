@@ -1,12 +1,10 @@
 {
   "apps": [
     {
-      "name": "presentickets-backend",
+      "name": "backend",
       "script": "server.js",
-      "cwd": "/var/www/presentickets/Backend",
+      "cwd": "/var/www/presentickets-backend",
       "env": {
-        "NODE_ENV": "development"
-      },      "env_production": {
         "NODE_ENV": "production",
         "PORT": 3000,
         "DB_HOST": "192.162.2.5",
@@ -14,7 +12,7 @@
         "DB_NAME": "presentickets",
         "DB_PASSWORD": "postgres",
         "DB_PORT": 5432,
-        "DB_SSL": false,
+        "DB_SSL": "false",
         "BASE_URL": "http://192.162.2.5:3000",
         "FRONTEND_URL": "http://192.162.2.5",
         "JWT_SECRET": "supersecreto123",

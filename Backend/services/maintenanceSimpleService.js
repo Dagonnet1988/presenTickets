@@ -3,7 +3,7 @@
  * Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
  */
 
-import { pool } from '../server.js';
+import { pool } from '../db.js';
 
 class MaintenanceSimpleService {
   
