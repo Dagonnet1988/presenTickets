@@ -528,6 +528,19 @@ process.on('unhandledRejection', (reason, promise) => {
     return; // No registrar como error crítico
   }
   
+  // Errores conocidos de WhatsApp Web - NO críticos
+  if (reasonStr.includes('markedUnread') || reasonStr.includes('sendSeen')) {
+    console.warn(`⚠️ [${localTime}] Error conocido de WhatsApp Web (markedUnread):`, reasonStr);
+    console.log('ℹ️ Este error es causado por cambios en la API de WhatsApp. El mensaje puede haberse enviado.');
+    return; // No registrar como error crítico
+  }
+  
+  if (reasonStr.includes('Target closed') || reasonStr.includes('Protocol error')) {
+    console.warn(`⚠️ [${localTime}] WhatsApp Web: Conexión cerrada inesperadamente`);
+    console.log('ℹ️ Esto puede ocurrir si la sesión expiró o hay problemas de red.');
+    return; // No registrar como error crítico
+  }
+  
   // Para otros errores, registrarlos normalmente
   console.error(`🚫 [${localTime}] PROMESA RECHAZADA NO MANEJADA:`, {
     reason: reason,

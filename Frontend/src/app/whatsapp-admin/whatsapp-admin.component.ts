@@ -883,6 +883,8 @@ export class WhatsAppAdminComponent implements OnInit {
       case 'sent': return 'status-sent';
       case 'failed': return 'status-failed';
       case 'pending': return 'status-pending';
+      case 'skipped': return 'status-skipped';
+      case 'queued': return 'status-queued';
       default: return 'status-unknown';
     }
   }
@@ -895,6 +897,8 @@ export class WhatsAppAdminComponent implements OnInit {
       case 'sent': return 'check_circle';
       case 'failed': return 'error';
       case 'pending': return 'schedule';
+      case 'skipped': return 'block';
+      case 'queued': return 'hourglass_empty';
       default: return 'help_outline';
     }
   }
@@ -907,6 +911,8 @@ export class WhatsAppAdminComponent implements OnInit {
       case 'sent': return 'Enviado';
       case 'failed': return 'Fallido';
       case 'pending': return 'Pendiente';
+      case 'skipped': return 'Omitido';
+      case 'queued': return 'En cola';
       default: return 'Desconocido';
     }
   }

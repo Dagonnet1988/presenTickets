@@ -24,8 +24,22 @@ class WhatsAppWebService {
     this.client = null;
     this.isReady = false;
     this.isInitializing = false;
+    this.isDestroying = false; // Flag para controlar destrucción en curso
     this.qrCode = null;
     this.io = null; // Referencia a Socket.IO
+
+    // Control de reconexión para evitar múltiples intentos simultáneos
+    this.reconnectTimeout = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 3;
+    this.reconnectDelay = 15000; // 15 segundos entre intentos
+    this.lastDisconnectTime = 0;
+
+    // Control de generación de QR
+    this.qrGenerationCount = 0;
+    this.maxQRGenerations = 10; // Máximo de QRs antes de pausar
+    this.qrCooldownActive = false;
+    this.lastQRTime = 0;
 
     // Rate limiting para prevenir bloqueos de WhatsApp
     this.lastMessageTime = 0;
@@ -96,17 +110,34 @@ class WhatsAppWebService {
    */
   async initialize() {
     try {
+      // Verificar si hay destrucción en curso
+      if (this.isDestroying) {
+        console.log('⏳ Destrucción en curso, esperando antes de inicializar...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        if (this.isDestroying) {
+          console.log('⚠️ Destrucción aún en curso, cancelando inicialización');
+          return false;
+        }
+      }
+
       if (this.isInitializing) {
         console.log('⚠️ Inicialización ya en progreso...');
         return false;
       }
 
-      if (this.isReady) {
+      if (this.isReady && this.client) {
         console.log('✅ WhatsApp Web ya está conectado');
         return true;
       }
 
+      // Verificar cooldown de QR
+      if (this.qrCooldownActive) {
+        console.log('⏳ QR cooldown activo, esperando...');
+        return false;
+      }
+
       this.isInitializing = true;
+      this.qrGenerationCount = 0; // Reset contador de QR
       console.log('🚀 Inicializando WhatsApp Web...');
 
       // Cargar configuración de antibloqueo desde BD
@@ -153,40 +184,63 @@ class WhatsAppWebService {
    */
   async initializeClient() {
     try {
-      // Destruir cliente anterior si existe
+      // Destruir cliente anterior si existe de forma segura
       if (this.client) {
+        console.log('🧹 Limpiando cliente anterior...');
+        this.isDestroying = true;
         try {
-          await this.client.destroy();
+          await Promise.race([
+            this.client.destroy(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout destruyendo cliente')), 10000))
+          ]);
         } catch (destroyError) {
           console.warn('⚠️ Error destruyendo cliente anterior:', destroyError.message);
+        } finally {
+          this.client = null;
+          this.isDestroying = false;
         }
+        // Esperar para que Chrome libere recursos
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
+
+      // Configuración robusta de Puppeteer para Windows
+      // NOTA: NO usar --single-process ya que causa "Target closed" error
+      const puppeteerArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--disable-gpu',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection',
+        '--disable-extensions',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-default-apps',
+        '--mute-audio',
+        '--hide-scrollbars'
+      ];
 
       this.client = new Client({
         authStrategy: new LocalAuth({
-          dataPath: this.authFolder
+          dataPath: this.authFolder,
+          clientId: 'presentickets-whatsapp' // ID único para evitar conflictos
         }),
         puppeteer: {
           headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor'
-          ],
+          args: puppeteerArgs,
           handleSIGINT: false,
           handleSIGTERM: false,
-          handleSIGHUP: false
+          handleSIGHUP: false,
+          timeout: 90000 // Timeout de 90 segundos para operaciones de Puppeteer
         },
-        webVersionCache: {
-          type: 'remote',
-          remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-        }
+        qrMaxRetries: 5, // Limitar reintentos de QR
+        takeoverOnConflict: false, // No tomar control si hay otra sesión
+        takeoverTimeoutMs: 0
       });
 
       // Configurar eventos ANTES de inicializar
@@ -196,22 +250,29 @@ class WhatsAppWebService {
       console.log('🔄 Iniciando cliente WhatsApp Web...');
       const initPromise = this.client.initialize();
       
-      // Timeout de 60 segundos para la inicialización
+      // Timeout de 90 segundos para la inicialización
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout en inicialización de WhatsApp Web')), 60000);
+        setTimeout(() => reject(new Error('Timeout en inicialización de WhatsApp Web')), 90000);
       });
 
       await Promise.race([initPromise, timeoutPromise]);
       console.log('✅ Cliente WhatsApp Web inicializado correctamente');
 
     } catch (error) {
-      console.error('❌ Error creando/iniciando cliente WhatsApp Web:', error);
+      console.error('❌ Error creando/iniciando cliente WhatsApp Web:', error.message || error);
       this.isInitializing = false;
+      this.isDestroying = false;
       
-      // Limpiar cliente en caso de error
+      // Limpiar cliente en caso de error de forma segura
       if (this.client) {
         try {
-          await this.client.destroy();
+          // Verificar que el cliente tenga el método destroy antes de llamarlo
+          if (typeof this.client.destroy === 'function') {
+            await Promise.race([
+              this.client.destroy(),
+              new Promise(resolve => setTimeout(resolve, 5000)) // Timeout de 5 segundos
+            ]);
+          }
         } catch (destroyError) {
           console.warn('⚠️ Error limpiando cliente:', destroyError.message);
         }
@@ -227,16 +288,53 @@ class WhatsAppWebService {
    * Configurar manejadores de eventos
    */
   setupEventHandlers() {
-    // Evento QR Code
+    // Evento QR Code - CON CONTROL DE RATE LIMITING
     this.client.on('qr', (qr) => {
-      console.log('📱 Código QR generado - Enviando al frontend');
+      const now = Date.now();
+      this.qrGenerationCount++;
+      
+      // Verificar si estamos generando QRs muy rápido (posible loop)
+      if (this.lastQRTime && (now - this.lastQRTime) < 5000) {
+        console.warn(`⚠️ QR generado muy rápido (${Math.round((now - this.lastQRTime)/1000)}s desde el anterior)`);
+      }
+      
+      // Limitar cantidad de QRs generados
+      if (this.qrGenerationCount > this.maxQRGenerations) {
+        console.error(`🛑 Demasiados QRs generados (${this.qrGenerationCount}). Activando cooldown de 60 segundos...`);
+        this.qrCooldownActive = true;
+        
+        // Notificar al frontend sobre el cooldown
+        if (this.io) {
+          this.io.emit('whatsapp-connection-status', {
+            isConnected: false,
+            hasSocket: false,
+            error: 'Demasiados intentos de QR. Espera 60 segundos antes de reintentar.',
+            cooldown: true,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
+        // Resetear después de 60 segundos
+        setTimeout(() => {
+          this.qrCooldownActive = false;
+          this.qrGenerationCount = 0;
+          console.log('✅ Cooldown de QR terminado');
+        }, 60000);
+        
+        return; // No procesar más QRs durante el cooldown
+      }
+      
+      this.lastQRTime = now;
+      console.log(`📱 Código QR generado (#${this.qrGenerationCount}) - Enviando al frontend`);
       this.qrCode = qr;
 
       // Enviar QR a través de WebSocket si está disponible
       if (this.io) {
         this.io.emit('whatsapp-qr-code', {
           qrCode: qr,
-          qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`
+          qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`,
+          attempt: this.qrGenerationCount,
+          maxAttempts: this.maxQRGenerations
         });
       }
     });
@@ -247,6 +345,14 @@ class WhatsAppWebService {
       this.isReady = true;
       this.isInitializing = false;
       this.qrCode = null;
+      this.qrGenerationCount = 0; // Reset contador de QR al conectar
+      this.reconnectAttempts = 0; // Reset intentos de reconexión
+      
+      // Cancelar cualquier reconexión pendiente
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
 
       // Notificar conexión exitosa a través de WebSocket
       if (this.io) {
@@ -264,15 +370,19 @@ class WhatsAppWebService {
 
     // Evento de mensaje
     this.client.on('message', async (msg) => {
-      // Procesar mensajes entrantes si es necesario
-      console.log('📨 Mensaje recibido:', msg.from, msg.body);
+      // Solo loggear si es un mensaje de texto normal
+      if (msg.body && msg.body.length < 100) {
+        console.log('📨 Mensaje recibido:', msg.from);
+      }
     });
 
-    // Evento de desconexión
+    // Evento de desconexión - CON DEBOUNCE
     this.client.on('disconnected', (reason) => {
+      const now = Date.now();
       console.log('❌ WhatsApp Web desconectado:', reason);
       this.isReady = false;
       this.qrCode = null;
+      this.isInitializing = false;
 
       // Notificar desconexión a través de WebSocket
       if (this.io) {
@@ -284,19 +394,53 @@ class WhatsAppWebService {
         });
       }
 
-      // Solo reconectar si no es una desconexión intencional
-      if (reason !== 'Client was logged out') {
-        console.log('🔄 Intentando reconectar en 10 segundos...');
-        setTimeout(() => {
-          console.log('🔄 Reconectando WhatsApp Web...');
-          // Usar .catch() para evitar errores no capturados que crasheen el servidor
-          this.initialize().catch(err => {
-            console.error('❌ Error en reconexión automática:', err);
-            // No lanzar el error, solo registrarlo
-          });
-        }, 10000);
+      // Evitar múltiples reconexiones simultáneas con debounce
+      if (this.reconnectTimeout) {
+        console.log('⏳ Ya hay una reconexión programada, ignorando...');
+        return;
+      }
+
+      // Verificar si la desconexión fue muy reciente (evitar loop)
+      if (this.lastDisconnectTime && (now - this.lastDisconnectTime) < 5000) {
+        console.warn('⚠️ Desconexiones muy frecuentes detectadas, aumentando delay...');
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 120000); // Max 2 minutos
+      }
+      this.lastDisconnectTime = now;
+
+      // Solo reconectar si no es una desconexión intencional (LOGOUT)
+      const shouldReconnect = reason !== 'LOGOUT' && 
+                              reason !== 'Client was logged out' &&
+                              this.reconnectAttempts < this.maxReconnectAttempts;
+
+      if (shouldReconnect) {
+        this.reconnectAttempts++;
+        console.log(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${this.reconnectDelay/1000} segundos...`);
+        
+        this.reconnectTimeout = setTimeout(async () => {
+          this.reconnectTimeout = null;
+          console.log('🔄 Ejecutando reconexión automática...');
+          
+          try {
+            await this.initialize();
+          } catch (err) {
+            console.error('❌ Error en reconexión automática:', err.message);
+          }
+        }, this.reconnectDelay);
+      } else if (reason === 'LOGOUT') {
+        console.log('🚪 Sesión cerrada (LOGOUT). Requiere escanear nuevo QR.');
+        this.reconnectAttempts = 0;
+        this.reconnectDelay = 15000; // Reset delay
       } else {
-        console.log('🚪 Sesión cerrada por el usuario. No reconectar automáticamente.');
+        console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Intervención manual requerida.`);
+        if (this.io) {
+          this.io.emit('whatsapp-connection-status', {
+            isConnected: false,
+            hasSocket: false,
+            error: 'Máximo de reconexiones alcanzado. Por favor, reconecta manualmente.',
+            requiresManualAction: true,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     });
 
@@ -304,23 +448,39 @@ class WhatsAppWebService {
     this.client.on('auth_failure', (msg) => {
       console.error('❌ Fallo de autenticación:', msg);
       this.isReady = false;
+      this.isInitializing = false;
       this.qrCode = null;
+      
+      // Notificar al frontend
+      if (this.io) {
+        this.io.emit('whatsapp-connection-status', {
+          isConnected: false,
+          hasSocket: false,
+          error: 'Fallo de autenticación: ' + msg,
+          requiresNewQR: true,
+          timestamp: new Date().toISOString()
+        });
+      }
     });
 
     // Evento de carga
     this.client.on('loading_screen', (percent, message) => {
       console.log('⏳ Cargando WhatsApp Web:', percent + '%', message);
+      // Notificar progreso al frontend
+      if (this.io) {
+        this.io.emit('whatsapp-loading', { percent, message });
+      }
     });
 
     // Evento de error crítico - IMPORTANTE para evitar crash del servidor
     this.client.on('error', (error) => {
-      console.error('❌ Error crítico en cliente WhatsApp Web:', error);
+      console.error('❌ Error crítico en cliente WhatsApp Web:', error.message);
       // NO lanzar el error para evitar que crashee el servidor
       // Solo notificar a través de WebSocket
       if (this.io) {
         this.io.emit('whatsapp-connection-status', {
-          isConnected: false,
-          hasSocket: false,
+          isConnected: this.isReady, // Mantener estado actual
+          hasSocket: !!this.client,
           error: 'Error en cliente: ' + error.message,
           timestamp: new Date().toISOString()
         });
@@ -356,15 +516,66 @@ class WhatsAppWebService {
       // Formatear número de teléfono
       const formattedNumber = this.formatPhoneNumber(phoneNumber);
 
-      // Enviar mensaje
-      const result = await this.client.sendMessage(formattedNumber, message);
+      // Enviar mensaje con retry y manejo de errores mejorado
+      let result;
+      let lastError;
+      const maxRetries = 2;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Verificar que el cliente siga conectado antes de cada intento
+          if (!this.isReady || !this.client) {
+            throw new Error('WhatsApp se desconectó durante el envío');
+          }
+          
+          // Enviar mensaje con opciones que evitan el error de sendSeen
+          result = await this.client.sendMessage(formattedNumber, message, {
+            // Evitar marcar como leído para prevenir el error 'markedUnread'
+            sendSeen: false
+          });
+          
+          // Si llegamos aquí, el mensaje se envió correctamente
+          break;
+          
+        } catch (sendError) {
+          lastError = sendError;
+          const errorMsg = sendError.message || sendError.toString();
+          
+          // Si es el error conocido de markedUnread, intentar envío alternativo
+          if (errorMsg.includes('markedUnread') || errorMsg.includes('sendSeen')) {
+            console.warn(`⚠️ Error conocido de WhatsApp Web (intento ${attempt}/${maxRetries}):`, errorMsg);
+            
+            if (attempt < maxRetries) {
+              // Esperar un poco antes de reintentar
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              continue;
+            }
+          }
+          
+          // Si es error de Target closed, el cliente se desconectó
+          if (errorMsg.includes('Target closed') || errorMsg.includes('Protocol error')) {
+            console.error('❌ Cliente WhatsApp desconectado durante envío');
+            this.isReady = false;
+            throw new Error('WhatsApp Web se desconectó. Por favor, reconecta.');
+          }
+          
+          // Si no es un error recuperable, lanzar inmediatamente
+          if (attempt === maxRetries) {
+            throw sendError;
+          }
+        }
+      }
+      
+      if (!result && lastError) {
+        throw lastError;
+      }
 
       // Actualizar contadores
       this.updateMessageCounters();
 
       return result;
     } catch (error) {
-      console.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error);
+      console.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error.message || error);
       throw error;
     }
   }
@@ -545,21 +756,59 @@ class WhatsAppWebService {
     return {
       isConnected: this.isReady,
       hasSocket: !!this.client,
+      isInitializing: this.isInitializing,
       timestamp: new Date().toISOString(),
       currentQRCode: this.qrCode,
+      // Estado de reconexión
+      reconnectAttempts: this.reconnectAttempts,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+      qrGenerationCount: this.qrGenerationCount,
+      qrCooldownActive: this.qrCooldownActive,
       // Estadísticas de uso
       dailyMessageCount: this.dailyMessageCount,
       lastMessageTime: this.lastMessageTime,
+      lastMessageFormatted: this.lastMessageTime 
+        ? new Date(this.lastMessageTime).toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+        : 'Nunca',
       lastResetDate: this.lastResetDate,
       rateLimitStatus: {
         dailyLimit: this.rateLimits.maxDailyMessages,
         dailyUsed: this.dailyMessageCount,
-        dailyRemaining: this.rateLimits.maxDailyMessages - this.dailyMessageCount,
+        dailyRemaining: Math.max(0, this.rateLimits.maxDailyMessages - this.dailyMessageCount),
         hourlyLimit: this.rateLimits.maxMessagesPerHour,
         hourlyUsed: this.messageCount,
-        hourlyRemaining: this.rateLimits.maxMessagesPerHour - this.messageCount
+        hourlyRemaining: Math.max(0, this.rateLimits.maxMessagesPerHour - this.messageCount)
       }
     };
+  }
+
+  /**
+   * Resetear estado interno (para recuperación manual)
+   */
+  resetState() {
+    console.log('🔄 Reseteando estado interno de WhatsApp Service...');
+    
+    // Cancelar reconexión pendiente
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    // Resetear flags
+    this.isInitializing = false;
+    this.isDestroying = false;
+    this.isReady = false;
+    this.qrCode = null;
+    
+    // Resetear contadores de control
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 15000;
+    this.qrGenerationCount = 0;
+    this.qrCooldownActive = false;
+    this.lastDisconnectTime = 0;
+    
+    console.log('✅ Estado interno reseteado');
+    return true;
   }
 
   /**
@@ -568,25 +817,41 @@ class WhatsAppWebService {
   async disconnect() {
     try {
       console.log('🔌 Desconectando WhatsApp Web...');
+      
+      // Cancelar cualquier reconexión pendiente primero
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+        console.log('⏹️ Reconexión pendiente cancelada');
+      }
+      
+      this.isDestroying = true;
 
       if (this.client) {
         // Intentar hacer logout con manejo de errores específico para Windows
         try {
-          await this.client.logout();
+          await Promise.race([
+            this.client.logout(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout en logout')), 10000))
+          ]);
           console.log('✅ Logout exitoso');
         } catch (logoutError) {
           // Error EBUSY es común en Windows cuando Chrome tiene archivos bloqueados
           if (logoutError.message?.includes('EBUSY') || logoutError.message?.includes('resource busy')) {
-            console.warn('⚠️ Advertencia al cerrar sesión (archivos de Chrome bloqueados):', logoutError.message);
-            console.log('ℹ️ Esto es normal en Windows. La sesión se cerrará de todas formas.');
+            console.warn('⚠️ Advertencia al cerrar sesión (archivos de Chrome bloqueados)');
+          } else if (logoutError.message?.includes('Timeout')) {
+            console.warn('⚠️ Timeout durante logout, continuando con destrucción...');
           } else {
-            console.error('❌ Error durante logout:', logoutError);
+            console.error('❌ Error durante logout:', logoutError.message);
           }
         }
 
-        // Destruir el cliente de todas formas
+        // Destruir el cliente de todas formas con timeout
         try {
-          await this.client.destroy();
+          await Promise.race([
+            this.client.destroy(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout en destroy')), 10000))
+          ]);
           console.log('✅ Cliente destruido');
         } catch (destroyError) {
           console.warn('⚠️ Error al destruir cliente:', destroyError.message);
@@ -598,17 +863,21 @@ class WhatsAppWebService {
       this.isReady = false;
       this.qrCode = null;
       this.isInitializing = false;
+      this.isDestroying = false;
+      
+      // Resetear contadores de control
+      this.reconnectAttempts = 0;
+      this.qrGenerationCount = 0;
+      this.qrCooldownActive = false;
 
       // Limpiar archivos de sesión para forzar nueva autenticación
       // Esperar un momento para que Chrome libere los archivos
       if (process.platform === 'win32') {
-        console.log('⏳ Esperando 2 segundos para que Chrome libere archivos (Windows)...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('⏳ Esperando 3 segundos para que Chrome libere archivos (Windows)...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
       try {
-        const fs = await import('fs');
-        const path = await import('path');
         const authPath = path.join(process.cwd(), 'whatsapp_auth_web');
         if (fs.existsSync(authPath)) {
           console.log('🧹 Limpiando archivos de sesión...');
@@ -617,7 +886,7 @@ class WhatsAppWebService {
             const filePath = path.join(authPath, file);
             try {
               if (fs.statSync(filePath).isDirectory()) {
-                fs.rmSync(filePath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+                fs.rmSync(filePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
               } else {
                 fs.unlinkSync(filePath);
               }

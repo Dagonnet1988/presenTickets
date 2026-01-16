@@ -199,6 +199,34 @@ router.post('/reconnect', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 /**
+ * Resetear estado interno del servicio WhatsApp (para recuperación de errores)
+ */
+router.post('/reset-state', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    console.log('🔄 Reseteando estado de WhatsApp por solicitud del admin...');
+    
+    // Primero intentar desconectar limpiamente
+    try {
+      await whatsappWebService.disconnect();
+    } catch (disconnectError) {
+      console.warn('⚠️ Error durante desconexión:', disconnectError.message);
+    }
+    
+    // Resetear estado interno
+    whatsappWebService.resetState();
+    
+    res.json({ 
+      success: true, 
+      message: 'Estado de WhatsApp reseteado. Puede iniciar una nueva conexión.',
+      status: whatsappWebService.getConnectionStatus()
+    });
+  } catch (error) {
+    console.error('❌ Error reseteando estado WhatsApp:', error);
+    res.status(500).json({ error: 'Error al resetear estado de WhatsApp' });
+  }
+});
+
+/**
  * Enviar mensaje de prueba
  */
 router.post('/test-message', authMiddleware, adminMiddleware, async (req, res) => {

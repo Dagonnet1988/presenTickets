@@ -168,3 +168,5 @@ id_ed25519*
 # Temporary folders
 tmp/
 temp/
+Backend/.wwebjs_cache/
+Backend/whatsapp_auth_web/

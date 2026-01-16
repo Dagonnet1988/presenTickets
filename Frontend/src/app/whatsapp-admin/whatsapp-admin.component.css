@@ -1119,6 +1119,16 @@ mat-icon {
   color: white !important;
 }
 
+.status-skipped {
+  background-color: #607d8b !important;
+  color: white !important;
+}
+
+.status-queued {
+  background-color: #2196f3 !important;
+  color: white !important;
+}
+
 .status-unknown {
   background-color: #9e9e9e !important;
   color: white !important;
