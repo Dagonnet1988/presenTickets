@@ -166,6 +166,10 @@ router.post("/", (req, res) => {
     multiples: true,
     uploadDir: "./uploads",
     keepExtensions: true,
+    maxFileSize: 50 * 1024 * 1024, // 50MB máximo por archivo
+    maxTotalFileSize: 100 * 1024 * 1024, // 100MB total
+    allowEmptyFiles: true, // Permitir archivos vacíos para evitar crash
+    minFileSize: 0, // Permitir archivos de 0 bytes
   });
 
   form.parse(req, async (err, fields, files) => {

@@ -541,6 +541,13 @@ process.on('unhandledRejection', (reason, promise) => {
     return; // No registrar como error crítico
   }
   
+  // Errores de Frame desconectado de Puppeteer - NO críticos
+  if (reasonStr.includes('detached Frame') || reasonStr.includes('Execution context was destroyed')) {
+    console.warn(`⚠️ [${localTime}] WhatsApp Web: Frame desconectado`);
+    console.log('ℹ️ La sesión de WhatsApp perdió conexión. Se intentará reconectar automáticamente.');
+    return; // No registrar como error crítico
+  }
+  
   // Para otros errores, registrarlos normalmente
   console.error(`🚫 [${localTime}] PROMESA RECHAZADA NO MANEJADA:`, {
     reason: reason,

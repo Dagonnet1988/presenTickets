@@ -475,17 +475,79 @@ class WhatsAppWebService {
     // Evento de error crítico - IMPORTANTE para evitar crash del servidor
     this.client.on('error', (error) => {
       console.error('❌ Error crítico en cliente WhatsApp Web:', error.message);
-      // NO lanzar el error para evitar que crashee el servidor
-      // Solo notificar a través de WebSocket
+      
+      // Detectar errores de desconexión
+      const errorMsg = error.message || '';
+      if (errorMsg.includes('detached Frame') || 
+          errorMsg.includes('Target closed') ||
+          errorMsg.includes('Protocol error')) {
+        console.error('❌ Detectado error de desconexión en evento error');
+        this.isReady = false;
+        this.scheduleReconnect('Error crítico: ' + errorMsg);
+      }
+      
+      // Notificar a través de WebSocket
       if (this.io) {
         this.io.emit('whatsapp-connection-status', {
-          isConnected: this.isReady, // Mantener estado actual
+          isConnected: this.isReady,
           hasSocket: !!this.client,
           error: 'Error en cliente: ' + error.message,
           timestamp: new Date().toISOString()
         });
       }
     });
+  }
+
+  /**
+   * Programar reconexión con debounce
+   */
+  scheduleReconnect(reason) {
+    // Si ya hay una reconexión programada, no programar otra
+    if (this.reconnectTimeout) {
+      console.log('⏳ Ya hay una reconexión programada, ignorando...');
+      return;
+    }
+    
+    // Verificar máximo de intentos
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Intervención manual requerida.`);
+      if (this.io) {
+        this.io.emit('whatsapp-connection-status', {
+          isConnected: false,
+          hasSocket: false,
+          error: 'Máximo de reconexiones alcanzado. Por favor, reconecta manualmente.',
+          requiresManualAction: true,
+          timestamp: new Date().toISOString()
+        });
+      }
+      return;
+    }
+    
+    this.reconnectAttempts++;
+    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 120000); // Max 2 minutos
+    
+    console.log(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${delay/1000}s. Razón: ${reason}`);
+    
+    this.reconnectTimeout = setTimeout(async () => {
+      this.reconnectTimeout = null;
+      console.log('🔄 Ejecutando reconexión automática...');
+      
+      try {
+        // Limpiar cliente anterior si existe
+        if (this.client) {
+          try {
+            await this.client.destroy();
+          } catch (e) {
+            console.warn('⚠️ Error destruyendo cliente anterior:', e.message);
+          }
+          this.client = null;
+        }
+        
+        await this.initialize();
+      } catch (err) {
+        console.error('❌ Error en reconexión automática:', err.message);
+      }
+    }, delay);
   }
 
   /**
@@ -552,11 +614,30 @@ class WhatsAppWebService {
             }
           }
           
-          // Si es error de Target closed, el cliente se desconectó
-          if (errorMsg.includes('Target closed') || errorMsg.includes('Protocol error')) {
-            console.error('❌ Cliente WhatsApp desconectado durante envío');
+          // Si es error de Target closed o detached Frame, el cliente se desconectó
+          if (errorMsg.includes('Target closed') || 
+              errorMsg.includes('Protocol error') ||
+              errorMsg.includes('detached Frame') ||
+              errorMsg.includes('Execution context was destroyed')) {
+            console.error('❌ Cliente WhatsApp desconectado durante envío (Frame detached)');
             this.isReady = false;
-            throw new Error('WhatsApp Web se desconectó. Por favor, reconecta.');
+            this.qrCode = null;
+            
+            // Notificar desconexión a través de WebSocket
+            if (this.io) {
+              this.io.emit('whatsapp-connection-status', {
+                isConnected: false,
+                hasSocket: false,
+                error: 'Sesión de WhatsApp perdida. Requiere reconexión.',
+                requiresManualAction: true,
+                timestamp: new Date().toISOString()
+              });
+            }
+            
+            // Programar reconexión automática si no hay una pendiente
+            this.scheduleReconnect('Frame detached durante envío');
+            
+            throw new Error('WhatsApp Web se desconectó. Reconexión en progreso...');
           }
           
           // Si no es un error recuperable, lanzar inmediatamente

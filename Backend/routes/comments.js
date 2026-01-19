@@ -51,8 +51,8 @@ router.post('/:ticketId', async (req, res) => {
       maxTotalFileSize: 100 * 1024 * 1024, // 100MB total
       maxFields: 1000,
       maxFieldsSize: 20 * 1024 * 1024, // 20MB para campos de texto
-      allowEmptyFiles: false,
-      minFileSize: 1, // Al menos 1 byte
+      allowEmptyFiles: true, // Permitir archivos vacíos para evitar crash
+      minFileSize: 0, // Permitir archivos de 0 bytes
       hashAlgorithm: false // Desactivar hash para mejor rendimiento
     });
 
