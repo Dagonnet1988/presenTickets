@@ -288,8 +288,22 @@ export class WhatsAppAdminComponent implements OnInit {
   private setupWebSocketListeners() {
     // Escuchar código QR
     this.socket.on('whatsapp-qr-code', (data: any) => {
-      this.qrCode = data.qrCode;
-      this.qrCodeUrl = data.qrUrl;
+      // Soporta payload { clear: true } para ocultar QR inmediatamente
+      if (data && data.clear) {
+        this.qrCode = null;
+        this.qrCodeUrl = null;
+        return;
+      }
+      this.qrCode = data?.qrCode || null;
+      this.qrCodeUrl = data?.qrUrl || (this.qrCode ? this.getQRCodeUrl(this.qrCode) : null);
+    });
+
+    // Socket connection state
+    this.socket.on('connect', () => {
+      this.connectionStatus.hasSocket = true;
+    });
+    this.socket.on('disconnect', () => {
+      this.connectionStatus.hasSocket = false;
     });
 
     // Escuchar cambios de estado de conexión

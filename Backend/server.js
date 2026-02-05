@@ -480,6 +480,22 @@ process.on('uncaughtException', (err) => {
     second: '2-digit'
   });
   
+  // Filtrar errores conocidos de WhatsApp/Puppeteer que NO son críticos
+  const errorMsg = err.message || '';
+  const isWhatsAppError = errorMsg.includes('WhatsApp') ||
+                          errorMsg.includes('detached Frame') ||
+                          errorMsg.includes('Target closed') ||
+                          errorMsg.includes('Protocol error') ||
+                          errorMsg.includes('Execution context') ||
+                          errorMsg.includes('Puppeteer') ||
+                          errorMsg.includes('markedUnread') ||
+                          errorMsg.includes('sendSeen');
+  
+  if (isWhatsAppError) {
+    console.warn(`⚠️ [${localTime}] Error de WhatsApp/Puppeteer (no crítico):`, errorMsg);
+    return; // NO crashear el servidor
+  }
+  
   console.error(`💥 [${localTime}] EXCEPCIÓN NO CAPTURADA:`, {
     message: err.message,
     stack: err.stack,

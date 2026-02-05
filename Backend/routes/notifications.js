@@ -139,7 +139,8 @@ export async function createNotification({ user_id, type, message, ticket_id, wh
     try {
       await sendWhatsAppNotification(user_id, ticket_id, whatsappContent, type);
     } catch (error) {
-      console.error('Error enviando notificación WhatsApp:', error);
+      // Capturar CUALQUIER error para evitar crash del servicio
+      console.error('❌ Error enviando notificación WhatsApp (capturado):', error?.message || error);
     }
   });
 }

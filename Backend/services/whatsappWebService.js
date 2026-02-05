@@ -31,9 +31,15 @@ class WhatsAppWebService {
     // Control de reconexión para evitar múltiples intentos simultáneos
     this.reconnectTimeout = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 3;
-    this.reconnectDelay = 15000; // 15 segundos entre intentos
+    this.maxReconnectAttempts = 10; // Aumentado para mayor resiliencia
+    this.reconnectDelay = 10000; // 10 segundos entre intentos iniciales
     this.lastDisconnectTime = 0;
+    this.healthCheckInterval = null; // Verificación periódica de conexión
+    this.loadingCompleteTimeout = null; // Timeout cuando loading llega a 100% pero no hay ready
+    this.initializationTimeout = null; // Timeout para detectar inicialización atascada
+    this.initializationStartTime = 0;
+    this.pendingQr = null; // QR almacenado temporalmente hasta que haya cliente Socket.IO
+    this.socketListenerAdded = false;
 
     // Control de generación de QR
     this.qrGenerationCount = 0;
@@ -239,9 +245,12 @@ class WhatsAppWebService {
           timeout: 90000 // Timeout de 90 segundos para operaciones de Puppeteer
         },
         qrMaxRetries: 5, // Limitar reintentos de QR
-        takeoverOnConflict: false, // No tomar control si hay otra sesión
-        takeoverTimeoutMs: 0
+        // takeoverOnConflict configurable vía variable de entorno para pruebas
+        takeoverOnConflict: (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'),
+        takeoverTimeoutMs: process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS ? parseInt(process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS, 10) : 0
       });
+
+      console.log('ℹ️ whatsapp-web.js takeoverOnConflict=', (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'));
 
       // Configurar eventos ANTES de inicializar
       this.setupEventHandlers();
@@ -291,6 +300,13 @@ class WhatsAppWebService {
     // Evento QR Code - CON CONTROL DE RATE LIMITING
     this.client.on('qr', (qr) => {
       const now = Date.now();
+      // Si el cliente ya está listo, no deberíamos emitir un nuevo QR
+      if (this.isReady) {
+        console.warn('⚠️ Se generó un QR pero el cliente ya está marcado como ready. Ignorando QR.');
+        // Aún actualizar qrCode interno para consistencia pero NO notificar al frontend
+        this.qrCode = qr;
+        return;
+      }
       this.qrGenerationCount++;
       
       // Verificar si estamos generando QRs muy rápido (posible loop)
@@ -327,15 +343,42 @@ class WhatsAppWebService {
       this.lastQRTime = now;
       console.log(`📱 Código QR generado (#${this.qrGenerationCount}) - Enviando al frontend`);
       this.qrCode = qr;
+      // Enviar QR a través de WebSocket si hay clientes conectados; si no, guardarlo para emitir cuando se conecte el admin
+      const emitQrIfPossible = () => {
+        if (!this.io) return false;
+        // Detectar clientes conectados en distintas versiones de Socket.IO
+        let clientsConnected = false;
+        try {
+          if (this.io.engine && typeof this.io.engine.clientsCount === 'number') {
+            clientsConnected = this.io.engine.clientsCount > 0;
+          } else if (this.io.sockets && this.io.sockets.sockets) {
+            const s = this.io.sockets.sockets;
+            clientsConnected = (typeof s.size === 'number') ? s.size > 0 : Object.keys(s).length > 0;
+          }
+        } catch (e) {
+          console.warn('⚠️ Error comprobando clientes Socket.IO:', e.message);
+        }
 
-      // Enviar QR a través de WebSocket si está disponible
-      if (this.io) {
-        this.io.emit('whatsapp-qr-code', {
-          qrCode: qr,
-          qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`,
+        if (clientsConnected) {
+          this.io.emit('whatsapp-qr-code', {
+            qrCode: qr,
+            qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`,
+            attempt: this.qrGenerationCount,
+            maxAttempts: this.maxQRGenerations
+          });
+          return true;
+        }
+        return false;
+      };
+
+      if (!emitQrIfPossible()) {
+        // Guardar QR pendiente y registrar
+        this.pendingQr = {
+          qr,
           attempt: this.qrGenerationCount,
           maxAttempts: this.maxQRGenerations
-        });
+        };
+        console.log('📱 QR guardado en pending hasta que un cliente Socket.IO se conecte');
       }
     });
 
@@ -345,6 +388,7 @@ class WhatsAppWebService {
       this.isReady = true;
       this.isInitializing = false;
       this.qrCode = null;
+      this.pendingQr = null;
       this.qrGenerationCount = 0; // Reset contador de QR al conectar
       this.reconnectAttempts = 0; // Reset intentos de reconexión
       
@@ -353,6 +397,27 @@ class WhatsAppWebService {
         clearTimeout(this.reconnectTimeout);
         this.reconnectTimeout = null;
       }
+      
+      // Cancelar timeout de inicialización
+      if (this.initializationTimeout) {
+        clearTimeout(this.initializationTimeout);
+        this.initializationTimeout = null;
+      }
+      
+      const initTime = Date.now() - this.initializationStartTime;
+      console.log(`⏱️ Tiempo de inicialización: ${(initTime/1000).toFixed(1)}s`);
+      
+      // Limpiar cualquier timeout creado por loading_screen al llegar a 100%
+      if (this.loadingCompleteTimeout) {
+        clearTimeout(this.loadingCompleteTimeout);
+        this.loadingCompleteTimeout = null;
+      }
+      // Informar al frontend que debe ocultar cualquier QR mostrado
+      if (this.io) {
+        this.io.emit('whatsapp-qr-code', { clear: true });
+      }
+      // Iniciar health check periódico
+      this.startHealthCheck();
 
       // Notificar conexión exitosa a través de WebSocket
       if (this.io) {
@@ -463,12 +528,73 @@ class WhatsAppWebService {
       }
     });
 
+    // Evento de autenticación exitosa
+    this.client.on('authenticated', (session) => {
+      console.log('🔐 Autenticado en WhatsApp Web (session recibida)');
+      // En algunas versiones la sesión llega aquí antes de `ready`
+      // Limpiar QR y notificar frontend para ocultar código si aún se muestra
+      this.qrCode = null;
+      this.pendingQr = null;
+      if (this.loadingCompleteTimeout) {
+        clearTimeout(this.loadingCompleteTimeout);
+        this.loadingCompleteTimeout = null;
+      }
+      if (this.io) {
+        this.io.emit('whatsapp-connection-status', {
+          isConnected: false,
+          hasSocket: true,
+          info: { authenticated: true },
+          timestamp: new Date().toISOString()
+        });
+        // Indicar explícitamente que frontend debe ocultar QR
+        this.io.emit('whatsapp-qr-code', { clear: true });
+      }
+    });
+
     // Evento de carga
     this.client.on('loading_screen', (percent, message) => {
       console.log('⏳ Cargando WhatsApp Web:', percent + '%', message);
       // Notificar progreso al frontend
       if (this.io) {
         this.io.emit('whatsapp-loading', { percent, message });
+      }
+
+      // Si llega a 100% y no pasa a `ready` en X segundos, forzar reconexión
+      try {
+        if (percent === 100) {
+          // Limpiar timeout anterior si existía
+          if (this.loadingCompleteTimeout) {
+            clearTimeout(this.loadingCompleteTimeout);
+          }
+          // Esperar 60s para que `ready` se dispare; si no, programar reconexión
+          this.loadingCompleteTimeout = setTimeout(() => {
+            if (!this.isReady) {
+              console.error('⚠️ Loading llegó a 100% pero `ready` no se disparó. Forzando reconexión.');
+              if (this.io) {
+                this.io.emit('whatsapp-connection-status', {
+                  isConnected: false,
+                  hasSocket: !!this.client,
+                  error: 'Loading stuck at 100% - forcing reconnect',
+                  timestamp: new Date().toISOString()
+                });
+              }
+              // Forzar reconexión segura
+              try {
+                this.scheduleReconnect('Loading stuck at 100%');
+              } catch (e) {
+                console.error('❌ Error al forzar reconexión tras loading stuck:', e.message);
+              }
+            }
+          }, 60000); // 60s
+        } else {
+          // Si vuelve a baja % limpiar cualquier timeout pendiente
+          if (this.loadingCompleteTimeout) {
+            clearTimeout(this.loadingCompleteTimeout);
+            this.loadingCompleteTimeout = null;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Error manejando loading_screen:', e.message);
       }
     });
 
@@ -508,15 +634,37 @@ class WhatsAppWebService {
       return;
     }
     
+    // Si ya está inicializando, no iniciar otra reconexión
+    if (this.isInitializing) {
+      console.log('⏳ Cliente ya está inicializando, ignorando reconexión...');
+      return;
+    }
+    
+    // Si han pasado más de 10 minutos desde el último intento, resetear contador
+    const now = Date.now();
+    if (now - this.lastDisconnectTime > 600000) { // 10 minutos
+      console.log('🔄 Reseteando contador de reconexiones (pasaron >10 min)');
+      this.reconnectAttempts = 0;
+    }
+    this.lastDisconnectTime = now;
+    
     // Verificar máximo de intentos
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Intervención manual requerida.`);
+      console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Esperando 5 minutos para reintentar...`);
+      // En lugar de requerir intervención manual, esperar 5 minutos y resetear
+      this.reconnectTimeout = setTimeout(() => {
+        this.reconnectTimeout = null;
+        this.reconnectAttempts = 0;
+        console.log('🔄 Reiniciando ciclo de reconexión después de pausa...');
+        this.scheduleReconnect('Reintento automático tras pausa');
+      }, 300000); // 5 minutos
+      
       if (this.io) {
         this.io.emit('whatsapp-connection-status', {
           isConnected: false,
           hasSocket: false,
-          error: 'Máximo de reconexiones alcanzado. Por favor, reconecta manualmente.',
-          requiresManualAction: true,
+          error: 'Reconexión pausada temporalmente. Reintentando en 5 minutos.',
+          requiresManualAction: false,
           timestamp: new Date().toISOString()
         });
       }
@@ -524,7 +672,7 @@ class WhatsAppWebService {
     }
     
     this.reconnectAttempts++;
-    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 120000); // Max 2 minutos
+    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 60000); // Max 1 minuto
     
     console.log(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${delay/1000}s. Razón: ${reason}`);
     
@@ -546,8 +694,84 @@ class WhatsAppWebService {
         await this.initialize();
       } catch (err) {
         console.error('❌ Error en reconexión automática:', err.message);
+        // Si falla, programar otro intento
+        this.scheduleReconnect('Fallo en reconexión anterior');
       }
     }, delay);
+  }
+
+  /**
+   * Iniciar verificación periódica de salud de la conexión
+   */
+  startHealthCheck() {
+    // Detener health check anterior si existe
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+    }
+    
+    this.healthCheckCount = 0; // Contador para log periódico
+    
+    // Verificar cada 5 minutos que la conexión sigue activa
+    this.healthCheckInterval = setInterval(async () => {
+      this.healthCheckCount++;
+      
+      // Si está inicializando por más de 5 minutos, forzar reset
+      if (this.isInitializing && !this.isReady) {
+        const initTime = Date.now() - this.initializationStartTime;
+        if (initTime > 300000) { // 5 minutos
+          console.error('🔍 Health check: Inicialización atascada por 5+ min. Forzando reset...');
+          this.isInitializing = false;
+          if (this.client) {
+            try {
+              await this.client.destroy();
+            } catch (e) {
+              console.warn('Error destruyendo:', e.message);
+            }
+            this.client = null;
+          }
+          this.scheduleReconnect('Health check: inicialización atascada');
+          return;
+        }
+      }
+      
+      if (!this.isReady || !this.client) {
+        console.log('🔍 Health check: Cliente no está listo, intentando reconectar...');
+        this.scheduleReconnect('Health check detectó cliente no listo');
+        return;
+      }
+      
+      try {
+        // Intentar obtener estado del cliente
+        const state = await this.client.getState();
+        if (state !== 'CONNECTED') {
+          console.log(`🔍 Health check: Estado inesperado (${state}), reconectando...`);
+          this.isReady = false;
+          this.scheduleReconnect(`Health check: estado ${state}`);
+        } else {
+          // Solo loggear cada 12 checks (1 hora) para no saturar logs
+          if (this.healthCheckCount % 12 === 0) {
+            console.log(`✅ Health check OK - WhatsApp estable (${this.healthCheckCount} verificaciones)`);
+          }
+        }
+      } catch (err) {
+        console.error('❌ Health check falló:', err.message);
+        this.isReady = false;
+        this.scheduleReconnect('Health check falló: ' + err.message);
+      }
+    }, 300000); // 5 minutos (era 2 minutos)
+    
+    console.log('🏥 Health check iniciado (cada 5 min, log cada 1 hora)');
+  }
+  
+  /**
+   * Detener health check
+   */
+  stopHealthCheck() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+      console.log('🏥 Health check detenido');
+    }
   }
 
   /**
@@ -555,6 +779,35 @@ class WhatsAppWebService {
    */
   setSocketIO(io) {
     this.io = io;
+    // Añadir listener de conexión una sola vez para enviar QR pendiente
+    if (!this.socketListenerAdded && this.io) {
+      this.socketListenerAdded = true;
+      try {
+        this.io.on('connection', (socket) => {
+          console.log('🔌 Cliente Socket.IO conectado (whatsapp-admin)');
+          // Si hay un QR pendiente, enviarlo inmediatamente
+          if (this.pendingQr) {
+            try {
+              this.io.emit('whatsapp-qr-code', {
+                qrCode: this.pendingQr.qr,
+                qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(this.pendingQr.qr)}`,
+                attempt: this.pendingQr.attempt,
+                maxAttempts: this.pendingQr.maxAttempts
+              });
+              console.log('📱 QR pendiente emitido al cliente recién conectado');
+            } catch (e) {
+              console.error('❌ Error enviando QR pendiente:', e.message);
+            }
+            this.pendingQr = null;
+          }
+          socket.on('disconnect', () => {
+            console.log('🧾 Cliente Socket.IO desconectado (whatsapp-admin)');
+          });
+        });
+      } catch (e) {
+        console.warn('⚠️ No se pudo registrar listener de Socket.IO:', e.message);
+      }
+    }
   }
 
   /**
@@ -869,6 +1122,9 @@ class WhatsAppWebService {
   resetState() {
     console.log('🔄 Reseteando estado interno de WhatsApp Service...');
     
+    // Detener health check
+    this.stopHealthCheck();
+    
     // Cancelar reconexión pendiente
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -898,6 +1154,9 @@ class WhatsAppWebService {
   async disconnect() {
     try {
       console.log('🔌 Desconectando WhatsApp Web...');
+      
+      // Detener health check
+      this.stopHealthCheck();
       
       // Cancelar cualquier reconexión pendiente primero
       if (this.reconnectTimeout) {
@@ -1297,9 +1556,13 @@ class WhatsAppWebService {
       return true;
 
     } catch (error) {
-      console.error('❌ Error enviando notificación WhatsApp:', error);
-      // Registrar error en base de datos
-      await this.logWhatsAppNotification(userId, ticketId, message, 'failed', error.message, null, notificationType);
+      console.error('❌ Error enviando notificación WhatsApp:', error.message || error);
+      // Registrar error en base de datos (con try-catch adicional para evitar crash)
+      try {
+        await this.logWhatsAppNotification(userId, ticketId, message, 'failed', error.message || 'Error desconocido', null, notificationType);
+      } catch (logError) {
+        console.error('❌ Error secundario al registrar en BD:', logError.message);
+      }
       return false;
     }
   }
