@@ -43,8 +43,9 @@ class WhatsAppWebService {
 
     // Control de generación de QR
     this.qrGenerationCount = 0;
-    this.maxQRGenerations = 10; // Máximo de QRs antes de pausar
+    this.maxQRGenerations = 3; // Máximo de QRs antes de detener (requiere reinicio manual)
     this.qrCooldownActive = false;
+    this.stoppedAwaitingManualStart = false; // Bandera: detenido esperando inicio manual
     this.lastQRTime = 0;
 
     // Rate limiting para prevenir bloqueos de WhatsApp
@@ -136,10 +137,12 @@ class WhatsAppWebService {
         return true;
       }
 
-      // Verificar cooldown de QR
-      if (this.qrCooldownActive) {
-        console.log('⏳ QR cooldown activo, esperando...');
-        return false;
+      // Reset de banderas cuando se inicia manualmente
+      // Esto permite reiniciar después de un stop por límite de QR
+      if (this.stoppedAwaitingManualStart) {
+        console.log('🔄 Reiniciando después de parada por límite de QR...');
+        this.stoppedAwaitingManualStart = false;
+        this.qrCooldownActive = false;
       }
 
       this.isInitializing = true;
@@ -314,30 +317,31 @@ class WhatsAppWebService {
         console.warn(`⚠️ QR generado muy rápido (${Math.round((now - this.lastQRTime)/1000)}s desde el anterior)`);
       }
       
-      // Limitar cantidad de QRs generados
+      // Limitar cantidad de QRs generados - DETENER COMPLETAMENTE después de 3 intentos
       if (this.qrGenerationCount > this.maxQRGenerations) {
-        console.error(`🛑 Demasiados QRs generados (${this.qrGenerationCount}). Activando cooldown de 60 segundos...`);
+        console.error(`🛑 Se alcanzó el límite de ${this.maxQRGenerations} QRs sin escanear. Deteniendo servicio WhatsApp.`);
+        console.log('📋 Para reiniciar, usa el botón "Conectar" en el módulo de WhatsApp Admin.');
+        
+        // Marcar como detenido esperando inicio manual
+        this.stoppedAwaitingManualStart = true;
         this.qrCooldownActive = true;
         
-        // Notificar al frontend sobre el cooldown
+        // Notificar al frontend que requiere inicio manual
         if (this.io) {
           this.io.emit('whatsapp-connection-status', {
             isConnected: false,
             hasSocket: false,
-            error: 'Demasiados intentos de QR. Espera 60 segundos antes de reintentar.',
-            cooldown: true,
+            error: `No se escaneó el código QR después de ${this.maxQRGenerations} intentos. Haz clic en "Conectar" para reintentar.`,
+            stoppedAwaitingManualStart: true,
+            requiresManualRestart: true,
             timestamp: new Date().toISOString()
           });
         }
         
-        // Resetear después de 60 segundos
-        setTimeout(() => {
-          this.qrCooldownActive = false;
-          this.qrGenerationCount = 0;
-          console.log('✅ Cooldown de QR terminado');
-        }, 60000);
+        // Detener el cliente completamente (sin reinicio automático)
+        this.stopClientWithoutReconnect();
         
-        return; // No procesar más QRs durante el cooldown
+        return; // No procesar más QRs
       }
       
       this.lastQRTime = now;
@@ -625,9 +629,70 @@ class WhatsAppWebService {
   }
 
   /**
+   * Detener el cliente SIN programar reconexión automática.
+   * Se usa cuando se alcanza el límite de QRs sin escanear.
+   * Requiere inicio manual desde el módulo de WhatsApp Admin.
+   */
+  async stopClientWithoutReconnect() {
+    console.log('🛑 Deteniendo cliente WhatsApp (sin reconexión automática)...');
+    
+    // Cancelar cualquier reconexión pendiente
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    // Detener health check
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+    
+    // Limpiar timeouts de inicialización
+    if (this.initializationTimeout) {
+      clearTimeout(this.initializationTimeout);
+      this.initializationTimeout = null;
+    }
+    if (this.loadingCompleteTimeout) {
+      clearTimeout(this.loadingCompleteTimeout);
+      this.loadingCompleteTimeout = null;
+    }
+    
+    // Destruir cliente si existe
+    if (this.client) {
+      try {
+        this.isDestroying = true;
+        await this.client.destroy();
+        console.log('✅ Cliente WhatsApp destruido correctamente');
+      } catch (err) {
+        console.warn('⚠️ Error al destruir cliente:', err.message);
+      } finally {
+        this.client = null;
+        this.isDestroying = false;
+      }
+    }
+    
+    // Resetear estados
+    this.isReady = false;
+    this.isInitializing = false;
+    this.qrCode = null;
+    this.pendingQr = null;
+    // NO resetear qrGenerationCount ni stoppedAwaitingManualStart aquí
+    // Esos se resetean solo cuando el usuario inicia manualmente
+    
+    console.log('📋 Servicio WhatsApp detenido. Esperando inicio manual desde el módulo Admin.');
+  }
+
+  /**
    * Programar reconexión con debounce
    */
   scheduleReconnect(reason) {
+    // Si el cliente se detuvo esperando inicio manual, no intentar reconectar
+    if (this.stoppedAwaitingManualStart) {
+      console.log('🛑 Reconexión bloqueada: esperando inicio manual desde el panel admin.');
+      return;
+    }
+
     // Si ya hay una reconexión programada, no programar otra
     if (this.reconnectTimeout) {
       console.log('⏳ Ya hay una reconexión programada, ignorando...');
@@ -1097,7 +1162,10 @@ class WhatsAppWebService {
       reconnectAttempts: this.reconnectAttempts,
       maxReconnectAttempts: this.maxReconnectAttempts,
       qrGenerationCount: this.qrGenerationCount,
+      maxQRGenerations: this.maxQRGenerations,
       qrCooldownActive: this.qrCooldownActive,
+      // Indica si el servicio se detuvo por límite de QR y espera inicio manual
+      stoppedAwaitingManualStart: this.stoppedAwaitingManualStart || false,
       // Estadísticas de uso
       dailyMessageCount: this.dailyMessageCount,
       lastMessageTime: this.lastMessageTime,
@@ -1136,6 +1204,7 @@ class WhatsAppWebService {
     this.isDestroying = false;
     this.isReady = false;
     this.qrCode = null;
+    this.stoppedAwaitingManualStart = false;
     
     // Resetear contadores de control
     this.reconnectAttempts = 0;

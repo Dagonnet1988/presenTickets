@@ -20,7 +20,7 @@ export class NotificationTypePipe implements PipeTransform {  transform(type: st
     switch (type) {
       case 'nuevo_ticket': return 'Nuevo Ticket';
       case 'comentario_user': return 'Nuevo Comentario';
-      case 'comentario_tech': return 'Nuevo Comentario';  
+      case 'comentario_tech': return 'Nuevo Comentario';
       case 'comentario_admin': return 'Nuevo Comentario';
       case 'nuevo_comentario': return 'Nuevo Comentario';
       case 'admin_comentario': return 'Nuevo Comentario';
@@ -34,6 +34,7 @@ export class NotificationTypePipe implements PipeTransform {  transform(type: st
       case 'reabierto_por_usuario': return 'Ticket re-abierto';
       case 'ticket_reabierto': return 'Ticket Re-abierto';
       case 'cambio_estado': return 'Cambio de Estado';
+      case 'external_email': return 'Correo Externo';
       default: return type;
     }
   }

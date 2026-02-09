@@ -46,14 +46,43 @@ export class SidebarComponent implements OnInit {
   @ViewChild(HomeComponent) homeComponent?: HomeComponent;
   @Output() sidebarToggled = new EventEmitter<boolean>();
 
+  private readonly SIDEBAR_STATE_KEY = 'sidebarCollapsed';
+
   constructor(private authService: AuthService, private router: Router, private refreshTicketsService: RefreshTicketsService) {}
 
   ngOnInit(): void {
     this.userRole = this.authService.getUserRole() || '';
+    // Restaurar estado del sidebar desde localStorage
+    this.restoreSidebarState();
   }
+
   toggleSidebar(): void {
     this.isCollapsed = !this.isCollapsed;
+    this.saveSidebarState();
     this.sidebarToggled.emit(this.isCollapsed);
+  }
+
+  // Guardar estado del sidebar en localStorage
+  private saveSidebarState(): void {
+    try {
+      localStorage.setItem(this.SIDEBAR_STATE_KEY, JSON.stringify(this.isCollapsed));
+    } catch (e) {
+      console.warn('No se pudo guardar el estado del sidebar:', e);
+    }
+  }
+
+  // Restaurar estado del sidebar desde localStorage
+  private restoreSidebarState(): void {
+    try {
+      const savedState = localStorage.getItem(this.SIDEBAR_STATE_KEY);
+      if (savedState !== null) {
+        this.isCollapsed = JSON.parse(savedState);
+        // Emitir el estado restaurado para que el layout lo reciba
+        setTimeout(() => this.sidebarToggled.emit(this.isCollapsed), 0);
+      }
+    } catch (e) {
+      console.warn('No se pudo restaurar el estado del sidebar:', e);
+    }
   }
 
   goToHomeAndRefresh() {

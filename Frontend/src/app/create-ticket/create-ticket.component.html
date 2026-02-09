@@ -96,10 +96,12 @@
 
         <!-- Adjuntar Archivos -->
         <div class="file-upload">
-          <input type="file" (change)="onFileChange($event)" multiple />
-          <div class="drop-zone" (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)">
-            <mat-icon style="font-size: 48px; height: 48px; width: 48px; margin-bottom: 16px; color: #1976d2;">cloud_upload</mat-icon>
-            <span>Arrastra y suelta archivos aquí o haz clic para seleccionar archivos</span>
+          <div class="drop-zone-wrapper">
+            <input type="file" (change)="onFileChange($event)" multiple />
+            <div class="drop-zone" (drop)="onDrop($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)">
+              <mat-icon style="font-size: 48px; height: 48px; width: 48px; margin-bottom: 16px; color: #1976d2;">cloud_upload</mat-icon>
+              <span>Arrastra y suelta archivos aquí o haz clic para seleccionar archivos</span>
+            </div>
           </div>
           <ul class="attachment-list">
             <li *ngFor="let file of attachments; let i = index" class="attachment-item">

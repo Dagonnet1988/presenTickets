@@ -370,7 +370,8 @@ router.get('/user-settings', authMiddleware, async (req, res) => {
         COALESCE(ups.whatsapp_ticket_created, true) as whatsapp_ticket_created,
         COALESCE(ups.whatsapp_ticket_assigned, true) as whatsapp_ticket_assigned,
         COALESCE(ups.whatsapp_ticket_status, true) as whatsapp_ticket_status,
-        COALESCE(ups.whatsapp_comments, true) as whatsapp_comments
+        COALESCE(ups.whatsapp_comments, true) as whatsapp_comments,
+        COALESCE(ups.whatsapp_external_email, true) as whatsapp_external_email
       FROM users u
       LEFT JOIN user_preferences_settings ups ON u.id = ups.user_id
       WHERE u.id = $1
@@ -401,6 +402,7 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
       whatsapp_ticket_assigned, 
       whatsapp_ticket_status, 
       whatsapp_comments,
+      whatsapp_external_email,
       // Nuevas configuraciones avanzadas
       notification_schedule,
       notification_start_time,
@@ -425,6 +427,7 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
         whatsapp_ticket_assigned, 
         whatsapp_ticket_status, 
         whatsapp_comments,
+        whatsapp_external_email,
         notification_schedule,
         notification_start_time,
         notification_end_time,
@@ -435,13 +438,14 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
         daily_limit,
         do_not_disturb,
         do_not_disturb_until
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       ON CONFLICT (user_id) DO UPDATE SET
         whatsapp_enabled = EXCLUDED.whatsapp_enabled,
         whatsapp_ticket_created = EXCLUDED.whatsapp_ticket_created,
         whatsapp_ticket_assigned = EXCLUDED.whatsapp_ticket_assigned,
         whatsapp_ticket_status = EXCLUDED.whatsapp_ticket_status,
         whatsapp_comments = EXCLUDED.whatsapp_comments,
+        whatsapp_external_email = EXCLUDED.whatsapp_external_email,
         notification_schedule = EXCLUDED.notification_schedule,
         notification_start_time = EXCLUDED.notification_start_time,
         notification_end_time = EXCLUDED.notification_end_time,
@@ -455,7 +459,7 @@ router.put('/user-settings', authMiddleware, async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
     `, [
       userId, whatsapp_enabled, whatsapp_ticket_created, whatsapp_ticket_assigned, 
-      whatsapp_ticket_status, whatsapp_comments, notification_schedule, 
+      whatsapp_ticket_status, whatsapp_comments, whatsapp_external_email, notification_schedule, 
       notification_start_time, notification_end_time, notification_mode, 
       min_priority, weekend_notifications, sound_enabled, daily_limit, 
       do_not_disturb, do_not_disturb_until
@@ -662,7 +666,8 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         COALESCE(ups.whatsapp_ticket_created, true) as whatsapp_ticket_created,
         COALESCE(ups.whatsapp_ticket_assigned, true) as whatsapp_ticket_assigned,
         COALESCE(ups.whatsapp_ticket_status, true) as whatsapp_ticket_status,
-        COALESCE(ups.whatsapp_comments, true) as whatsapp_comments
+        COALESCE(ups.whatsapp_comments, true) as whatsapp_comments,
+        COALESCE(ups.whatsapp_external_email, true) as whatsapp_external_email
       FROM users u
       LEFT JOIN user_preferences_settings ups ON u.id = ups.user_id
       WHERE u.id = $1
@@ -691,7 +696,8 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
       'ticket_reabierto': 'whatsapp_ticket_status',
       'comentario': 'whatsapp_comments',
       'comentario_user': 'whatsapp_comments',
-      'admin_comentario': 'whatsapp_comments'
+      'admin_comentario': 'whatsapp_comments',
+      'external_email': 'whatsapp_external_email'
     };
 
     if (typeMapping[notificationType] && !settings[typeMapping[notificationType]]) {

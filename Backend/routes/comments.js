@@ -15,7 +15,7 @@
 
 import express from 'express';
 import { pool } from '../db.js';
-import { emitTicketNotification, getNotificationRecipients } from '../server.js';
+import { io, emitTicketNotification, getNotificationRecipients } from '../server.js';
 import formidable from 'formidable';
 import path from 'path';
 import fs from 'fs';
@@ -222,6 +222,16 @@ router.post('/:ticketId', async (req, res) => {
           });
         }
       }
+
+      // === EMITIR EVENTO TICKET-UPDATED PARA ACTUALIZACIÓN EN TIEMPO REAL ===
+      // Este evento actualiza la vista del ticket y el home para todos los usuarios conectados
+      io.emit('ticket-updated', {
+        ticketId: parseInt(ticketId),
+        updatedFields: {
+          newComment: true,
+          status: newStatus || currentStatus
+        }
+      });
 
       // === NUEVO: Registrar comentario y cambios en el historial ===
       try {

@@ -119,3 +119,13 @@
 .notification-item.reopened:hover {
   background-color: rgba(244, 67, 54, 0.1);
 }
+
+/* External email notifications */
+.notification-item.external-email {
+  background-color: rgba(156, 39, 176, 0.08);
+  border-left: 3px solid #9c27b0;
+}
+
+.notification-item.external-email:hover {
+  background-color: rgba(156, 39, 176, 0.15);
+}

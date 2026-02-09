@@ -37,10 +37,49 @@ export class NotificationBellComponent {
   constructor(private notificationService: NotificationService, private router: Router) {
     this.notificationService.notifications$.subscribe((n) => {
       this.notifications = n;
-      // Filtrar solo las notificaciones no leídas para mostrar en la campana
-      this.unreadNotifications = n.filter((x) => !(x.read || (x as any).is_read));
+      // Filtrar solo las notificaciones no leídas
+      const unread = n.filter((x) => !(x.read || (x as any).is_read));
+
+      // Agrupar notificaciones de external_email por external_ticket_id
+      // Para que solo aparezca una por ticket externo (evita duplicados entre técnicos)
+      this.unreadNotifications = this.groupExternalEmailNotifications(unread);
       this.unreadCount = this.unreadNotifications.length;
     });
+  }
+
+  /**
+   * Agrupa las notificaciones de tipo external_email por external_ticket_id
+   * Solo muestra una notificación por ticket externo (la más reciente)
+   */
+  private groupExternalEmailNotifications(notifications: TicketNotification[]): TicketNotification[] {
+    const emailNotifications = notifications.filter(n => n.type === 'external_email');
+    const otherNotifications = notifications.filter(n => n.type !== 'external_email');
+
+    // Agrupar emails por external_ticket_id, quedarse con el más reciente
+    const emailGroups = new Map<string, TicketNotification>();
+    for (const notification of emailNotifications) {
+      const key = (notification as any).external_ticket_id || notification.id?.toString() || 'unknown';
+      const existing = emailGroups.get(key);
+
+      // Obtener fecha de la notificación (created_at del backend o timestamp)
+      const getDate = (n: TicketNotification) => {
+        const dateStr = (n as any).created_at || n.timestamp;
+        return dateStr ? new Date(dateStr).getTime() : 0;
+      };
+
+      // Quedarse con la notificación más reciente
+      if (!existing || getDate(notification) > getDate(existing)) {
+        emailGroups.set(key, notification);
+      }
+    }
+
+    // Combinar notificaciones agrupadas con las demás
+    return [...Array.from(emailGroups.values()), ...otherNotifications]
+      .sort((a, b) => {
+        const dateA = (a as any).created_at || a.timestamp;
+        const dateB = (b as any).created_at || b.timestamp;
+        return new Date(dateB || 0).getTime() - new Date(dateA || 0).getTime(); // Más recientes primero
+      });
   }
 
   markAllAsRead() {
@@ -59,10 +98,24 @@ export class NotificationBellComponent {
   // Limpiar todas las notificaciones leídas del backend y del listado local
   clearAllRead() {
     this.notificationService.deleteAllRead();
-  }  goToTicket(notification: TicketNotification) {
+  }
+
+  goToTicket(notification: TicketNotification) {
     // Obtenemos el ticketId de la notificación
     const ticketId = notification.ticket_id;
+
+    // Para notificaciones de email externo sin ticket asociado,
+    // solo marcamos como leída
     if (!ticketId) {
+      if (notification.type === 'external_email') {
+        // Marcar como leída y mostrar info del ticket externo
+        this.markAsRead(notification);
+        const externalId = (notification as any).external_ticket_id;
+        if (externalId) {
+          console.log(`Notificación de ticket externo #${externalId} marcada como leída`);
+        }
+        return;
+      }
       console.error('No se pudo obtener el ID del ticket de la notificación');
       return;
     }

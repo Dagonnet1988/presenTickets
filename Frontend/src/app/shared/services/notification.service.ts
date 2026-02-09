@@ -16,11 +16,13 @@ export interface TicketNotification {
   id?: number;
   ticket_id?: number;
   external_ticket_id?: string;
+  email_subject?: string;
   type: string;
   data: any;
   read?: boolean;
   is_read?: boolean; // Campo del backend
   timestamp?: Date;
+  created_at?: Date; // Campo del backend para fecha de creación
   message?: string;
 }
 
@@ -171,6 +173,40 @@ export class NotificationService {
         setTimeout(() => this.fetchUnreadNotifications(), 500);
       });
     });
+
+    // Listener para alertas de email externo (respuestas de soporte OSIGU)
+    this.socket.on('external-email-alert', (data: any) => {
+      this.ngZone.run(() => {
+        // Mostrar notificación del navegador si está en segundo plano
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const title = data.externalTicketId
+              ? `📧 Respuesta de Soporte - Ticket #${data.externalTicketId}`
+              : '📧 Correo de Soporte Externo';
+            new Notification(title, {
+              body: data.subject?.substring(0, 100) || 'Nuevo correo recibido',
+              icon: '/favicon.ico',
+              tag: `email-${data.externalTicketId || Date.now()}`,
+              badge: '/favicon.ico'
+            });
+          } catch (error) {
+            console.error('Error mostrando notificación de email:', error);
+          }
+        }
+
+        // Actualizar lista de notificaciones
+        setTimeout(() => this.fetchUnreadNotifications(), 500);
+      });
+    });
+
+    // Listener para notificaciones compartidas marcadas como leídas por otro técnico
+    this.socket.on('shared-notification-read', (data: { externalTicketId: string; markedBy: number }) => {
+      this.ngZone.run(() => {
+        console.log(`📧 Notificación compartida del ticket #${data.externalTicketId} marcada como leída por otro técnico`);
+        // Refrescar notificaciones para quitar las que ya fueron leídas
+        this.fetchUnreadNotifications();
+      });
+    });
   }
 
   private getCurrentTicketIdFromUrl(): number | null {
@@ -218,18 +254,24 @@ export class NotificationService {
   markAsRead(notification: TicketNotification, callback?: () => void) {
     if (!notification.id) return;
 
-    this.http.post(`${environment.backendUrl}/api/notifications/read/${notification.id}`, {}, {
+    this.http.post<{ success: boolean; shared?: boolean; markedCount?: number }>(`${environment.backendUrl}/api/notifications/read/${notification.id}`, {}, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     }).subscribe({
-      next: () => {
-        const current = this.notificationsSubject.value;
-        // En lugar de eliminar, marcar como leída para mantener el historial
-        const updated = current.map(n =>
-          n.id === notification.id
-            ? { ...n, read: true, is_read: true }
-            : n
-        );
-        this.notificationsSubject.next(updated);
+      next: (response) => {
+        // Si fue notificación compartida (external_email), refrescar todas las notificaciones
+        // porque el backend marcó como leídas las de todos los usuarios
+        if (response.shared) {
+          this.fetchUnreadNotifications();
+        } else {
+          const current = this.notificationsSubject.value;
+          // En lugar de eliminar, marcar como leída para mantener el historial
+          const updated = current.map(n =>
+            n.id === notification.id
+              ? { ...n, read: true, is_read: true }
+              : n
+          );
+          this.notificationsSubject.next(updated);
+        }
         if (callback) callback();
       },
       error: (error) => console.error('Error marcando notificación como leída:', error)

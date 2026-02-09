@@ -47,12 +47,14 @@
 .dashboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 24px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 24px;
   border-radius: 8px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .header-title h1 {
@@ -70,14 +72,41 @@
   font-size: 1.1rem;
 }
 
-.header-actions button {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
-.header-actions button:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+.header-actions button,
+.header-actions .export-btn {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.header-actions button:hover,
+.header-actions .export-btn:hover {
+  background-color: rgba(255, 255, 255, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.header-actions button:disabled,
+.header-actions .export-btn:disabled {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.header-actions .export-btn mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 /* Filters card - exactamente igual al dashboard */
@@ -205,17 +234,145 @@
   max-width: 600px;
 }
 
-/* Content wrapper */
-.content-wrapper {
+/* ============================================
+   BARRA DE FILTROS HORIZONTAL MODERNA
+   ============================================ */
+
+.filters-bar {
+  background: #fff;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+/* Fila de búsqueda */
+.filters-row-search {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.filters-row-search .search-field {
+  flex: 1;
+  min-width: 280px;
+  max-width: 600px;
+}
+
+/* Botón X para limpiar búsqueda */
+.clear-search-btn {
+  color: #999;
+  transition: color 0.2s ease;
+}
+
+.clear-search-btn:hover {
+  color: #d32f2f;
+}
+
+/* Fila principal de filtros */
+.filters-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start; /* Alinear desde arriba */
+  gap: 12px;
+}
+
+.filters-row-main .filter-field {
+  min-width: 130px;
+  max-width: 170px;
+}
+
+.filters-row-main .date-field {
+  min-width: 140px;
+  max-width: 170px;
+}
+
+/* Botón limpiar filtros */
+.clear-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px !important;
+  height: 56px; /* Altura del input interno de mat-form-field */
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  flex-grow: 0;
+  width: auto !important;
+  max-width: fit-content;
+  color: #d32f2f;
+  border-color: #ffcdd2;
+  /*margin-top: 1px; /* Compensar el espacio del label flotante de mat-form-field */
+  align-self: flex-start;
+}
+
+.clear-filters-btn mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.clear-filters-btn:hover {
+  background-color: #ffebee !important;
+  border-color: #ef9a9a;
+}
+
+/* Texto de los botones */
+.btn-text {
+  display: inline;
+}
+
+/* Contadores de estado */
+.status-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.status-counts button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.status-counts button mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.status-counts button.active-status {
+  background-color: #1976d2 !important;
+  color: white !important;
+  border-color: #1976d2 !important;
+}
+
+/* Área principal de contenido (sin panel lateral) */
+.tickets-main-content {
+  width: 100%;
+}
+
+/* Content wrapper - ya no necesita flex para panel lateral */
+.content-wrapper {
+  display: block;
   transition: all 0.3s ease;
 }
 
 .tickets-section {
-  flex: 2;
+  width: 100%;
   background: var(--background-color);
   border-radius: var(--border-radius);
   height: fit-content;
@@ -484,9 +641,9 @@
 }
 
 .status-closed {
-  background-color: #ffffff !important;
-  color: #1f1f1f !important;
-  border: 1px solid #e1bee7;
+  background-color: #424242 !important;
+  color: #ffffff !important;
+  border: 1px solid #616161;
   padding: 4px 12px;
   border-radius: 16px;
   font-size: 0.75rem;
@@ -803,49 +960,108 @@ button {
     gap: 16px;
   }
 
-  .filter-panel {
-    min-width: 240px;
+  .filters-row-search .search-field {
+    min-width: 200px;
+    max-width: 400px;
+  }
+
+  .filters-row-main .filter-field {
+    min-width: 120px;
+    max-width: 150px;
   }
 }
 
 @media (max-width: 900px) {
-  .home-container {
+  .filters-row-search {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .tickets-section {
-    width: 100%;
-  }
-
-  .filter-panel {
-    margin-left: 0;
-    margin-top: 24px;
+  .filters-row-search .search-field {
     max-width: 100%;
-    position: static;
+    min-width: 100%;
+  }
+
+  .filters-row-main {
+    gap: 10px;
+  }
+
+  .filters-row-main .filter-field,
+  .filters-row-main .date-field {
+    flex: 1 1 calc(50% - 5px);
+    min-width: calc(50% - 5px);
+    max-width: calc(50% - 5px);
   }
 
   .status-counts {
     gap: 8px;
-  }
-}
-
-@media (max-width: 600px) {
-  .tickets-section,
-  .filter-panel {
-    padding: 16px;
-  }
-
-  .ticket-item {
-    padding: 14px;
+    justify-content: center;
   }
 
   .status-counts button {
     font-size: 0.8em;
     padding: 8px 12px;
   }
+}
+
+@media (max-width: 600px) {
+  .filters-bar {
+    padding: 16px;
+  }
+
+  .filters-row-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filters-row-main .filter-field,
+  .filters-row-main .date-field {
+    max-width: 100%;
+    width: 100%;
+    min-width: 100%;
+    flex: 1 1 100%;
+  }
+
+  /* Botón limpiar filtros en móvil - mantener compacto */
+  .clear-filters-btn {
+    height: 48px;
+    justify-content: center;
+  }
+
+  /* Contadores en columna vertical */
+  .status-counts {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .status-counts button {
+    justify-content: center;
+    font-size: 0.85em;
+    padding: 12px 16px;
+  }
+
+  .ticket-item {
+    padding: 14px;
+  }
 
   .pagination-controls button {
     padding: 6px 12px;
     font-size: 13px;
   }
+}
+
+/* Animación de carga para el icono de exportar */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
 }

@@ -13,7 +13,7 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { BannerComponent } from '../../banner/banner.component';
 import { SidebarComponent } from '../../sidebar/sidebar.component';
@@ -104,8 +104,21 @@ import { FooterComponent } from '../../footer/footer.component';
     }
   `]
 })
-export class MainLayoutComponent {
+export class MainLayoutComponent implements OnInit {
   isSidebarCollapsed = false;
+  private readonly SIDEBAR_STATE_KEY = 'sidebarCollapsed';
+
+  ngOnInit(): void {
+    // Restaurar estado inicial del sidebar desde localStorage
+    try {
+      const savedState = localStorage.getItem(this.SIDEBAR_STATE_KEY);
+      if (savedState !== null) {
+        this.isSidebarCollapsed = JSON.parse(savedState);
+      }
+    } catch (e) {
+      console.warn('No se pudo restaurar el estado del sidebar:', e);
+    }
+  }
 
   onSidebarToggle(isCollapsed: boolean): void {
     this.isSidebarCollapsed = isCollapsed;

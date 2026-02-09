@@ -263,7 +263,12 @@ const checkAndCreateTables = async () => {
         { name: 'message', type: 'TEXT NOT NULL' },
         { name: 'ticket_id', type: 'INTEGER REFERENCES tickets(id) ON DELETE CASCADE' },
         { name: 'is_read', type: 'BOOLEAN DEFAULT false' },
-        { name: 'created_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' }
+        { name: 'created_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+        // Columnas para monitoreo de email externo
+        { name: 'external_ticket_id', type: 'VARCHAR(100)' },
+        { name: 'email_subject', type: 'TEXT' },
+        // ID del mensaje de email para notificaciones compartidas
+        { name: 'email_message_id', type: 'VARCHAR(255)' }
       ];
       for (const column of columns) {
         const columnExists = await client.query(
@@ -418,7 +423,8 @@ const checkAndCreateTables = async () => {
         { name: 'sound_enabled', type: 'BOOLEAN DEFAULT true', description: 'Sonido habilitado' },
         { name: 'daily_limit', type: 'VARCHAR(20) DEFAULT \'unlimited\'', description: 'Límite diario' },
         { name: 'do_not_disturb', type: 'BOOLEAN DEFAULT false', description: 'Modo no molestar' },
-        { name: 'do_not_disturb_until', type: 'TIMESTAMP NULL', description: 'No molestar hasta' }
+        { name: 'do_not_disturb_until', type: 'TIMESTAMP NULL', description: 'No molestar hasta' },
+        { name: 'whatsapp_external_email', type: 'BOOLEAN DEFAULT true', description: 'Notificaciones WhatsApp de emails externos' }
         // Las plantillas de WhatsApp ahora son aleatorias en el backend para evitar bloqueos
       ];
 
@@ -665,6 +671,35 @@ const checkAndCreateTables = async () => {
       console.log("✅ Tabla 'maintenance_status' creada exitosamente (versión simple).");
     } else {
       console.log("✅ La tabla 'maintenance_status' ya existe.");
+    }
+
+    // Validar y crear la tabla "processed_emails" para el monitor de correo
+    const processedEmailsTableExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'processed_emails'
+      );
+    `);
+
+    if (!processedEmailsTableExists.rows[0].exists) {
+      console.log("➕ Creando tabla 'processed_emails'...");
+      await client.query(`
+        CREATE TABLE processed_emails (
+          id SERIAL PRIMARY KEY,
+          message_id VARCHAR(255) UNIQUE NOT NULL,
+          external_ticket_id VARCHAR(100),
+          subject TEXT,
+          from_address VARCHAR(255),
+          processed_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      // Crear índice para búsqueda rápida
+      await client.query(`
+        CREATE INDEX idx_processed_emails_message_id ON processed_emails(message_id);
+      `);
+      console.log("✅ Tabla 'processed_emails' creada exitosamente.");
+    } else {
+      console.log("✅ La tabla 'processed_emails' ya existe.");
     }
 
     console.log("✅ Validación y creación de tablas completada.");

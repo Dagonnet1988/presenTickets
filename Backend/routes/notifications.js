@@ -32,8 +32,10 @@ router.get('/', authMiddleware, async (req, res) => {
     );
     
     // Luego obtener las notificaciones no leídas (que ya no incluirán las de ID externo)
+    // Usar COALESCE para priorizar external_ticket_id de la notificación sobre el del ticket
     const result = await pool.query(
-      `SELECT n.*, t.external_ticket_id 
+      `SELECT n.*, 
+              COALESCE(n.external_ticket_id, t.external_ticket_id) as external_ticket_id
        FROM notifications n 
        LEFT JOIN tickets t ON n.ticket_id = t.id 
        WHERE n.user_id = $1 AND n.is_read = false 
@@ -48,17 +50,70 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // Marcar notificación como leída
+// Para notificaciones de email externo: marcar TODAS las del mismo external_ticket_id (más robusto que email_message_id)
 router.post('/read/:id', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const notificationId = req.params.id;
-    // Solo el dueño puede marcar como leída
-    await pool.query(
-      'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
+    
+    // Primero obtener la notificación para verificar si es de tipo external_email
+    const notificationResult = await pool.query(
+      'SELECT type, email_message_id, external_ticket_id FROM notifications WHERE id = $1 AND user_id = $2',
       [notificationId, userId]
     );
-    res.json({ success: true });
+    
+    if (notificationResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Notificación no encontrada' });
+    }
+    
+    const notification = notificationResult.rows[0];
+    
+    // Si es notificación de email externo, marcar TODAS las del mismo external_ticket_id para TODOS los usuarios
+    if (notification.type === 'external_email' && notification.external_ticket_id) {
+      // Obtener IDs de usuarios afectados antes de marcar como leídas
+      const affectedUsersResult = await pool.query(
+        'SELECT DISTINCT user_id FROM notifications WHERE external_ticket_id = $1 AND type = $2 AND is_read = false',
+        [notification.external_ticket_id, 'external_email']
+      );
+      
+      const updateResult = await pool.query(
+        'UPDATE notifications SET is_read = true WHERE external_ticket_id = $1 AND type = $2 RETURNING id',
+        [notification.external_ticket_id, 'external_email']
+      );
+      console.log(`📧 Notificaciones de email externo #${notification.external_ticket_id} marcadas como leídas: ${updateResult.rowCount} (compartidas entre técnicos)`);
+      
+      // Emitir WebSocket a TODOS los técnicos afectados para que actualicen sus notificaciones
+      const io = req.app.get('io');
+      if (io && affectedUsersResult.rows.length > 0) {
+        for (const row of affectedUsersResult.rows) {
+          // No emitir al usuario que hizo la acción (ese ya actualizó)
+          if (row.user_id !== userId) {
+            io.to(`user-${row.user_id}`).emit('shared-notification-read', {
+              externalTicketId: notification.external_ticket_id,
+              markedBy: userId
+            });
+          }
+        }
+        console.log(`📧 WebSocket emitido a ${affectedUsersResult.rows.length - 1} técnicos`);
+      }
+      
+      return res.json({ 
+        success: true, 
+        shared: true, 
+        markedCount: updateResult.rowCount,
+        externalTicketId: notification.external_ticket_id
+      });
+    } else {
+      // Notificación normal: solo marcar la del usuario actual
+      await pool.query(
+        'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
+        [notificationId, userId]
+      );
+    }
+    
+    res.json({ success: true, shared: false });
   } catch (err) {
+    console.error('Error al marcar notificación como leída:', err);
     res.status(500).json({ error: 'Error al marcar notificación como leída' });
   }
 });

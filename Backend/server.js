@@ -23,6 +23,7 @@ import helmet from 'helmet';
 import { pool } from './db.js';
 import { authMiddleware } from './routes/auth.js';
 import whatsappService from './services/whatsappWebService.js';
+import emailMonitorService from './services/emailMonitorService.js';
 import checkAndCreateTables from './dbInit.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -263,6 +264,7 @@ async function setupRoutes() {
   const dashboardSettingsRoutes = (await import('./routes/dashboardSettings.js')).default;
   const dashboardConfigRoutes = (await import('./routes/dashboardConfig.js')).default;
   const maintenanceSimpleRoutes = (await import('./routes/maintenanceSimple.js')).default;
+  const emailMonitorRoutes = (await import('./routes/emailMonitor.js')).default;
 
   // Rutas públicas
   app.use('/api/auth', authRoutes);
@@ -291,6 +293,9 @@ async function setupRoutes() {
 
   // Rutas de mantenimiento (protegidas - requieren autenticación)
   app.use('/api/maintenance', authMiddleware, maintenanceSimpleRoutes);
+
+  // Rutas de monitoreo de email (protegidas - requieren autenticación)
+  app.use('/api/email-monitor', authMiddleware, emailMonitorRoutes);
 
   // Manejo de rutas no encontradas (debe estar al final)
   app.use((req, res, next) => {
@@ -356,6 +361,8 @@ io.on('connection', (socket) => {
     if (!userSockets.has(userId)) userSockets.set(userId, new Set());
     userSockets.get(userId).add(socket.id);
     socket.data.userId = userId;
+    // Unir a sala específica del usuario para usar io.to(`user-${userId}`)
+    socket.join(`user-${userId}`);
   });
   
   socket.on('disconnect', () => {
@@ -455,8 +462,23 @@ checkAndCreateTables().then(async () => {
     // Configurar Socket.IO para WhatsApp
     whatsappService.setSocketIO(io);
     
+    // Configurar Socket.IO para monitor de email
+    emailMonitorService.setSocketIO(io);
+    
     // Hacer io disponible para las rutas de mantenimiento
     app.set('io', io);
+    
+    // Auto-iniciar monitor de email si está configurado
+    if (process.env.EMAIL_MONITOR_USER && process.env.EMAIL_MONITOR_PASSWORD) {
+      setTimeout(() => {
+        console.log('📧 Iniciando monitor de email...');
+        emailMonitorService.start().catch(err => {
+          console.error('❌ Error al iniciar monitor de email:', err.message);
+        });
+      }, 5000);
+    } else {
+      console.log('📧 Monitor de email no configurado (faltan credenciales)');
+    }
     
     // Inicializar servicio de WhatsApp después de que el servidor esté listo
     setTimeout(() => {

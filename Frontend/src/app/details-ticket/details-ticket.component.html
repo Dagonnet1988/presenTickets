@@ -15,6 +15,26 @@
 
 <div class="details-ticket-container fade-in-up" *ngIf="ticket">
 
+  <!-- Sticky Header - Se muestra al hacer scroll -->
+  <div class="sticky-ticket-header" [class.visible]="showStickyHeader">
+    <div class="sticky-header-content">
+      <button mat-icon-button class="sticky-back-btn" (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <div class="sticky-ticket-info">
+        <span class="sticky-ticket-number">#{{ ticket?.id }}</span>
+        <span class="sticky-ticket-title">{{ ticket?.title }}</span>
+        <span class="sticky-external-id" *ngIf="ticket?.external_ticket_id">
+          <mat-icon>link</mat-icon>
+          {{ ticket.external_ticket_id }}
+        </span>
+      </div>
+      <span class="sticky-status-badge" [ngClass]="getStatusClass(ticket?.status)">
+        {{ ticket?.status }}
+      </span>
+    </div>
+  </div>
+
   <!-- Header Section - Optimizado y compacto -->
   <div class="header-section">
     <!-- Primera fila: Navegación y título -->

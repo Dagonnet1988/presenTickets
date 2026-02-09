@@ -22,32 +22,192 @@
         MIS TICKETS
       </h1>
     </div>
+    <!-- Botón de exportar (solo admin y tech) -->
+    <div class="header-actions" *ngIf="userRole === 'admin' || userRole === 'tech'">
+      <button mat-raised-button
+              color="primary"
+              (click)="openExportDialog()"
+              [disabled]="tickets.length === 0 || isExporting"
+              class="export-btn"
+              matTooltip="Exportar tickets a Excel">
+        <mat-icon *ngIf="!isExporting">file_download</mat-icon>
+        <mat-icon *ngIf="isExporting" class="spin-icon">sync</mat-icon>
+        <span class="btn-text">{{ isExporting ? 'Exportando...' : 'Exportar Excel' }}</span>
+      </button>
+    </div>
   </div>
 
   <!-- Indicador de período actual -->
   <div class="metrics-header">
     <h2>Listado de Tickets</h2>
-
-  </div>  <!-- Barra de Búsqueda moderna -->
-  <div class="search-section">
-    <mat-form-field appearance="outline" class="search-field">
-      <mat-label>Buscar tickets por título o número...</mat-label>
-      <input matInput
-             [(ngModel)]="searchQuery"
-             (input)="onSearchChange()"
-             placeholder="Ej: Ticket #123 o problema de impresión">
-      <mat-icon matSuffix>search</mat-icon>
-    </mat-form-field>
   </div>
 
-  <div class="content-wrapper">
-    <!-- Sección principal de tickets -->
-    <div class="tickets-section">      <!-- Lista de Tickets moderna -->
-      <div class="ticket-list">
-        <div
-          class="ticket-item"
-          *ngFor="let ticket of paginatedTickets"
-          [ngClass]="{'unassigned': !ticket.assigned_to && userRole !== 'user'}"
+  <!-- Barra de Búsqueda y Filtros Horizontales -->
+  <div class="filters-bar">
+    <!-- Fila 1: Búsqueda -->
+    <div class="filters-row-search">
+      <mat-form-field appearance="outline" class="search-field">
+        <mat-label>Buscar tickets...</mat-label>
+        <input matInput
+               [(ngModel)]="searchQuery"
+               (input)="onSearchChange()"
+               placeholder="Buscar por #, título, descripción o ID externo">
+        <button mat-icon-button matSuffix
+                *ngIf="searchQuery"
+                (click)="clearSearch()"
+                class="clear-search-btn"
+                matTooltip="Limpiar búsqueda">
+          <mat-icon>close</mat-icon>
+        </button>
+        <mat-icon matSuffix *ngIf="!searchQuery">search</mat-icon>
+      </mat-form-field>
+    </div>
+
+    <!-- Fila 2: Filtros principales -->
+    <div class="filters-row-main">
+      <!-- Estado -->
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Estado</mat-label>
+        <mat-select [(ngModel)]="filters.status" (selectionChange)="onStatusSelectChange()">
+          <mat-option value="todos">Todos</mat-option>
+          <mat-option value="abiertos">Abiertos</mat-option>
+          <mat-option value="cerrados">Cerrados</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Período -->
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Período</mat-label>
+        <mat-select [(ngModel)]="filters.datePeriod" (selectionChange)="onDatePeriodChange()">
+          <mat-option value="all">Todo el tiempo</mat-option>
+          <mat-option value="7days">Últimos 7 días</mat-option>
+          <mat-option value="30days">Últimos 30 días</mat-option>
+          <mat-option value="90days">Últimos 90 días</mat-option>
+          <mat-option value="custom">Personalizado</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Fechas personalizadas (solo si período = custom) -->
+      <mat-form-field appearance="outline" class="date-field" *ngIf="filters.datePeriod === 'custom'">
+        <mat-label>Fecha inicio</mat-label>
+        <input matInput [matDatepicker]="startPicker" [(ngModel)]="filters.startDate" (dateChange)="applyFilters()">
+        <mat-datepicker-toggle matSuffix [for]="startPicker"></mat-datepicker-toggle>
+        <mat-datepicker #startPicker></mat-datepicker>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="date-field" *ngIf="filters.datePeriod === 'custom'">
+        <mat-label>Fecha fin</mat-label>
+        <input matInput [matDatepicker]="endPicker" [(ngModel)]="filters.endDate" (dateChange)="applyFilters()">
+        <mat-datepicker-toggle matSuffix [for]="endPicker"></mat-datepicker-toggle>
+        <mat-datepicker #endPicker></mat-datepicker>
+      </mat-form-field>
+
+      <!-- Ordenar por -->
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Ordenar por</mat-label>
+        <mat-select [(ngModel)]="filters.orderBy" (selectionChange)="applyFilters()">
+          <mat-option value="fecha">Fecha</mat-option>
+          <mat-option value="estado">Estado</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Asignado a (solo admin) -->
+      <mat-form-field appearance="outline" class="filter-field" *ngIf="userRole === 'admin'">
+        <mat-label>Asignado a</mat-label>
+        <mat-select [(ngModel)]="filters.assignedTo" (selectionChange)="applyFilters()">
+          <mat-option value="todos">Todos</mat-option>
+          <mat-option value="noAsignado">No asignado</mat-option>
+          <mat-option *ngFor="let userId of getTechNamesKeys()" [value]="userId">
+            {{ getTechName(userId) }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Vista de tickets (solo tech) -->
+      <mat-form-field appearance="outline" class="filter-field" *ngIf="userRole === 'tech'">
+        <mat-label>Ver tickets</mat-label>
+        <mat-select [(ngModel)]="techTicketView" (selectionChange)="onTechViewChange()">
+          <mat-option value="mine">Solo mis tickets</mat-option>
+          <mat-option value="all">Todos los tickets</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Botón limpiar filtros (solo visible cuando hay filtros activos, excluyendo búsqueda) -->
+      <button mat-stroked-button
+              *ngIf="hasActiveFilters()"
+              (click)="resetFiltersOnly()"
+              class="clear-filters-btn">
+        <mat-icon>filter_list_off</mat-icon>
+        <span class="btn-text">Limpiar filtros</span>
+      </button>
+    </div>
+
+    <!-- Contadores de estados rápidos -->
+    <!-- Para usuarios: solo 2 contadores relevantes -->
+    <div class="status-counts" *ngIf="userRole === 'user'">
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Esperando respuesta del usuario'"
+        (click)="filterByStatus('Esperando respuesta del usuario')">
+        <mat-icon>hourglass_empty</mat-icon>
+        Esperando tu respuesta: <strong>{{ countEsperandoUsuario }}</strong>
+      </button>
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Escalado a externo'"
+        (click)="filterByStatus('Escalado a Externo')">
+        <mat-icon>open_in_new</mat-icon>
+        Escalado Ext: <strong>{{ countEscaladoExterno }}</strong>
+      </button>
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Escalado a Tier 3 / Gerente de Cuenta'"
+        (click)="filterByStatus('Escalado a Tier 3 / Gerente de Cuenta')">
+        <mat-icon>trending_up</mat-icon>
+        Tier 3: <strong>{{ countEscaladoTier3 }}</strong>
+      </button>
+      <button mat-stroked-button color="warn"
+        [class.active-status]="activeStatusFilter === 'En gestión'"
+        (click)="filterByStatus('En gestión')">
+        <mat-icon>engineering</mat-icon>
+        En Gestión sistemas: <strong>{{ countEnGestion }}</strong>
+      </button>
+    </div>
+
+    <!-- Para admin y tech: todos los contadores -->
+    <div class="status-counts" *ngIf="userRole !== 'user'">
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Esperando respuesta del usuario'"
+        (click)="filterByStatus('Esperando respuesta del usuario')">
+        <mat-icon>hourglass_empty</mat-icon>
+        Esperando tu respuesta: <strong>{{ countEsperandoUsuario }}</strong>
+      </button>
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Escalado a externo'"
+        (click)="filterByStatus('Escalado a Externo')">
+        <mat-icon>open_in_new</mat-icon>
+        Escalado Ext: <strong>{{ countEscaladoExterno }}</strong>
+      </button>
+      <button mat-stroked-button
+        [class.active-status]="activeStatusFilter === 'Escalado a Tier 3 / Gerente de Cuenta'"
+        (click)="filterByStatus('Escalado a Tier 3 / Gerente de Cuenta')">
+        <mat-icon>trending_up</mat-icon>
+        Tier 3: <strong>{{ countEscaladoTier3 }}</strong>
+      </button>
+      <button mat-stroked-button color="warn"
+        [class.active-status]="activeStatusFilter === 'En gestión'"
+        (click)="filterByStatus('En gestión')">
+        <mat-icon>engineering</mat-icon>
+        En Gestión: <strong>{{ countEnGestion }}</strong>
+      </button>
+    </div>
+  </div>
+
+  <!-- Contenido principal: Lista de tickets (sin panel lateral) -->
+  <div class="tickets-main-content">
+    <!-- Lista de Tickets moderna -->
+    <div class="ticket-list">
+      <div
+        class="ticket-item"
+        *ngFor="let ticket of paginatedTickets"
+        [ngClass]="{'unassigned': !ticket.assigned_to && userRole !== 'user'}"
           (click)="viewTicketDetails(ticket.id)"
         >
           <div class="ticket-header">
@@ -180,89 +340,4 @@
         </button>
       </div>
     </div>
-    <!-- Sección de Filtros -->
-    <div class="filter-panel">
-      <h2>Filtros de Búsqueda</h2>
-      <form>
-        <!-- Filtro por Estado -->
-        <div class="filter-group">
-          <label for="status">Estado</label>
-          <select
-            id="status"
-            [(ngModel)]="filters.status"
-            name="status"
-            (change)="onStatusSelectChange()"
-            class="large-select"
-          >
-            <option value="todos">Todos</option>
-            <option value="abiertos">Abiertos</option>
-            <option value="cerrados">Cerrados</option>
-          </select>
-        </div>
-        <!-- Ordenar por -->
-        <div class="filter-group">
-          <label for="orderBy">Ordenar por</label>
-          <select
-            id="orderBy"
-            [(ngModel)]="filters.orderBy"
-            name="orderBy"
-            (change)="applyFilters()"
-            class="large-select"
-          >
-            <option value="fecha">Fecha</option>
-            <option value="estado">Estado</option>
-          </select>
-        </div>
-        <!-- Filtro por Fecha -->
-        <div class="filter-group">
-          <label for="startDate">Fecha de Inicio</label>
-          <input type="date" id="startDate" [(ngModel)]="filters.startDate" name="startDate" (change)="applyFilters()" class="large-select">
-        </div>
-        <div class="filter-group">
-          <label for="endDate">Fecha Final</label>
-          <input type="date" id="endDate" [(ngModel)]="filters.endDate" name="endDate" (change)="applyFilters()" class="large-select">
-        </div>
-        <!-- Botón para alternar entre ver todos los tickets y ver solo los asignados -->
-        <div class="filter-group" *ngIf="userRole === 'tech'">
-          <button type="button" (click)="toggleShowAllTickets()">
-            {{ showAllTickets ? 'Ver solo mis tickets asignados' : 'Ver todos los tickets' }}
-          </button>
-        </div>
-        <div *ngIf="userRole === 'admin'">
-          <label for="assignedToFilter">Asignado a:</label>
-          <select id="assignedToFilter" [(ngModel)]="filters.assignedTo" name="assignedToFilter" (change)="applyFilters()">
-            <option value="todos">Todos</option>
-            <option value="noAsignado">No asignado</option>
-            <option *ngFor="let userId of getTechNamesKeys()" [value]="userId">{{ getTechName(userId) }}</option>
-          </select>
-        </div>
-      </form>
-      <!-- Botón para Resetear Filtros -->
-      <div class="filter-actions">
-        <button mat-raised-button color="primary" (click)="resetFilters()">Resetear Filtros</button>
-      </div>
-      <!-- Botones de conteo de tickets por estado -->
-      <div class="status-counts" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 24px 0 18px 0;">
-        <button mat-stroked-button color="secondary"
-          [class.active-status]="activeStatusFilter === 'Esperando respuesta del usuario'"
-          (click)="filterByStatus('Esperando respuesta del usuario')">
-          Esperando respuesta del usuario: <strong>{{ countEsperandoUsuario }}</strong>
-        </button>
-        <button mat-stroked-button color="accent"
-          [class.active-status]="activeStatusFilter === 'Escalado a externo'"
-          (click)="filterByStatus('Escalado a Externo')">
-          Escalado a Externo: <strong>{{ countEscaladoExterno }}</strong>
-        </button>
-        <button mat-stroked-button color="primary"
-          [class.active-status]="activeStatusFilter === 'Escalado a Tier 3 / Gerente de Cuenta'"
-          (click)="filterByStatus('Escalado a Tier 3 / Gerente de Cuenta')">
-          Escalado a Tier 3: <strong>{{ countEscaladoTier3 }}</strong>
-        </button>
-        <button mat-stroked-button color="warn"
-          [class.active-status]="activeStatusFilter === 'En gestión'"
-          (click)="filterByStatus('En gestión')">
-          En Gestión: <strong>{{ countEnGestion }}</strong>
-        </button>
-      </div>
-    </div>
-  </div>
+

@@ -94,26 +94,36 @@ import { AuthService } from '../shared/services/auth.service';
 
       <!-- Formulario compacto para agregar -->
       <div class="add-form-compact" *ngIf="showAddForm && canManageParticipants()">
-        <!-- Campo de búsqueda -->
-        <div class="search-row">
-          <mat-form-field appearance="outline" class="search-field">
-            <mat-label>Buscar usuario</mat-label>
-            <input matInput
-                   [(ngModel)]="searchText"
-                   (ngModelChange)="onSearchChange()"
-                   placeholder="Nombre, apellido o email...">
-            <mat-icon matSuffix>search</mat-icon>
-          </mat-form-field>
-        </div>
-
         <div class="form-row-compact">
           <mat-form-field appearance="outline" class="user-field">
-            <mat-label>Usuario ({{ availableUsers.length }} disponibles)</mat-label>
-            <mat-select [(value)]="selectedUserId">
+            <mat-label>Seleccionar usuario</mat-label>
+            <mat-select [(value)]="selectedUserId" panelClass="search-select-panel">
+              <!-- Campo de búsqueda dentro del select -->
+              <div class="select-search-container">
+                <mat-icon>search</mat-icon>
+                <input matInput
+                       class="select-search-input"
+                       [(ngModel)]="searchText"
+                       (ngModelChange)="onSearchChange()"
+                       (click)="$event.stopPropagation()"
+                       (keydown)="$event.stopPropagation()"
+                       placeholder="Buscar por nombre o email...">
+                <mat-icon *ngIf="searchText" class="clear-search" (click)="clearSearch($event)">close</mat-icon>
+              </div>
+
+              <!-- Opciones filtradas -->
+              <mat-option *ngIf="availableUsers.length === 0" disabled>
+                <em>No se encontraron usuarios</em>
+              </mat-option>
               <mat-option *ngFor="let user of availableUsers" [value]="user.id">
-                {{ user.full_name }} - {{ user.role }}
+                <div class="user-option">
+                  <span class="user-name">{{ user.full_name }}</span>
+                  <span class="user-separator">•</span>
+                  <span class="user-role" [style.color]="getRoleColor(user.role)">{{ getRoleLabel(user.role) }}</span>
+                </div>
               </mat-option>
             </mat-select>
+            <mat-hint *ngIf="availableUsers.length > 0">{{ availableUsers.length }} usuarios disponibles</mat-hint>
           </mat-form-field>
 
           <button
@@ -189,18 +199,10 @@ import { AuthService } from '../shared/services/auth.service';
       border-top: 1px solid rgba(0,0,0,0.12);
     }
 
-    .search-row {
-      margin-bottom: 12px;
-    }
-
-    .search-field {
-      width: 100%;
-    }
-
     .form-row-compact {
       display: flex;
       gap: 8px;
-      align-items: flex-end;
+      align-items: flex-start;
     }
 
     .user-field {
@@ -209,6 +211,59 @@ import { AuthService } from '../shared/services/auth.service';
 
     .user-field mat-form-field {
       font-size: 14px;
+    }
+
+    /* Estilos para búsqueda dentro del select */
+    ::ng-deep .search-select-panel .select-search-container {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.12);
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1;
+      gap: 8px;
+    }
+
+    ::ng-deep .search-select-panel .select-search-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 14px;
+      padding: 4px 0;
+      background: transparent;
+    }
+
+    ::ng-deep .search-select-panel .clear-search {
+      cursor: pointer;
+      font-size: 18px;
+      color: rgba(0,0,0,0.54);
+    }
+
+    ::ng-deep .search-select-panel .clear-search:hover {
+      color: rgba(0,0,0,0.87);
+    }
+
+    .user-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .user-name {
+      font-weight: 500;
+    }
+
+    .user-separator {
+      color: rgba(0,0,0,0.38);
+      font-size: 10px;
+    }
+
+    .user-role {
+      font-size: 12px;
+      font-weight: 500;
     }
 
     ::ng-deep .participants-compact .mat-mdc-form-field {
@@ -295,7 +350,8 @@ export class TicketParticipantsComponent implements OnInit, OnDestroy {
   loadAvailableUsers(search?: string) {
     this.participantsService.getAvailableUsers(this.ticketId, search).subscribe({
       next: (users) => {
-        this.availableUsers = users;
+        // Filtrar admins - no deben aparecer como participantes agregables
+        this.availableUsers = users.filter(user => user.role !== 'admin');
       },
       error: (error) => {
         console.error('Error cargando usuarios disponibles:', error);
@@ -320,6 +376,15 @@ export class TicketParticipantsComponent implements OnInit, OnDestroy {
         this.selectedUserId = null;
       }
     }, 300); // 300ms de delay
+  }
+
+  /**
+   * Limpiar campo de búsqueda
+   */
+  clearSearch(event: Event) {
+    event.stopPropagation();
+    this.searchText = '';
+    this.loadAvailableUsers();
   }
 
   /**
@@ -403,6 +468,18 @@ export class TicketParticipantsComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Obtener etiqueta traducida del rol
+   */
+  getRoleLabel(role: string): string {
+    const labels: { [key: string]: string } = {
+      'admin': 'Administrador',
+      'tech': 'Técnico',
+      'user': 'Usuario'
+    };
+    return labels[role] || role;
+  }
+
+  /**
    * Obtener color para el rol del usuario (basado en el rol real del usuario)
    */
   getRoleColor(userRole: string): string {
@@ -418,6 +495,6 @@ export class TicketParticipantsComponent implements OnInit, OnDestroy {
    * Obtener texto del tooltip para participante
    */
   getTooltipText(participant: TicketParticipant): string {
-    return `${participant.full_name} (${participant.role})`;
+    return `${participant.full_name} (${this.getRoleLabel(participant.role)})`;
   }
 }

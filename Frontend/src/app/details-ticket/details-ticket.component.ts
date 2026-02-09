@@ -13,8 +13,8 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, TemplateRef, LOCALE_ID, ChangeDetectionStrategy } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, TemplateRef, LOCALE_ID, ChangeDetectionStrategy, HostListener } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Location, registerLocaleData } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -84,10 +84,19 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   private assignmentDialogRef: MatDialogRef<any> | null = null;
   selectedPriority: string = '';
   selectedAssignedTo: string = '';
+  showStickyHeader: boolean = false; // Para el header sticky al hacer scroll
   private subscriptions: Subscription = new Subscription();
+
+  // Listener para detectar scroll y mostrar/ocultar sticky header
+  @HostListener('window:scroll', [])
+  onWindowScroll() {
+    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    this.showStickyHeader = scrollPosition > 150; // Mostrar después de 150px de scroll
+  }
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private ticketService: TicketService,
     private location: Location,
     public authService: AuthService,
@@ -534,7 +543,8 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   }
 
   goBack(): void {
-    this.location.back();
+    // Navegar al home - los filtros se restaurarán desde sessionStorage
+    this.router.navigate(['/home']);
   }
 
   confirmAction(action: string): void {

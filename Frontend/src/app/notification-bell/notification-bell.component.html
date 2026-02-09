@@ -29,9 +29,12 @@
       <div *ngFor="let n of unreadNotifications | slice:0:8"
            class="notification-item"           [class.status-change]="n.type === 'cambio_estado'"
            [class.reopened]="n.type === 'ticket_reabierto'"
+           [class.external-email]="n.type === 'external_email'"
            [class.new-notification]="!n.id"
            (click)="goToTicket(n)"
-           [title]="n.id ?
+           [title]="n.type === 'external_email' ?
+                   'Respuesta de soporte externo. Haz clic para ver detalles.' :
+                   n.id ?
                    (n.type === 'cambio_estado' ?
                     'Ticket actualizado. Haz clic para ver los detalles.' :
                     n.type === 'ticket_reabierto' ?
@@ -40,17 +43,25 @@
                    'Notificación reciente. Haz clic para verla.'">
         <div style="display: flex; align-items: flex-start;">
           <mat-icon [color]="n.type === 'cambio_estado' ? 'accent' :
-                           n.type === 'ticket_reabierto' ? 'warn' : 'primary'"
+                           n.type === 'ticket_reabierto' ? 'warn' :
+                           n.type === 'external_email' ? 'warn' : 'primary'"
                    style="margin-right: 10px; margin-top: 2px;">
             {{ n.type === 'cambio_estado' ? 'update' :
                n.type === 'ticket_reabierto' ? 'replay' :
                n.type === 'nuevo_ticket' ? 'add_circle' :
-               n.type === 'ticket_asignado' ? 'person' : 'info' }}
+               n.type === 'ticket_asignado' ? 'person' :
+               n.type === 'external_email' ? 'email' : 'info' }}
           </mat-icon>
           <div>
             <b>{{ n.message || (n.type | notificationType) }}</b>
-            <div>Ticket #{{ n.ticket_id || 'Cargando...' }}</div>
-            <span class="timestamp">{{ n.timestamp | date:'short' }}</span>
+            <div *ngIf="n.type === 'external_email'; else normalTicket">
+              Ticket Externo #{{ n.external_ticket_id || 'Sin ID' }}
+              <span *ngIf="n.ticket_id"> → Interno #{{ n.ticket_id }}</span>
+            </div>
+            <ng-template #normalTicket>
+              <div>Ticket #{{ n.ticket_id || 'Cargando...' }}</div>
+            </ng-template>
+            <span class="timestamp">{{ (n.created_at || n.timestamp) | date:'short' }}</span>
           </div>
         </div>
       </div>
