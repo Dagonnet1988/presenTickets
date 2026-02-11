@@ -561,10 +561,12 @@ async function calculateEnhancedMetrics(pool, dateRange = null, config = null, u
         u.firstname AS user_firstname,
         u.lastname AS user_lastname,
         assigned_u.firstname AS assigned_firstname,
-        assigned_u.lastname AS assigned_lastname
+        assigned_u.lastname AS assigned_lastname,
+        ts.rating AS survey_rating
       FROM tickets t
       LEFT JOIN users u ON t.user_id = u.id
       LEFT JOIN users assigned_u ON t.assigned_to = assigned_u.id
+      LEFT JOIN ticket_surveys ts ON t.id = ts.ticket_id
       ${whereClause}
       ORDER BY t.created_at DESC
     `;
@@ -766,7 +768,8 @@ async function calculateEnhancedMetrics(pool, dateRange = null, config = null, u
         responseTime,
         createdAt: ticket.created_at,
         closedAt: ticket.closed_at,
-        isOverdue: isTicketOverdue
+        isOverdue: isTicketOverdue,
+        surveyRating: ticket.survey_rating || null
       });
     }
     

@@ -13,7 +13,7 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -34,7 +34,11 @@ export class NotificationBellComponent {
   unreadNotifications: TicketNotification[] = [];
   unreadCount = 0;
 
-  constructor(private notificationService: NotificationService, private router: Router) {
+  constructor(
+    private notificationService: NotificationService,
+    private router: Router,
+    private cdr: ChangeDetectorRef
+  ) {
     this.notificationService.notifications$.subscribe((n) => {
       this.notifications = n;
       // Filtrar solo las notificaciones no leídas
@@ -44,6 +48,9 @@ export class NotificationBellComponent {
       // Para que solo aparezca una por ticket externo (evita duplicados entre técnicos)
       this.unreadNotifications = this.groupExternalEmailNotifications(unread);
       this.unreadCount = this.unreadNotifications.length;
+
+      // Forzar detección de cambios para actualizar la UI inmediatamente
+      this.cdr.detectChanges();
     });
   }
 

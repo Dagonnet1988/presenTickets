@@ -23,7 +23,7 @@ export const environment = {
   maintenance: 'http://192.162.2.5:3000/api/maintenance',
   backendUrl: 'http://192.162.2.5:3000',
   apiUrl: 'http://192.162.2.5:3000',
-  appVersion: '1.1'
+  appVersion: '1.2'
 };
 
 // Eliminar console.log, console.debug, console.warn en producción

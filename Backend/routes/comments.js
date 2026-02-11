@@ -149,12 +149,13 @@ router.post('/:ticketId', async (req, res) => {
           'INSERT INTO attachments (ticket_id, comment_id, filename, filepath) VALUES ($1, $2, $3, $4)',
           [ticketId, commentId, attachment.name, attachment.url]
         );
-      }      // Obtener datos del ticket y usuario que envía el comentario
-      const ticketResult = await client.query('SELECT assigned_to, user_id, title, status FROM tickets WHERE id = $1', [ticketId]);
+      }      // Obtener datos del ticket y usuario que envía el comentario (incluyendo participantes)
+      const ticketResult = await client.query('SELECT assigned_to, user_id, title, status, participants FROM tickets WHERE id = $1', [ticketId]);
       const assignedTo = ticketResult.rows[0]?.assigned_to;
       const ticketUserId = ticketResult.rows[0]?.user_id;
       const ticketTitle = ticketResult.rows[0]?.title || '';
       const currentStatus = ticketResult.rows[0]?.status;
+      const participants = ticketResult.rows[0]?.participants || [];
 
       const userResult = await client.query('SELECT role, firstname, username FROM users WHERE id = $1', [userId]);
       const userRole = userResult.rows[0]?.role;
@@ -178,6 +179,13 @@ router.post('/:ticketId', async (req, res) => {
         notificationType = 'comentario_tech';
         shouldUpdateStatus = true;
         newStatus = 'Esperando respuesta del usuario';
+        
+        // Agregar participantes del ticket (excluyendo al que comenta)
+        for (const participantId of participants) {
+          if (participantId !== userId && !recipients.includes(participantId)) {
+            recipients.push(participantId);
+          }
+        }
       } else if (userRole === 'user') {
         // Usuario comenta: notificar al técnico asignado y cambiar estado si es necesario
         if (assignedTo && assignedTo !== userId) recipients.push(assignedTo);
@@ -187,6 +195,18 @@ router.post('/:ticketId', async (req, res) => {
         if (currentStatus === 'Creado' || currentStatus === 'Esperando respuesta del usuario') {
           shouldUpdateStatus = true;
           newStatus = 'En gestión';
+        }
+        
+        // Agregar al creador del ticket si no es quien comenta
+        if (ticketUserId && ticketUserId !== userId && !recipients.includes(ticketUserId)) {
+          recipients.push(ticketUserId);
+        }
+        
+        // Agregar participantes del ticket (excluyendo al que comenta)
+        for (const participantId of participants) {
+          if (participantId !== userId && !recipients.includes(participantId)) {
+            recipients.push(participantId);
+          }
         }
       }
 

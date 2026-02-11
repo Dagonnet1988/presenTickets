@@ -123,6 +123,30 @@
             <mat-icon>refresh</mat-icon>
             Reabrir Ticket
           </button>
+
+          <!-- Botón Calificar Servicio - Solo para usuarios cuando ticket está Resuelto y no tiene encuesta -->
+          <button
+            *ngIf="userRole === 'user' && ticket?.status === 'Resuelto' && !hasSurvey && !surveyLoading"
+            mat-raised-button
+            color="accent"
+            class="action-button survey-button"
+            (click)="openSurveyModal(false)"
+          >
+            <mat-icon>star_rate</mat-icon>
+            Calificar Servicio
+          </button>
+
+          <!-- Indicador de calificación existente -->
+          <div
+            *ngIf="hasSurvey && !surveyLoading"
+            class="survey-rating-display"
+            matTooltip="Calificación del servicio">
+            <mat-icon class="survey-icon">verified</mat-icon>
+            <span class="survey-label">Calificado:</span>
+            <div class="survey-stars">
+              <mat-icon *ngFor="let star of getSurveyStars()" [class.filled]="star === 'star'">{{ star }}</mat-icon>
+            </div>
+          </div>
         </div>
 
         <!-- Controles compactos en la misma línea (responsivo) -->

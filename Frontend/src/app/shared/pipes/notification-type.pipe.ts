@@ -27,6 +27,7 @@ export class NotificationTypePipe implements PipeTransform {  transform(type: st
       case 'admin_estado_ticket': return 'Nuevo estado de Ticket';
       case 'ticket_cerrado': return 'Ticket Cerrado';
       case 'ticket_resuelto': return 'Ticket Resuelto';
+      case 'ticket_resuelto_encuesta': return 'Ticket Resuelto - ¡Califícanos!';
       case 'estado_escalado': return 'Ticket Escalado';
       case 'ticket_asignado': return 'Ticket Asignado';
       case 'asignado_tecnico': return 'Ticket tomado por un técnico';

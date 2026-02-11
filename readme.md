@@ -637,7 +637,7 @@ Este software es propiedad intelectual exclusiva de Diego Sánchez. El uso por p
 
 ---
 
-**🎉 PresenTickets v1.1 - Sistema de Gestión de Tickets Profesional**
+**🎉 PresenTickets v1.2 - Sistema de Gestión de Tickets Profesional**
 
 *Desarrollado con ❤️ por Diego Sánchez para Clínica La Presentación*
 
@@ -737,7 +737,21 @@ El proyecto está dividido en dos partes principales:
 
 ## 📝 Changelog y Versiones
 
-### v1.1 (Enero 2025) - Versión Actual 🚀
+### v1.2 (febrero 2026) - Versión Actual 🚀
+
+#### ✨ Nuevas Funcionalidades:
+- **📧 Monitoreo de Correos Externos**: Integración IMAP para correos de soporte@osigu.com
+- **🔔 Notificaciones Compartidas**: Sistema de notificaciones para rol técnico con sincronización
+- **📱 WhatsApp para Emails**: Notificaciones WhatsApp de correos externos con preferencia configurable
+- **🎫 Extracción de Tickets**: Detección automática de tickets [CHERMZ][#XXX] en asuntos de email
+
+#### 🔧 Mejoras Técnicas:
+- **WebSocket Optimizado**: Eventos `external-email-alert` y `shared-notification-read`
+- **Nueva Tabla**: `processed_emails` para tracking de emails procesados
+- **Campos Expandidos**: `email_message_id`, `external_ticket_id`, `email_subject` en notificaciones
+- **Limpieza de Logs**: Eliminación de logs de debug para producción
+
+### v1.1 (Enero 2025)
 
 #### ✨ Nuevas Funcionalidades:
 - **🎫 Sistema de Participantes Mejorado**: Campo `participants INTEGER[]` en tabla tickets

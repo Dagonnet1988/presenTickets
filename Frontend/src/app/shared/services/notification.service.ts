@@ -237,11 +237,28 @@ export class NotificationService {
     }).subscribe({
       next: (notifications) => {
         // Transformar is_read a read para compatibilidad con el frontend
-        const transformedNotifications = notifications.map(n => ({
+        const serverNotifications = notifications.map(n => ({
           ...n,
           read: n.is_read || n.read || false
         }));
-        this.notificationsSubject.next(transformedNotifications);
+
+        // Obtener notificaciones actuales sin ID (recibidas por socket pero no persistidas aún)
+        const currentSocketOnlyNotifications = this.notificationsSubject.value.filter(n => !n.id);
+
+        // Combinar: notificaciones del servidor + notificaciones temporales de socket
+        // Las del servidor tienen prioridad (por si ya se persistió)
+        const existingServerIds = new Set(serverNotifications.map(n => n.id));
+        const socketNotificationsToKeep = currentSocketOnlyNotifications.filter(n => {
+          // Mantener solo si no hay una del servidor con el mismo ticket_id
+          return !serverNotifications.some(sn =>
+            sn.ticket_id === n.ticket_id &&
+            sn.type === n.type &&
+            Math.abs(new Date(sn.created_at || sn.timestamp || 0).getTime() - new Date(n.timestamp || 0).getTime()) < 10000
+          );
+        });
+
+        const combinedNotifications = [...serverNotifications, ...socketNotificationsToKeep];
+        this.notificationsSubject.next(combinedNotifications);
       },
       error: (error) => {
         if (isDevMode()) {

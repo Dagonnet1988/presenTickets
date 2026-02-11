@@ -19,6 +19,18 @@ import { pool } from '../db.js';
 import fs from 'fs';
 import path from 'path';
 
+// Sistema de logging configurable por nivel
+// Niveles: 'error' < 'warn' < 'info' < 'debug'
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const currentLogLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toLowerCase()] ?? LOG_LEVELS.info;
+
+const logger = {
+  error: (...args) => console.error(...args),
+  warn: (...args) => console.warn(...args),
+  info: (...args) => currentLogLevel >= LOG_LEVELS.info && console.log(...args),
+  debug: (...args) => currentLogLevel >= LOG_LEVELS.debug && console.log(...args)
+};
+
 class WhatsAppWebService {
   constructor() {
     this.client = null;
@@ -96,11 +108,11 @@ class WhatsAppWebService {
           if (fs.existsSync(filePath)) {
             try {
               fs.unlinkSync(filePath);
-              console.log(`🧹 Limpiado archivo bloqueado: ${fileName}`);
+              logger.debug(`🧹 Limpiado archivo bloqueado: ${fileName}`);
             } catch (err) {
               // Ignorar errores - el archivo aún puede estar en uso
               if (err.code !== 'EBUSY' && err.code !== 'ENOENT') {
-                console.warn(`⚠️ No se pudo limpiar ${fileName}:`, err.message);
+                logger.warn(`⚠️ No se pudo limpiar ${fileName}:`, err.message);
               }
             }
           }
@@ -108,7 +120,7 @@ class WhatsAppWebService {
       }
     } catch (error) {
       // Error no crítico, solo advertir
-      console.warn('⚠️ Error en limpieza inicial de archivos:', error.message);
+      logger.warn('⚠️ Error en limpieza inicial de archivos:', error.message);
     }
   }
 
@@ -119,48 +131,48 @@ class WhatsAppWebService {
     try {
       // Verificar si hay destrucción en curso
       if (this.isDestroying) {
-        console.log('⏳ Destrucción en curso, esperando antes de inicializar...');
+        logger.debug('⏳ Destrucción en curso, esperando antes de inicializar...');
         await new Promise(resolve => setTimeout(resolve, 3000));
         if (this.isDestroying) {
-          console.log('⚠️ Destrucción aún en curso, cancelando inicialización');
+          logger.debug('⚠️ Destrucción aún en curso, cancelando inicialización');
           return false;
         }
       }
 
       if (this.isInitializing) {
-        console.log('⚠️ Inicialización ya en progreso...');
+        logger.debug('⚠️ Inicialización ya en progreso...');
         return false;
       }
 
       if (this.isReady && this.client) {
-        console.log('✅ WhatsApp Web ya está conectado');
+        logger.debug('✅ WhatsApp Web ya está conectado');
         return true;
       }
 
       // Reset de banderas cuando se inicia manualmente
       // Esto permite reiniciar después de un stop por límite de QR
       if (this.stoppedAwaitingManualStart) {
-        console.log('🔄 Reiniciando después de parada por límite de QR...');
+        logger.debug('🔄 Reiniciando después de parada por límite de QR...');
         this.stoppedAwaitingManualStart = false;
         this.qrCooldownActive = false;
       }
 
       this.isInitializing = true;
       this.qrGenerationCount = 0; // Reset contador de QR
-      console.log('🚀 Inicializando WhatsApp Web...');
+      logger.info('🚀 Inicializando WhatsApp Web...');
 
       // Cargar configuración de antibloqueo desde BD
       try {
         await this.loadAntiBlockConfigFromDB();
       } catch (dbError) {
-        console.warn('⚠️ Error cargando config desde BD, usando valores por defecto:', dbError.message);
+        logger.warn('⚠️ Error cargando config desde BD, usando valores por defecto:', dbError.message);
       }
 
       // Sincronizar contadores con datos reales de la BD
       try {
         await this.syncCountersWithDB();
       } catch (syncError) {
-        console.warn('⚠️ Error sincronizando contadores, usando valores por defecto:', syncError.message);
+        logger.warn('⚠️ Error sincronizando contadores, usando valores por defecto:', syncError.message);
       }
 
       // Inicializar cliente de WhatsApp Web
@@ -168,8 +180,8 @@ class WhatsAppWebService {
 
       return true;
     } catch (error) {
-      console.error('❌ Error inicializando WhatsApp Web:', error.message);
-      console.error('Stack trace:', error.stack);
+      logger.error('❌ Error inicializando WhatsApp Web:', error.message);
+      logger.error('Stack trace:', error.stack);
       this.isInitializing = false;
       this.isReady = false;
       
@@ -195,7 +207,7 @@ class WhatsAppWebService {
     try {
       // Destruir cliente anterior si existe de forma segura
       if (this.client) {
-        console.log('🧹 Limpiando cliente anterior...');
+        logger.debug('🧹 Limpiando cliente anterior...');
         this.isDestroying = true;
         try {
           await Promise.race([
@@ -203,7 +215,7 @@ class WhatsAppWebService {
             new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout destruyendo cliente')), 10000))
           ]);
         } catch (destroyError) {
-          console.warn('⚠️ Error destruyendo cliente anterior:', destroyError.message);
+          logger.warn('⚠️ Error destruyendo cliente anterior:', destroyError.message);
         } finally {
           this.client = null;
           this.isDestroying = false;
@@ -253,13 +265,13 @@ class WhatsAppWebService {
         takeoverTimeoutMs: process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS ? parseInt(process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS, 10) : 0
       });
 
-      console.log('ℹ️ whatsapp-web.js takeoverOnConflict=', (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'));
+      logger.debug('ℹ️ whatsapp-web.js takeoverOnConflict=', (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'));
 
       // Configurar eventos ANTES de inicializar
       this.setupEventHandlers();
 
       // Inicializar cliente con timeout de seguridad
-      console.log('🔄 Iniciando cliente WhatsApp Web...');
+      logger.debug('🔄 Iniciando cliente WhatsApp Web...');
       const initPromise = this.client.initialize();
       
       // Timeout de 90 segundos para la inicialización
@@ -268,10 +280,10 @@ class WhatsAppWebService {
       });
 
       await Promise.race([initPromise, timeoutPromise]);
-      console.log('✅ Cliente WhatsApp Web inicializado correctamente');
+      logger.info('✅ Cliente WhatsApp Web inicializado correctamente');
 
     } catch (error) {
-      console.error('❌ Error creando/iniciando cliente WhatsApp Web:', error.message || error);
+      logger.error('❌ Error creando/iniciando cliente WhatsApp Web:', error.message || error);
       this.isInitializing = false;
       this.isDestroying = false;
       
@@ -286,7 +298,7 @@ class WhatsAppWebService {
             ]);
           }
         } catch (destroyError) {
-          console.warn('⚠️ Error limpiando cliente:', destroyError.message);
+          logger.warn('⚠️ Error limpiando cliente:', destroyError.message);
         }
         this.client = null;
       }
@@ -305,7 +317,7 @@ class WhatsAppWebService {
       const now = Date.now();
       // Si el cliente ya está listo, no deberíamos emitir un nuevo QR
       if (this.isReady) {
-        console.warn('⚠️ Se generó un QR pero el cliente ya está marcado como ready. Ignorando QR.');
+        logger.warn('⚠️ Se generó un QR pero el cliente ya está marcado como ready. Ignorando QR.');
         // Aún actualizar qrCode interno para consistencia pero NO notificar al frontend
         this.qrCode = qr;
         return;
@@ -314,13 +326,13 @@ class WhatsAppWebService {
       
       // Verificar si estamos generando QRs muy rápido (posible loop)
       if (this.lastQRTime && (now - this.lastQRTime) < 5000) {
-        console.warn(`⚠️ QR generado muy rápido (${Math.round((now - this.lastQRTime)/1000)}s desde el anterior)`);
+        logger.warn(`⚠️ QR generado muy rápido (${Math.round((now - this.lastQRTime)/1000)}s desde el anterior)`);
       }
       
       // Limitar cantidad de QRs generados - DETENER COMPLETAMENTE después de 3 intentos
       if (this.qrGenerationCount > this.maxQRGenerations) {
-        console.error(`🛑 Se alcanzó el límite de ${this.maxQRGenerations} QRs sin escanear. Deteniendo servicio WhatsApp.`);
-        console.log('📋 Para reiniciar, usa el botón "Conectar" en el módulo de WhatsApp Admin.');
+        logger.error(`🛑 Se alcanzó el límite de ${this.maxQRGenerations} QRs sin escanear. Deteniendo servicio WhatsApp.`);
+        logger.info('📋 Para reiniciar, usa el botón "Conectar" en el módulo de WhatsApp Admin.');
         
         // Marcar como detenido esperando inicio manual
         this.stoppedAwaitingManualStart = true;
@@ -345,7 +357,7 @@ class WhatsAppWebService {
       }
       
       this.lastQRTime = now;
-      console.log(`📱 Código QR generado (#${this.qrGenerationCount}) - Enviando al frontend`);
+      logger.debug(`📱 Código QR generado (#${this.qrGenerationCount}) - Enviando al frontend`);
       this.qrCode = qr;
       // Enviar QR a través de WebSocket si hay clientes conectados; si no, guardarlo para emitir cuando se conecte el admin
       const emitQrIfPossible = () => {
@@ -360,7 +372,7 @@ class WhatsAppWebService {
             clientsConnected = (typeof s.size === 'number') ? s.size > 0 : Object.keys(s).length > 0;
           }
         } catch (e) {
-          console.warn('⚠️ Error comprobando clientes Socket.IO:', e.message);
+          logger.warn('⚠️ Error comprobando clientes Socket.IO:', e.message);
         }
 
         if (clientsConnected) {
@@ -382,13 +394,13 @@ class WhatsAppWebService {
           attempt: this.qrGenerationCount,
           maxAttempts: this.maxQRGenerations
         };
-        console.log('📱 QR guardado en pending hasta que un cliente Socket.IO se conecte');
+        logger.debug('📱 QR guardado en pending hasta que un cliente Socket.IO se conecte');
       }
     });
 
     // Evento Ready
     this.client.on('ready', () => {
-      console.log('✅ WhatsApp Web conectado exitosamente!');
+      logger.info('✅ WhatsApp Web conectado exitosamente!');
       this.isReady = true;
       this.isInitializing = false;
       this.qrCode = null;
@@ -409,7 +421,7 @@ class WhatsAppWebService {
       }
       
       const initTime = Date.now() - this.initializationStartTime;
-      console.log(`⏱️ Tiempo de inicialización: ${(initTime/1000).toFixed(1)}s`);
+      logger.debug(`⏱️ Tiempo de inicialización: ${(initTime/1000).toFixed(1)}s`);
       
       // Limpiar cualquier timeout creado por loading_screen al llegar a 100%
       if (this.loadingCompleteTimeout) {
@@ -441,14 +453,14 @@ class WhatsAppWebService {
     this.client.on('message', async (msg) => {
       // Solo loggear si es un mensaje de texto normal
       if (msg.body && msg.body.length < 100) {
-        console.log('📨 Mensaje recibido:', msg.from);
+        logger.debug('📨 Mensaje recibido:', msg.from);
       }
     });
 
     // Evento de desconexión - CON DEBOUNCE
     this.client.on('disconnected', (reason) => {
       const now = Date.now();
-      console.log('❌ WhatsApp Web desconectado:', reason);
+      logger.error('❌ WhatsApp Web desconectado:', reason);
       this.isReady = false;
       this.qrCode = null;
       this.isInitializing = false;
@@ -465,13 +477,13 @@ class WhatsAppWebService {
 
       // Evitar múltiples reconexiones simultáneas con debounce
       if (this.reconnectTimeout) {
-        console.log('⏳ Ya hay una reconexión programada, ignorando...');
+        logger.debug('⏳ Ya hay una reconexión programada, ignorando...');
         return;
       }
 
       // Verificar si la desconexión fue muy reciente (evitar loop)
       if (this.lastDisconnectTime && (now - this.lastDisconnectTime) < 5000) {
-        console.warn('⚠️ Desconexiones muy frecuentes detectadas, aumentando delay...');
+        logger.warn('⚠️ Desconexiones muy frecuentes detectadas, aumentando delay...');
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 120000); // Max 2 minutos
       }
       this.lastDisconnectTime = now;
@@ -483,24 +495,24 @@ class WhatsAppWebService {
 
       if (shouldReconnect) {
         this.reconnectAttempts++;
-        console.log(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${this.reconnectDelay/1000} segundos...`);
+        logger.info(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${this.reconnectDelay/1000} segundos...`);
         
         this.reconnectTimeout = setTimeout(async () => {
           this.reconnectTimeout = null;
-          console.log('🔄 Ejecutando reconexión automática...');
+          logger.debug('🔄 Ejecutando reconexión automática...');
           
           try {
             await this.initialize();
           } catch (err) {
-            console.error('❌ Error en reconexión automática:', err.message);
+            logger.error('❌ Error en reconexión automática:', err.message);
           }
         }, this.reconnectDelay);
       } else if (reason === 'LOGOUT') {
-        console.log('🚪 Sesión cerrada (LOGOUT). Requiere escanear nuevo QR.');
+        logger.info('🚪 Sesión cerrada (LOGOUT). Requiere escanear nuevo QR.');
         this.reconnectAttempts = 0;
         this.reconnectDelay = 15000; // Reset delay
       } else {
-        console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Intervención manual requerida.`);
+        logger.warn(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Intervención manual requerida.`);
         if (this.io) {
           this.io.emit('whatsapp-connection-status', {
             isConnected: false,
@@ -515,7 +527,7 @@ class WhatsAppWebService {
 
     // Evento de autenticación fallida
     this.client.on('auth_failure', (msg) => {
-      console.error('❌ Fallo de autenticación:', msg);
+      logger.error('❌ Fallo de autenticación:', msg);
       this.isReady = false;
       this.isInitializing = false;
       this.qrCode = null;
@@ -534,7 +546,7 @@ class WhatsAppWebService {
 
     // Evento de autenticación exitosa
     this.client.on('authenticated', (session) => {
-      console.log('🔐 Autenticado en WhatsApp Web (session recibida)');
+      logger.debug('🔐 Autenticado en WhatsApp Web (session recibida)');
       // En algunas versiones la sesión llega aquí antes de `ready`
       // Limpiar QR y notificar frontend para ocultar código si aún se muestra
       this.qrCode = null;
@@ -557,7 +569,7 @@ class WhatsAppWebService {
 
     // Evento de carga
     this.client.on('loading_screen', (percent, message) => {
-      console.log('⏳ Cargando WhatsApp Web:', percent + '%', message);
+      logger.debug('⏳ Cargando WhatsApp Web:', percent + '%', message);
       // Notificar progreso al frontend
       if (this.io) {
         this.io.emit('whatsapp-loading', { percent, message });
@@ -573,7 +585,7 @@ class WhatsAppWebService {
           // Esperar 60s para que `ready` se dispare; si no, programar reconexión
           this.loadingCompleteTimeout = setTimeout(() => {
             if (!this.isReady) {
-              console.error('⚠️ Loading llegó a 100% pero `ready` no se disparó. Forzando reconexión.');
+              logger.error('⚠️ Loading llegó a 100% pero `ready` no se disparó. Forzando reconexión.');
               if (this.io) {
                 this.io.emit('whatsapp-connection-status', {
                   isConnected: false,
@@ -586,7 +598,7 @@ class WhatsAppWebService {
               try {
                 this.scheduleReconnect('Loading stuck at 100%');
               } catch (e) {
-                console.error('❌ Error al forzar reconexión tras loading stuck:', e.message);
+                logger.error('❌ Error al forzar reconexión tras loading stuck:', e.message);
               }
             }
           }, 60000); // 60s
@@ -598,20 +610,20 @@ class WhatsAppWebService {
           }
         }
       } catch (e) {
-        console.warn('⚠️ Error manejando loading_screen:', e.message);
+        logger.warn('⚠️ Error manejando loading_screen:', e.message);
       }
     });
 
     // Evento de error crítico - IMPORTANTE para evitar crash del servidor
     this.client.on('error', (error) => {
-      console.error('❌ Error crítico en cliente WhatsApp Web:', error.message);
+      logger.error('❌ Error crítico en cliente WhatsApp Web:', error.message);
       
       // Detectar errores de desconexión
       const errorMsg = error.message || '';
       if (errorMsg.includes('detached Frame') || 
           errorMsg.includes('Target closed') ||
           errorMsg.includes('Protocol error')) {
-        console.error('❌ Detectado error de desconexión en evento error');
+        logger.error('❌ Detectado error de desconexión en evento error');
         this.isReady = false;
         this.scheduleReconnect('Error crítico: ' + errorMsg);
       }
@@ -634,7 +646,7 @@ class WhatsAppWebService {
    * Requiere inicio manual desde el módulo de WhatsApp Admin.
    */
   async stopClientWithoutReconnect() {
-    console.log('🛑 Deteniendo cliente WhatsApp (sin reconexión automática)...');
+    logger.info('🛑 Deteniendo cliente WhatsApp (sin reconexión automática)...');
     
     // Cancelar cualquier reconexión pendiente
     if (this.reconnectTimeout) {
@@ -663,9 +675,9 @@ class WhatsAppWebService {
       try {
         this.isDestroying = true;
         await this.client.destroy();
-        console.log('✅ Cliente WhatsApp destruido correctamente');
+        logger.debug('✅ Cliente WhatsApp destruido correctamente');
       } catch (err) {
-        console.warn('⚠️ Error al destruir cliente:', err.message);
+        logger.warn('⚠️ Error al destruir cliente:', err.message);
       } finally {
         this.client = null;
         this.isDestroying = false;
@@ -680,7 +692,7 @@ class WhatsAppWebService {
     // NO resetear qrGenerationCount ni stoppedAwaitingManualStart aquí
     // Esos se resetean solo cuando el usuario inicia manualmente
     
-    console.log('📋 Servicio WhatsApp detenido. Esperando inicio manual desde el módulo Admin.');
+    logger.info('📋 Servicio WhatsApp detenido. Esperando inicio manual desde el módulo Admin.');
   }
 
   /**
@@ -689,38 +701,38 @@ class WhatsAppWebService {
   scheduleReconnect(reason) {
     // Si el cliente se detuvo esperando inicio manual, no intentar reconectar
     if (this.stoppedAwaitingManualStart) {
-      console.log('🛑 Reconexión bloqueada: esperando inicio manual desde el panel admin.');
+      logger.debug('🛑 Reconexión bloqueada: esperando inicio manual desde el panel admin.');
       return;
     }
 
     // Si ya hay una reconexión programada, no programar otra
     if (this.reconnectTimeout) {
-      console.log('⏳ Ya hay una reconexión programada, ignorando...');
+      logger.debug('⏳ Ya hay una reconexión programada, ignorando...');
       return;
     }
     
     // Si ya está inicializando, no iniciar otra reconexión
     if (this.isInitializing) {
-      console.log('⏳ Cliente ya está inicializando, ignorando reconexión...');
+      logger.debug('⏳ Cliente ya está inicializando, ignorando reconexión...');
       return;
     }
     
     // Si han pasado más de 10 minutos desde el último intento, resetear contador
     const now = Date.now();
     if (now - this.lastDisconnectTime > 600000) { // 10 minutos
-      console.log('🔄 Reseteando contador de reconexiones (pasaron >10 min)');
+      logger.debug('🔄 Reseteando contador de reconexiones (pasaron >10 min)');
       this.reconnectAttempts = 0;
     }
     this.lastDisconnectTime = now;
     
     // Verificar máximo de intentos
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Esperando 5 minutos para reintentar...`);
+      logger.info(`⚠️ Máximo de reconexiones alcanzado (${this.maxReconnectAttempts}). Esperando 5 minutos para reintentar...`);
       // En lugar de requerir intervención manual, esperar 5 minutos y resetear
       this.reconnectTimeout = setTimeout(() => {
         this.reconnectTimeout = null;
         this.reconnectAttempts = 0;
-        console.log('🔄 Reiniciando ciclo de reconexión después de pausa...');
+        logger.debug('🔄 Reiniciando ciclo de reconexión después de pausa...');
         this.scheduleReconnect('Reintento automático tras pausa');
       }, 300000); // 5 minutos
       
@@ -739,11 +751,11 @@ class WhatsAppWebService {
     this.reconnectAttempts++;
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 60000); // Max 1 minuto
     
-    console.log(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${delay/1000}s. Razón: ${reason}`);
+    logger.info(`🔄 Programando reconexión #${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${delay/1000}s. Razón: ${reason}`);
     
     this.reconnectTimeout = setTimeout(async () => {
       this.reconnectTimeout = null;
-      console.log('🔄 Ejecutando reconexión automática...');
+      logger.debug('🔄 Ejecutando reconexión automática...');
       
       try {
         // Limpiar cliente anterior si existe
@@ -751,14 +763,14 @@ class WhatsAppWebService {
           try {
             await this.client.destroy();
           } catch (e) {
-            console.warn('⚠️ Error destruyendo cliente anterior:', e.message);
+            logger.warn('⚠️ Error destruyendo cliente anterior:', e.message);
           }
           this.client = null;
         }
         
         await this.initialize();
       } catch (err) {
-        console.error('❌ Error en reconexión automática:', err.message);
+        logger.error('❌ Error en reconexión automática:', err.message);
         // Si falla, programar otro intento
         this.scheduleReconnect('Fallo en reconexión anterior');
       }
@@ -784,13 +796,13 @@ class WhatsAppWebService {
       if (this.isInitializing && !this.isReady) {
         const initTime = Date.now() - this.initializationStartTime;
         if (initTime > 300000) { // 5 minutos
-          console.error('🔍 Health check: Inicialización atascada por 5+ min. Forzando reset...');
+          logger.error('🔍 Health check: Inicialización atascada por 5+ min. Forzando reset...');
           this.isInitializing = false;
           if (this.client) {
             try {
               await this.client.destroy();
             } catch (e) {
-              console.warn('Error destruyendo:', e.message);
+              logger.warn('Error destruyendo:', e.message);
             }
             this.client = null;
           }
@@ -800,7 +812,7 @@ class WhatsAppWebService {
       }
       
       if (!this.isReady || !this.client) {
-        console.log('🔍 Health check: Cliente no está listo, intentando reconectar...');
+        logger.debug('🔍 Health check: Cliente no está listo, intentando reconectar...');
         this.scheduleReconnect('Health check detectó cliente no listo');
         return;
       }
@@ -809,23 +821,23 @@ class WhatsAppWebService {
         // Intentar obtener estado del cliente
         const state = await this.client.getState();
         if (state !== 'CONNECTED') {
-          console.log(`🔍 Health check: Estado inesperado (${state}), reconectando...`);
+          logger.debug(`🔍 Health check: Estado inesperado (${state}), reconectando...`);
           this.isReady = false;
           this.scheduleReconnect(`Health check: estado ${state}`);
         } else {
           // Solo loggear cada 12 checks (1 hora) para no saturar logs
           if (this.healthCheckCount % 12 === 0) {
-            console.log(`✅ Health check OK - WhatsApp estable (${this.healthCheckCount} verificaciones)`);
+            logger.info(`✅ Health check OK - WhatsApp estable (${this.healthCheckCount} verificaciones)`);
           }
         }
       } catch (err) {
-        console.error('❌ Health check falló:', err.message);
+        logger.error('❌ Health check falló:', err.message);
         this.isReady = false;
         this.scheduleReconnect('Health check falló: ' + err.message);
       }
     }, 300000); // 5 minutos (era 2 minutos)
     
-    console.log('🏥 Health check iniciado (cada 5 min, log cada 1 hora)');
+    logger.debug('🏥 Health check iniciado (cada 5 min, log cada 1 hora)');
   }
   
   /**
@@ -835,7 +847,7 @@ class WhatsAppWebService {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
-      console.log('🏥 Health check detenido');
+      logger.debug('🏥 Health check detenido');
     }
   }
 
@@ -849,7 +861,6 @@ class WhatsAppWebService {
       this.socketListenerAdded = true;
       try {
         this.io.on('connection', (socket) => {
-          console.log('🔌 Cliente Socket.IO conectado (whatsapp-admin)');
           // Si hay un QR pendiente, enviarlo inmediatamente
           if (this.pendingQr) {
             try {
@@ -859,18 +870,18 @@ class WhatsAppWebService {
                 attempt: this.pendingQr.attempt,
                 maxAttempts: this.pendingQr.maxAttempts
               });
-              console.log('📱 QR pendiente emitido al cliente recién conectado');
+              logger.debug('📱 QR pendiente emitido al cliente recién conectado');
             } catch (e) {
-              console.error('❌ Error enviando QR pendiente:', e.message);
+              logger.error('❌ Error enviando QR pendiente:', e.message);
             }
             this.pendingQr = null;
           }
           socket.on('disconnect', () => {
-            console.log('🧾 Cliente Socket.IO desconectado (whatsapp-admin)');
+            // Conexión cerrada - no requiere log
           });
         });
       } catch (e) {
-        console.warn('⚠️ No se pudo registrar listener de Socket.IO:', e.message);
+        logger.warn('⚠️ No se pudo registrar listener de Socket.IO:', e.message);
       }
     }
   }
@@ -923,7 +934,7 @@ class WhatsAppWebService {
           
           // Si es el error conocido de markedUnread, intentar envío alternativo
           if (errorMsg.includes('markedUnread') || errorMsg.includes('sendSeen')) {
-            console.warn(`⚠️ Error conocido de WhatsApp Web (intento ${attempt}/${maxRetries}):`, errorMsg);
+            logger.warn(`⚠️ Error conocido de WhatsApp Web (intento ${attempt}/${maxRetries}):`, errorMsg);
             
             if (attempt < maxRetries) {
               // Esperar un poco antes de reintentar
@@ -937,7 +948,7 @@ class WhatsAppWebService {
               errorMsg.includes('Protocol error') ||
               errorMsg.includes('detached Frame') ||
               errorMsg.includes('Execution context was destroyed')) {
-            console.error('❌ Cliente WhatsApp desconectado durante envío (Frame detached)');
+            logger.error('❌ Cliente WhatsApp desconectado durante envío (Frame detached)');
             this.isReady = false;
             this.qrCode = null;
             
@@ -974,7 +985,7 @@ class WhatsAppWebService {
 
       return result;
     } catch (error) {
-      console.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error.message || error);
+      logger.error(`❌ Error enviando mensaje a ${phoneNumber}:`, error.message || error);
       throw error;
     }
   }
@@ -1026,7 +1037,7 @@ class WhatsAppWebService {
 
       client.release();
     } catch (error) {
-      console.error('❌ Error cargando configuración de antibloqueo desde BD:', error);
+      logger.error('❌ Error cargando configuración de antibloqueo desde BD:', error);
     }
   }
 
@@ -1036,7 +1047,7 @@ class WhatsAppWebService {
   async syncCountersWithDB() {
     try {
       if (!pool) {
-        console.warn('⚠️ Pool de BD no disponible para sincronizar contadores');
+        logger.warn('⚠️ Pool de BD no disponible para sincronizar contadores');
         return;
       }
 
@@ -1071,7 +1082,7 @@ class WhatsAppWebService {
 
       client.release();
     } catch (error) {
-      console.error('❌ Error sincronizando contadores con BD:', error);
+      logger.error('❌ Error sincronizando contadores con BD:', error);
     }
   }
 
@@ -1094,13 +1105,13 @@ class WhatsAppWebService {
 
     // Verificar límite diario
     if (this.dailyMessageCount >= this.rateLimits.maxDailyMessages) {
-      console.warn(`⚠️ Límite diario de ${this.rateLimits.maxDailyMessages} mensajes alcanzado (actual: ${this.dailyMessageCount})`);
+      logger.warn(`⚠️ Límite diario de ${this.rateLimits.maxDailyMessages} mensajes alcanzado (actual: ${this.dailyMessageCount})`);
       return false;
     }
 
     // Verificar límite por hora
     if (this.messageCount >= this.rateLimits.maxMessagesPerHour) {
-      console.warn(`⚠️ Límite horario de ${this.rateLimits.maxMessagesPerHour} mensajes alcanzado (actual: ${this.messageCount})`);
+      logger.warn(`⚠️ Límite horario de ${this.rateLimits.maxMessagesPerHour} mensajes alcanzado (actual: ${this.messageCount})`);
       return false;
     }
 
@@ -1188,7 +1199,7 @@ class WhatsAppWebService {
    * Resetear estado interno (para recuperación manual)
    */
   resetState() {
-    console.log('🔄 Reseteando estado interno de WhatsApp Service...');
+    logger.debug('🔄 Reseteando estado interno de WhatsApp Service...');
     
     // Detener health check
     this.stopHealthCheck();
@@ -1213,7 +1224,7 @@ class WhatsAppWebService {
     this.qrCooldownActive = false;
     this.lastDisconnectTime = 0;
     
-    console.log('✅ Estado interno reseteado');
+    logger.debug('✅ Estado interno reseteado');
     return true;
   }
 
@@ -1222,7 +1233,7 @@ class WhatsAppWebService {
    */
   async disconnect() {
     try {
-      console.log('🔌 Desconectando WhatsApp Web...');
+      logger.info('🔌 Desconectando WhatsApp Web...');
       
       // Detener health check
       this.stopHealthCheck();
@@ -1231,7 +1242,7 @@ class WhatsAppWebService {
       if (this.reconnectTimeout) {
         clearTimeout(this.reconnectTimeout);
         this.reconnectTimeout = null;
-        console.log('⏹️ Reconexión pendiente cancelada');
+        logger.debug('⏹️ Reconexión pendiente cancelada');
       }
       
       this.isDestroying = true;
@@ -1243,15 +1254,15 @@ class WhatsAppWebService {
             this.client.logout(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout en logout')), 10000))
           ]);
-          console.log('✅ Logout exitoso');
+          logger.debug('✅ Logout exitoso');
         } catch (logoutError) {
           // Error EBUSY es común en Windows cuando Chrome tiene archivos bloqueados
           if (logoutError.message?.includes('EBUSY') || logoutError.message?.includes('resource busy')) {
-            console.warn('⚠️ Advertencia al cerrar sesión (archivos de Chrome bloqueados)');
+            logger.warn('⚠️ Advertencia al cerrar sesión (archivos de Chrome bloqueados)');
           } else if (logoutError.message?.includes('Timeout')) {
-            console.warn('⚠️ Timeout durante logout, continuando con destrucción...');
+            logger.warn('⚠️ Timeout durante logout, continuando con destrucción...');
           } else {
-            console.error('❌ Error durante logout:', logoutError.message);
+            logger.error('❌ Error durante logout:', logoutError.message);
           }
         }
 
@@ -1261,9 +1272,9 @@ class WhatsAppWebService {
             this.client.destroy(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout en destroy')), 10000))
           ]);
-          console.log('✅ Cliente destruido');
+          logger.debug('✅ Cliente destruido');
         } catch (destroyError) {
-          console.warn('⚠️ Error al destruir cliente:', destroyError.message);
+          logger.warn('⚠️ Error al destruir cliente:', destroyError.message);
         }
         
         this.client = null;
@@ -1282,14 +1293,14 @@ class WhatsAppWebService {
       // Limpiar archivos de sesión para forzar nueva autenticación
       // Esperar un momento para que Chrome libere los archivos
       if (process.platform === 'win32') {
-        console.log('⏳ Esperando 3 segundos para que Chrome libere archivos (Windows)...');
+        logger.debug('⏳ Esperando 3 segundos para que Chrome libere archivos (Windows)...');
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
       try {
         const authPath = path.join(process.cwd(), 'whatsapp_auth_web');
         if (fs.existsSync(authPath)) {
-          console.log('🧹 Limpiando archivos de sesión...');
+          logger.debug('🧹 Limpiando archivos de sesión...');
           const files = fs.readdirSync(authPath);
           for (const file of files) {
             const filePath = path.join(authPath, file);
@@ -1302,16 +1313,16 @@ class WhatsAppWebService {
             } catch (fileError) {
               // Ignorar errores EBUSY en Windows - los archivos se limpiarán en el próximo inicio
               if (fileError.code === 'EBUSY' && process.platform === 'win32') {
-                console.warn(`⚠️ Archivo ${file} está en uso, se limpiará en el próximo inicio`);
+                logger.warn(`⚠️ Archivo ${file} está en uso, se limpiará en el próximo inicio`);
               } else {
-                console.warn(`⚠️ No se pudo eliminar ${file}:`, fileError.message);
+                logger.warn(`⚠️ No se pudo eliminar ${file}:`, fileError.message);
               }
             }
           }
-          console.log('✅ Archivos de sesión limpiados');
+          logger.debug('✅ Archivos de sesión limpiados');
         }
       } catch (cleanupError) {
-        console.warn('⚠️ Error limpiando archivos de sesión:', cleanupError.message);
+        logger.warn('⚠️ Error limpiando archivos de sesión:', cleanupError.message);
       }
 
       // Notificar desconexión a través de WebSocket
@@ -1323,9 +1334,9 @@ class WhatsAppWebService {
         });
       }
 
-      console.log('✅ WhatsApp Web desconectado exitosamente');
+      logger.info('✅ WhatsApp Web desconectado exitosamente');
     } catch (error) {
-      console.error('❌ Error durante desconexión:', error);
+      logger.error('❌ Error durante desconexión:', error);
     }
   }
 
@@ -1338,7 +1349,7 @@ class WhatsAppWebService {
       await new Promise(resolve => setTimeout(resolve, 2000));
       await this.initialize();
     } catch (error) {
-      console.error('❌ Error durante reconexión:', error);
+      logger.error('❌ Error durante reconexión:', error);
       throw error;
     }
   }
@@ -1421,7 +1432,7 @@ class WhatsAppWebService {
         }
       };
     } catch (error) {
-      console.error('❌ Error obteniendo estadísticas de WhatsApp:', error);
+      logger.error('❌ Error obteniendo estadísticas de WhatsApp:', error);
       return { error: error.message };
     }
   }
@@ -1476,7 +1487,7 @@ class WhatsAppWebService {
       return report;
 
     } catch (error) {
-      console.error('❌ Error generando reporte de rendimiento:', error);
+      logger.error('❌ Error generando reporte de rendimiento:', error);
       return {
         title: `Reporte de Rendimiento WhatsApp - Error`,
         generated_at: new Date().toISOString(),
@@ -1563,7 +1574,7 @@ class WhatsAppWebService {
       }
 
       if (!isTypeEnabled) {
-        console.log(`⚠️ Notificaciones tipo "${notificationType}" deshabilitadas en configuración global`);
+        logger.debug(`⚠️ Notificaciones tipo "${notificationType}" deshabilitadas en configuración global`);
         await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', `Notificaciones tipo "${notificationType}" deshabilitadas en configuración global`, null, notificationType);
         client.release();
         return false;
@@ -1572,7 +1583,7 @@ class WhatsAppWebService {
       // Verificar horario laboral
       const inBusinessHours = await this.isBusinessHours();
       if (!inBusinessHours) {
-        console.log(`⚠️ Notificación omitida: fuera de horario laboral`);
+        logger.debug(`⚠️ Notificación omitida: fuera de horario laboral`);
         await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Envío fuera de horario laboral', null, notificationType);
         client.release();
         return false;
@@ -1592,7 +1603,7 @@ class WhatsAppWebService {
 
       // Verificar si el usuario tiene número de teléfono
       if (!user.phone) {
-        console.log(`⚠️ Usuario ${fullName} sin número de teléfono`);
+        logger.debug(`⚠️ Usuario ${fullName} sin número de teléfono`);
         client.release();
         return false;
       }
@@ -1625,12 +1636,12 @@ class WhatsAppWebService {
       return true;
 
     } catch (error) {
-      console.error('❌ Error enviando notificación WhatsApp:', error.message || error);
+      logger.error('❌ Error enviando notificación WhatsApp:', error.message || error);
       // Registrar error en base de datos (con try-catch adicional para evitar crash)
       try {
         await this.logWhatsAppNotification(userId, ticketId, message, 'failed', error.message || 'Error desconocido', null, notificationType);
       } catch (logError) {
-        console.error('❌ Error secundario al registrar en BD:', logError.message);
+        logger.error('❌ Error secundario al registrar en BD:', logError.message);
       }
       return false;
     }
@@ -1665,7 +1676,7 @@ class WhatsAppWebService {
       return formattedMessage;
 
     } catch (error) {
-      console.error('Error al formatear mensaje:', error);
+      logger.error('Error al formatear mensaje:', error);
       // Fallback simple
       return `Hola ${userName}, actualización en ticket #${ticketId}: ${message}`;
     }
@@ -1736,7 +1747,7 @@ class WhatsAppWebService {
       `, [userId, ticketId, message, status, error, phoneNumber, notificationType]);
       client.release();
     } catch (dbError) {
-      console.error('❌ Error registrando notificación WhatsApp en BD:', dbError);
+      logger.error('❌ Error registrando notificación WhatsApp en BD:', dbError);
     }
   }
 
@@ -1776,7 +1787,7 @@ class WhatsAppWebService {
       return inWorkHours && !inLunchBreak;
 
     } catch (error) {
-      console.error('❌ Error verificando horario laboral:', error);
+      logger.error('❌ Error verificando horario laboral:', error);
       return false; // Por seguridad, considerar como fuera de horario si hay error
     }
   }
@@ -1818,7 +1829,7 @@ class WhatsAppWebService {
       };
 
     } catch (error) {
-      console.error('❌ Error obteniendo horarios laborales:', error);
+      logger.error('❌ Error obteniendo horarios laborales:', error);
 
       // Retornar horarios por defecto en caso de error
       return {

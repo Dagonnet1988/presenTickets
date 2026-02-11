@@ -61,7 +61,7 @@
             <ng-template #normalTicket>
               <div>Ticket #{{ n.ticket_id || 'Cargando...' }}</div>
             </ng-template>
-            <span class="timestamp">{{ (n.created_at || n.timestamp) | date:'short' }}</span>
+            <span class="timestamp">{{ (n.created_at || n.timestamp) | date:'dd/MM/yy, h:mm a' }}</span>
           </div>
         </div>
       </div>

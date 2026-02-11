@@ -527,27 +527,28 @@ router.patch("/:id", async (req, res) => {
         
         // Solo enviar notificaciones de cambio de estado si NO es un cambio automático
         if (!isAutomaticChange) {
-          // Obtener detalles del ticket y destinatarios para notificaciones
+          // Obtener detalles del ticket y destinatarios para notificaciones (incluyendo participantes)
           const ticketResult = await client.query(
-            "SELECT title, user_id, assigned_to FROM tickets WHERE id = $1",
+            "SELECT title, user_id, assigned_to, participants FROM tickets WHERE id = $1",
             [id]
           );
           if (ticketResult.rows.length > 0) {
-            const { title, user_id, assigned_to } = ticketResult.rows[0];
+            const { title, user_id, assigned_to, participants } = ticketResult.rows[0];
             const ticketTitle = title || "Ticket sin título";
+            const ticketParticipants = participants || [];
 
             // Determinar el tipo de notificación según el estado
             let notificationType = "cambio_estado";
           let notificationMessage = `${ticketTitle}: estado cambiado a ${status}`;
 
           // Determinar los destinatarios según el estado
-          let recipients = [];// Si es "Escalado a externo" o "Escalado a Tier3" o "Resuelto" - notificar al usuario
+          let recipients = [];
+          
+          // Si es "Escalado a externo" o "Escalado a Tier3" - notificar solo al usuario creador
           if (
             status === "Escalado a externo" ||
-            status === "Escalado a Tier 3 / Gerente de Cuenta" ||
-            status === "Resuelto"
+            status === "Escalado a Tier 3 / Gerente de Cuenta"
           ) {
-            
             if (user_id) {
               recipients.push(user_id);
 
@@ -572,9 +573,85 @@ router.patch("/:id", async (req, res) => {
               );
             }
           }
-          // Si es "En revisión" - notificar al técnico asignado
+          // Si es "Resuelto" - notificar al usuario creador Y a todos los participantes
+          // Incluir recordatorio de encuesta de satisfacción
+          else if (status === "Resuelto") {
+            // Obtener ID del usuario que realiza la acción para excluirlo de notificaciones
+            const actorId = parseInt(req.user?.id);
+            
+            // Mensaje con recordatorio de encuesta
+            notificationMessage = `${ticketTitle}: Tu ticket ha sido resuelto. ¡Por favor califica el servicio recibido!`;
+            notificationType = "ticket_resuelto_encuesta";
+            
+            // Usar Set para evitar duplicados - convertir todos a números
+            const recipientSet = new Set();
+            
+            // Agregar usuario creador (si no es quien resuelve)
+            if (user_id && parseInt(user_id) !== actorId) {
+              recipientSet.add(parseInt(user_id));
+            }
+            
+            // Agregar participantes (excluyendo al actor)
+            for (const participantId of ticketParticipants) {
+              const pId = parseInt(participantId);
+              if (pId !== actorId) {
+                recipientSet.add(pId);
+              }
+            }
+            
+            // Convertir a array
+            recipients = Array.from(recipientSet);
+            
+            // Crear notificaciones para todos los destinatarios
+            // La notificación de encuesta solo va a usuarios con rol 'user'
+            for (const recipientId of recipients) {
+              // Verificar si el recipiente es un usuario (para determinar tipo de notificación)
+              const recipientResult = await client.query(
+                "SELECT role FROM users WHERE id = $1",
+                [recipientId]
+              );
+              const recipientRole = recipientResult.rows[0]?.role;
+              
+              // Mensaje diferenciado según rol
+              const messageForRecipient = recipientRole === 'user' 
+                ? notificationMessage 
+                : `${ticketTitle}: estado cambiado a Resuelto`;
+              
+              const typeForRecipient = recipientRole === 'user'
+                ? "ticket_resuelto_encuesta"
+                : "cambio_estado";
+              
+              await createNotification({
+                user_id: recipientId,
+                type: typeForRecipient,
+                message: messageForRecipient,
+                ticket_id: id,
+                // Mensaje WhatsApp solo para usuarios (con recordatorio de encuesta)
+                whatsapp_message: recipientRole === 'user'
+                  ? `🎉 *Tu ticket ha sido resuelto*\n\n📋 *Ticket:* ${ticketTitle}\n\n⭐ Por favor ingresa a PresenTickets para calificar el servicio recibido.\n\n¡Tu opinión es muy importante para nosotros!`
+                  : undefined
+              });
+            }
+
+            // Emitir notificación en tiempo real a todos
+            if (recipients.length > 0) {
+              emitTicketNotification(
+                notificationType,
+                {
+                  ticketId: id,
+                  title: ticketTitle,
+                  createdAt: new Date(),
+                  message: notificationMessage,
+                  showSurvey: true // Flag para que el frontend muestre el botón de encuesta
+                },
+                recipients
+              );
+            }
+          }
+          // Si es "En revisión" - notificar al técnico asignado (si no es quien hace el cambio)
           else if (status === "En revisión") {
-            if (assigned_to) {
+            const actorId = req.user?.id;
+            if (assigned_to && assigned_to !== actorId) {
               recipients.push(assigned_to);
 
               // Crear notificación en la base de datos
@@ -598,9 +675,10 @@ router.patch("/:id", async (req, res) => {
               );
             }
           }
-          // Si es "En proceso" - notificar al técnico asignado
+          // Si es "En proceso" - notificar al técnico asignado (si no es quien hace el cambio)
           else if (status === "En proceso") {
-            if (assigned_to) {
+            const actorId = req.user?.id;
+            if (assigned_to && assigned_to !== actorId) {
               recipients.push(assigned_to);
 
               // Crear notificación en la base de datos
@@ -624,20 +702,47 @@ router.patch("/:id", async (req, res) => {
               );
             }
           }
-          // Si es "Cerrado" - notificar al técnico
+          // Si es "Cerrado" - notificar al usuario creador, técnico asignado Y participantes
           else if (status === "Cerrado") {
-            if (assigned_to) {
-              recipients.push(assigned_to);
-
-              // Crear notificación en la base de datos
+            // Obtener ID del usuario que realiza la acción para excluirlo de notificaciones
+            const actorId = parseInt(req.user?.id);
+            
+            // Usar Set para evitar duplicados - convertir todos a números
+            const recipientSet = new Set();
+            
+            // Agregar usuario creador (si no es quien cierra)
+            if (user_id && parseInt(user_id) !== actorId) {
+              recipientSet.add(parseInt(user_id));
+            }
+            
+            // Agregar técnico asignado (si no es quien cierra)
+            if (assigned_to && parseInt(assigned_to) !== actorId) {
+              recipientSet.add(parseInt(assigned_to));
+            }
+            
+            // Agregar participantes (excluyendo al actor)
+            for (const participantId of ticketParticipants) {
+              const pId = parseInt(participantId);
+              if (pId !== actorId) {
+                recipientSet.add(pId);
+              }
+            }
+            
+            // Convertir a array
+            recipients = Array.from(recipientSet);
+            
+            // Crear notificaciones para todos los destinatarios
+            for (const recipientId of recipients) {
               await createNotification({
-                user_id: assigned_to,
+                user_id: recipientId,
                 type: notificationType,
                 message: notificationMessage,
                 ticket_id: id,
               });
+            }
 
-              // Emitir notificación en tiempo real
+            // Emitir notificación en tiempo real a todos
+            if (recipients.length > 0) {
               emitTicketNotification(
                 notificationType,
                 {
@@ -646,7 +751,7 @@ router.patch("/:id", async (req, res) => {
                   createdAt: new Date(),
                   message: notificationMessage,
                 },
-                [assigned_to]
+                recipients
               );
             }
           }

@@ -71,13 +71,29 @@ class EmailMonitorService {
       return false;
     }
 
+    // Asegurarse de desconectar cualquier cliente existente
+    await this.disconnect();
+
     try {
       this.client = new ImapFlow({
         host: this.config.host,
         port: this.config.port,
         secure: this.config.secure,
         auth: this.config.auth,
-        logger: false
+        logger: false,
+        // Aumentar timeout para conexiones lentas
+        socketTimeout: 60000,
+        greetingTimeout: 30000
+      });
+
+      // Manejar eventos de error y cierre
+      this.client.on('error', (err) => {
+        this.isConnected = false;
+        // No propagar - se reintenta en checkEmails
+      });
+
+      this.client.on('close', () => {
+        this.isConnected = false;
       });
 
       await this.client.connect();
@@ -99,9 +115,11 @@ class EmailMonitorService {
   async disconnect() {
     if (this.client) {
       try {
+        // Remover listeners para evitar memory leaks
+        this.client.removeAllListeners();
         await this.client.logout();
       } catch (error) {
-        // Ignorar errores de desconexión
+        // Ignorar errores de desconexión - puede ya estar desconectado
       }
       this.client = null;
     }
@@ -167,7 +185,8 @@ class EmailMonitorService {
    * Revisar correos nuevos (busca por fecha reciente, no por estado leído)
    */
   async checkEmails() {
-    if (!this.isConnected) {
+    // Forzar reconexión si no está conectado
+    if (!this.isConnected || !this.client) {
       const connected = await this.connect();
       if (!connected) {
         this.errorCount++;
@@ -223,12 +242,17 @@ class EmailMonitorService {
 
         this.errorCount = 0;
       } finally {
-        lock.release();
+        try {
+          lock.release();
+        } catch (e) {
+          // Ignorar error al liberar lock - conexión puede estar cerrada
+        }
       }
     } catch (error) {
       console.error('❌ Error revisando correos:', error.message);
       this.errorCount++;
-      this.isConnected = false;
+      // Forzar desconexión limpia para que el próximo ciclo reconecte
+      await this.disconnect();
     }
   }
 

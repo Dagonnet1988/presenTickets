@@ -37,6 +37,8 @@ import { environment } from '../../environments/environment';
 import localeEs from '@angular/common/locales/es';
 import { forkJoin, map, catchError, of, finalize, Subscription, switchMap, tap } from 'rxjs';
 import { TicketParticipantsComponent } from '../ticket-participants/ticket-participants.component';
+import { SurveyService } from '../shared/services/survey.service';
+import { SurveyModalComponent, SurveyDialogData, SurveyDialogResult } from '../shared/components/survey-modal.component';
 
 registerLocaleData(localeEs, 'es');
 
@@ -87,6 +89,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   showStickyHeader: boolean = false; // Para el header sticky al hacer scroll
   private subscriptions: Subscription = new Subscription();
 
+  // Propiedades para encuestas de satisfacción
+  hasSurvey: boolean = false;
+  surveyRating: number | null = null;
+  surveyLoading: boolean = false;
+  private surveyJustSubmitted: boolean = false; // Flag para preservar estado después de enviar encuesta
+
   // Listener para detectar scroll y mostrar/ocultar sticky header
   @HostListener('window:scroll', [])
   onWindowScroll() {
@@ -103,7 +111,8 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     public userService: UserService,
     private cdr: ChangeDetectorRef,
     private dialog: MatDialog,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private surveyService: SurveyService
   ) {}  // Referencia a la función enlazada para poder eliminarla correctamente
   private boundRefreshHandler: any;
 
@@ -162,6 +171,17 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Guardar si acabamos de enviar encuesta para no sobrescribir el estado
+    const preserveSurveyState = this.surveyJustSubmitted;
+    this.surveyJustSubmitted = false; // Resetear flag
+
+    // Reiniciar estado de encuesta solo si no acabamos de enviar una
+    if (!preserveSurveyState) {
+      this.hasSurvey = false;
+      this.surveyRating = null;
+      this.surveyLoading = false;
+    }
+
     this.userRole = this.authService.getUserRole() || '';
 
     // Usar forkJoin para coordinar múltiples llamadas
@@ -190,6 +210,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
 
           // Marcar las notificaciones de este ticket como vistas
           this.notificationService.markTicketNotificationsAsRead(id);
+
+          // Verificar si existe encuesta de satisfacción (solo si está resuelto o cerrado)
+          // NO verificar si acabamos de enviar una encuesta (ya tenemos el estado correcto)
+          if (!preserveSurveyState && (this.ticket.status === 'Resuelto' || this.ticket.status === 'Cerrado')) {
+            this.checkSurveyStatus(parseInt(id));
+          }
 
           // Una única detección de cambios al final
           this.cdr.markForCheck();
@@ -555,7 +581,13 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.dialogRef.afterClosed().subscribe(result => {
       if (result) {
         if (action === 'cerrar') {
-          this.closeTicket();
+          // Para usuarios: primero cerrar el ticket, luego mostrar encuesta
+          if (this.userRole === 'user') {
+            this.closeTicketAndSurvey();
+          } else {
+            // Tech/Admin cierra directamente
+            this.closeTicket();
+          }
         } else if (action === 'resolver') {
           this.resolveTicket();
         } else if (action === 'reabrir') {
@@ -567,6 +599,75 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         }
       }
     });  }
+
+  /**
+   * Abrir encuesta y al enviar: cerrar ticket + guardar encuesta (solo para usuarios)
+   * Si ya existe una encuesta previa, cierra el ticket directamente sin pedir nueva calificación
+   */
+  closeTicketAndSurvey(): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      console.error('No se pudo obtener el ID del ticket');
+      return;
+    }
+
+    // Verificar si ya existe una encuesta para este ticket
+    if (this.hasSurvey) {
+      // Ya existe encuesta, cerrar el ticket directamente sin pedir nueva calificación
+      this.closeTicket();
+      return;
+    }
+
+    // Abrir modal de encuesta PRIMERO (ticket aún no está cerrado)
+    const dialogData: SurveyDialogData = {
+      ticketId: this.ticket?.id,
+      ticketTitle: this.ticket?.title || 'Sin título',
+      isRequired: true
+    };
+
+    const surveyDialogRef = this.dialog.open(SurveyModalComponent, {
+      data: dialogData,
+      width: '450px',
+      disableClose: true
+    });
+
+    surveyDialogRef.afterClosed().subscribe((result: SurveyDialogResult) => {
+      if (result?.submitted && result.rating) {
+        // PASO 1: Primero cerrar el ticket
+        this.ticketService.updateTicketStatus(ticketId, 'Cerrado', this.userRole).subscribe({
+          next: () => {
+            this.ticket.status = 'Cerrado';
+
+            // PASO 2: Luego enviar la encuesta (ahora el ticket ya está cerrado)
+            this.surveyService.submitSurvey(
+              this.ticket.id,
+              result.rating!,
+              result.comment
+            ).subscribe({
+              next: (response) => {
+                this.hasSurvey = true;
+                this.surveyRating = result.rating!;
+                this.surveyJustSubmitted = true;
+                this.loadTicketDetails(ticketId);
+                this.cdr.markForCheck();
+              },
+              error: (err) => {
+                console.error('Error enviando encuesta:', err);
+                // Ticket ya cerrado, solo recargar
+                this.loadTicketDetails(ticketId);
+              }
+            });
+          },
+          error: (error: HttpErrorResponse) => {
+            console.error('Error al cerrar el ticket:', error.message);
+            this.cdr.markForCheck();
+          }
+        });
+      }
+      // Si no envió la encuesta, no cierra el ticket
+    });
+  }
+
   closeTicket(): void {
     const ticketId = this.getCurrentTicketId();
     if (!ticketId) {
@@ -652,6 +753,85 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
         }
       })
     );
+  }
+
+  // ==========================================
+  // Métodos para Encuestas de Satisfacción
+  // ==========================================
+
+  /**
+   * Verificar si el ticket tiene una encuesta de satisfacción
+   */
+  checkSurveyStatus(ticketId: number): void {
+    this.surveyLoading = true;
+    this.surveyService.checkSurvey(ticketId).subscribe({
+      next: (result) => {
+        this.hasSurvey = result.hasSurvey;
+        this.surveyRating = result.rating;
+        this.surveyLoading = false;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Error verificando encuesta:', err);
+        this.surveyLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  /**
+   * Abrir modal de encuesta de satisfacción
+   * @param isRequired - true si es obligatorio (cierre de ticket), false si es opcional (ticket resuelto)
+   * @returns Promise<boolean> - true si se envió la encuesta, false si se canceló
+   */
+  openSurveyModal(isRequired: boolean = false): Promise<boolean> {
+    return new Promise((resolve) => {
+      const dialogData: SurveyDialogData = {
+        ticketId: this.ticket?.id,
+        ticketTitle: this.ticket?.title || 'Sin título',
+        isRequired
+      };
+
+      const surveyDialogRef = this.dialog.open(SurveyModalComponent, {
+        data: dialogData,
+        width: '450px',
+        disableClose: isRequired
+      });
+
+      surveyDialogRef.afterClosed().subscribe((result: SurveyDialogResult) => {
+        if (result?.submitted && result.rating) {
+          // Enviar encuesta al backend
+          this.surveyService.submitSurvey(
+            this.ticket.id,
+            result.rating,
+            result.comment
+          ).subscribe({
+            next: (response) => {
+              this.hasSurvey = true;
+              this.surveyRating = result.rating!;
+              this.surveyJustSubmitted = true; // Preservar estado al recargar
+              this.cdr.markForCheck();
+              resolve(true);
+            },
+            error: (err) => {
+              console.error('Error enviando encuesta:', err);
+              // Aún así permitir cerrar si falla la encuesta
+              resolve(true);
+            }
+          });
+        } else {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  /**
+   * Obtener las estrellas para mostrar la calificación
+   */
+  getSurveyStars(): string[] {
+    if (!this.surveyRating) return [];
+    return Array(5).fill(0).map((_, i) => i < this.surveyRating! ? 'star' : 'star_border');
   }
 
   isImage(fileName: string): boolean {

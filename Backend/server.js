@@ -265,6 +265,7 @@ async function setupRoutes() {
   const dashboardConfigRoutes = (await import('./routes/dashboardConfig.js')).default;
   const maintenanceSimpleRoutes = (await import('./routes/maintenanceSimple.js')).default;
   const emailMonitorRoutes = (await import('./routes/emailMonitor.js')).default;
+  const surveysRoutes = (await import('./routes/surveys.js')).default;
 
   // Rutas públicas
   app.use('/api/auth', authRoutes);
@@ -296,6 +297,9 @@ async function setupRoutes() {
 
   // Rutas de monitoreo de email (protegidas - requieren autenticación)
   app.use('/api/email-monitor', authMiddleware, emailMonitorRoutes);
+
+  // Rutas de encuestas de satisfacción (protegidas)
+  app.use('/api/surveys', authMiddleware, checkMaintenance, surveysRoutes);
 
   // Manejo de rutas no encontradas (debe estar al final)
   app.use((req, res, next) => {

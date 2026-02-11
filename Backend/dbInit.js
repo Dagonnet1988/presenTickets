@@ -16,6 +16,17 @@
 import pkg from 'pg';
 import { pool } from './db.js';
 
+// Sistema de logging configurable por nivel
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const currentLogLevel = LOG_LEVELS[process.env.LOG_LEVEL?.toLowerCase()] ?? LOG_LEVELS.info;
+
+const logger = {
+  error: (...args) => console.error(...args),
+  warn: (...args) => console.warn(...args),
+  info: (...args) => currentLogLevel >= LOG_LEVELS.info && console.log(...args),
+  debug: (...args) => currentLogLevel >= LOG_LEVELS.debug && console.log(...args)
+};
+
 const { Pool } = pkg;
 const createDatabaseIfNotExists = async () => {
   const defaultPool = new Pool({
@@ -37,16 +48,16 @@ const createDatabaseIfNotExists = async () => {
     `, [dbName]);
 
     if (dbExists.rows.length === 0) {
-      console.log(`➕ Creando la base de datos '${dbName}'...`);
+      logger.info(`➕ Creando la base de datos '${dbName}'...`);
       await client.query(`CREATE DATABASE ${dbName};`);
-      console.log(`✅ Base de datos '${dbName}' creada exitosamente.`);
+      logger.info(`✅ Base de datos '${dbName}' creada exitosamente.`);
     } else {
-      console.log(`✅ La base de datos '${dbName}' ya existe.`);
+      logger.debug(`✅ La base de datos '${dbName}' ya existe.`);
     }
 
     client.release();
   } catch (error) {
-    console.error("❌ Error al verificar/crear la base de datos:", error);
+    logger.error("❌ Error al verificar/crear la base de datos:", error);
   } finally {
     await defaultPool.end();
   }
@@ -57,7 +68,7 @@ const checkAndCreateTables = async () => {
 
   const client = await pool.connect();
   try {
-    console.log("🔍 Verificando estructura de la base de datos...");
+    logger.debug("🔍 Verificando estructura de la base de datos...");
 
     // Validar y crear la tabla "users"
     const usersTableExists = await client.query(`
@@ -68,7 +79,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!usersTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'users'...");
+      logger.info("➕ Creando tabla 'users'...");
       await client.query(`
         CREATE TABLE users (
           id SERIAL PRIMARY KEY,
@@ -84,7 +95,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'users' ya existe. Verificando columnas...");
+      logger.debug("✅ La tabla 'users' ya existe. Verificando columnas...");
       const usersColumns = [
         { name: 'firstname', type: 'VARCHAR(255)' },
         { name: 'lastname', type: 'VARCHAR(255)' },
@@ -100,7 +111,7 @@ const checkAndCreateTables = async () => {
           [column.name]
         );
         if (columnExists.rows.length === 0) {
-          console.log(`➕ Agregando columna '${column.name}' a la tabla 'users'`);
+          logger.info(`➕ Agregando columna '${column.name}' a la tabla 'users'`);
           await client.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`);
         }
       }
@@ -115,7 +126,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!ticketsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'tickets'...");
+      logger.info("➕ Creando tabla 'tickets'...");
       await client.query(`
         CREATE TABLE tickets (
           id SERIAL PRIMARY KEY,
@@ -133,7 +144,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'tickets' ya existe. Verificando columnas...");
+      logger.debug("✅ La tabla 'tickets' ya existe. Verificando columnas...");
       
       // Verificar y agregar columna external_ticket_id si no existe
       const externalTicketIdColumn = await client.query(
@@ -141,10 +152,10 @@ const checkAndCreateTables = async () => {
          WHERE table_name = 'tickets' AND column_name = 'external_ticket_id'`
       );
       if (externalTicketIdColumn.rows.length === 0) {
-        console.log("➕ Agregando columna 'external_ticket_id' a la tabla 'tickets'");
+        logger.info("➕ Agregando columna 'external_ticket_id' a la tabla 'tickets'");
         await client.query(`ALTER TABLE tickets ADD COLUMN external_ticket_id VARCHAR(100)`);
       } else {
-        console.log("✅ La columna 'external_ticket_id' ya existe en la tabla 'tickets'.");
+        logger.debug("✅ La columna 'external_ticket_id' ya existe en la tabla 'tickets'.");
       }
       
       // Verificar y agregar columna participants si no existe
@@ -153,11 +164,11 @@ const checkAndCreateTables = async () => {
          WHERE table_name = 'tickets' AND column_name = 'participants'`
       );
       if (participantsColumn.rows.length === 0) {
-        console.log("➕ Agregando columna 'participants' a la tabla 'tickets'");
+        logger.info("➕ Agregando columna 'participants' a la tabla 'tickets'");
         await client.query(`ALTER TABLE tickets ADD COLUMN participants INTEGER[] DEFAULT '{}'`);
-        console.log("✅ Columna 'participants' agregada exitosamente.");
+        logger.info("✅ Columna 'participants' agregada exitosamente.");
       } else {
-        console.log("✅ La columna 'participants' ya existe en la tabla 'tickets'.");
+        logger.debug("✅ La columna 'participants' ya existe en la tabla 'tickets'.");
       }
 
       // Verificar y agregar columna updated_at si no existe
@@ -166,14 +177,14 @@ const checkAndCreateTables = async () => {
          WHERE table_name = 'tickets' AND column_name = 'updated_at'`
       );
       if (updatedAtColumn.rows.length === 0) {
-        console.log("➕ Agregando columna 'updated_at' a la tabla 'tickets'");
+        logger.info("➕ Agregando columna 'updated_at' a la tabla 'tickets'");
         await client.query(`ALTER TABLE tickets ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         
         // Actualizar registros existentes para que tengan updated_at = created_at
         await client.query(`UPDATE tickets SET updated_at = created_at WHERE updated_at IS NULL`);
-        console.log("✅ Columna 'updated_at' agregada y datos existentes actualizados.");
+        logger.info("✅ Columna 'updated_at' agregada y datos existentes actualizados.");
       } else {
-        console.log("✅ La columna 'updated_at' ya existe en la tabla 'tickets'.");
+        logger.debug("✅ La columna 'updated_at' ya existe en la tabla 'tickets'.");
       }
     }
 
@@ -186,7 +197,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!commentsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'comments'...");
+      logger.info("➕ Creando tabla 'comments'...");
       await client.query(`
         CREATE TABLE comments (
           id SERIAL PRIMARY KEY,
@@ -197,7 +208,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'comments' ya existe.");
+      logger.debug("✅ La tabla 'comments' ya existe.");
     }
 
     // Validar y crear la tabla "attachments"
@@ -209,7 +220,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!attachmentsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'attachments'...");
+      logger.info("➕ Creando tabla 'attachments'...");
       await client.query(`
         CREATE TABLE attachments (
           id SERIAL PRIMARY KEY,
@@ -220,17 +231,17 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'attachments' ya existe. Verificando columnas...");
+      logger.debug("✅ La tabla 'attachments' ya existe. Verificando columnas...");
       // Verificar y agregar columna comment_id si no existe
       const commentIdColumn = await client.query(
         `SELECT column_name FROM information_schema.columns
          WHERE table_name = 'attachments' AND column_name = 'comment_id'`
       );
       if (commentIdColumn.rows.length === 0) {
-        console.log("➕ Agregando columna 'comment_id' a la tabla 'attachments'");
+        logger.info("➕ Agregando columna 'comment_id' a la tabla 'attachments'");
         await client.query(`ALTER TABLE attachments ADD COLUMN comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE`);
       } else {
-          console.log(`✅ La columna 'comment_id' ya existe en la tabla 'attachments'.`);
+          logger.debug(`✅ La columna 'comment_id' ya existe en la tabla 'attachments'.`);
         }
     }
 
@@ -243,7 +254,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!notificationsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'notifications'...");
+      logger.info("➕ Creando tabla 'notifications'...");
       await client.query(`
         CREATE TABLE notifications (
           id SERIAL PRIMARY KEY,
@@ -256,7 +267,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'notifications' ya existe. Verificando columnas...");
+      logger.debug("✅ La tabla 'notifications' ya existe. Verificando columnas...");
       // Verificar y agregar columnas si faltan
       const columns = [
         { name: 'type', type: 'VARCHAR(50) NOT NULL' },
@@ -277,7 +288,7 @@ const checkAndCreateTables = async () => {
           [column.name]
         );
         if (columnExists.rows.length === 0) {
-          console.log(`➕ Agregando columna '${column.name}' a la tabla 'notifications'`);
+          logger.info(`➕ Agregando columna '${column.name}' a la tabla 'notifications'`);
           await client.query(`ALTER TABLE notifications ADD COLUMN ${column.name} ${column.type}`);
         }
       }
@@ -293,7 +304,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!whatsappNotificationsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'whatsapp_notifications'...");
+      logger.info("➕ Creando tabla 'whatsapp_notifications'...");
       await client.query(`
         CREATE TABLE whatsapp_notifications (
           id SERIAL PRIMARY KEY,
@@ -309,7 +320,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'whatsapp_notifications' ya existe.");
+      logger.debug("✅ La tabla 'whatsapp_notifications' ya existe.");
       
       // Verificar si existe la columna notification_type, si no existe agregarla
       const notificationTypeColumnExists = await client.query(`
@@ -321,12 +332,12 @@ const checkAndCreateTables = async () => {
       `);
       
       if (!notificationTypeColumnExists.rows[0].exists) {
-        console.log("➕ Agregando columna 'notification_type' a 'whatsapp_notifications'...");
+        logger.info("➕ Agregando columna 'notification_type' a 'whatsapp_notifications'...");
         await client.query(`
           ALTER TABLE whatsapp_notifications 
           ADD COLUMN notification_type VARCHAR(50) DEFAULT 'unknown';
         `);
-        console.log("✅ Columna 'notification_type' agregada exitosamente.");
+        logger.info("✅ Columna 'notification_type' agregada exitosamente.");
       }
     }
 
@@ -339,7 +350,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!dashboardSettingsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'dashboard_settings'...");
+      logger.info("➕ Creando tabla 'dashboard_settings'...");
       await client.query(`
         CREATE TABLE dashboard_settings (
           id SERIAL PRIMARY KEY,
@@ -351,9 +362,9 @@ const checkAndCreateTables = async () => {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      console.log("✅ Tabla 'dashboard_settings' creada exitosamente.");
+      logger.info("✅ Tabla 'dashboard_settings' creada exitosamente.");
     } else {
-      console.log("✅ La tabla 'dashboard_settings' ya existe.");
+      logger.debug("✅ La tabla 'dashboard_settings' ya existe.");
       // Validar y agregar columnas si faltan
       const dashboardColumns = [
         { name: 'kpis', type: "JSONB DEFAULT '{}'::jsonb" },
@@ -369,7 +380,7 @@ const checkAndCreateTables = async () => {
           [column.name]
         );
         if (columnExists.rows.length === 0) {
-          console.log(`➕ Agregando columna '${column.name}' a la tabla 'dashboard_settings'`);
+          logger.info(`➕ Agregando columna '${column.name}' a la tabla 'dashboard_settings'`);
           await client.query(`ALTER TABLE dashboard_settings ADD COLUMN ${column.name} ${column.type}`);
         }
       }
@@ -384,7 +395,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!userPreferencesTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'user_preferences_settings'...");
+      logger.info("➕ Creando tabla 'user_preferences_settings'...");
       await client.query(`
         CREATE TABLE user_preferences_settings (
           id SERIAL PRIMARY KEY,
@@ -399,7 +410,7 @@ const checkAndCreateTables = async () => {
         );
       `);
     } else {
-      console.log("✅ La tabla 'user_preferences_settings' ya existe.");
+      logger.debug("✅ La tabla 'user_preferences_settings' ya existe.");
       
       // Actualizar el valor por defecto de whatsapp_enabled a true
       try {
@@ -407,9 +418,9 @@ const checkAndCreateTables = async () => {
           ALTER TABLE user_preferences_settings 
           ALTER COLUMN whatsapp_enabled SET DEFAULT true
         `);
-        console.log("✅ Valor por defecto de 'whatsapp_enabled' actualizado a true.");
+        logger.debug("✅ Valor por defecto de 'whatsapp_enabled' actualizado a true.");
       } catch (error) {
-        console.log("⚠️ Error actualizando valor por defecto:", error.message);
+        logger.warn("⚠️ Error actualizando valor por defecto:", error.message);
       }
 
       // Agregar nuevas columnas de configuración avanzada
@@ -444,10 +455,10 @@ const checkAndCreateTables = async () => {
               ALTER TABLE user_preferences_settings 
               ADD COLUMN ${column.name} ${column.type}
             `);
-            console.log(`✅ Columna '${column.name}' agregada: ${column.description}`);
+            logger.info(`✅ Columna '${column.name}' agregada: ${column.description}`);
           }
         } catch (error) {
-          console.log(`⚠️ Error agregando columna '${column.name}':`, error.message);
+          logger.warn(`⚠️ Error agregando columna '${column.name}':`, error.message);
         }
       }
     }
@@ -461,7 +472,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!dashboardConfigExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'dashboard_config'...");
+      logger.info("➕ Creando tabla 'dashboard_config'...");
       await client.query(`
         CREATE TABLE dashboard_config (
           id SERIAL PRIMARY KEY,
@@ -494,9 +505,9 @@ const checkAndCreateTables = async () => {
         ('paused_states', 'Escalado a externo,Esperando respuesta del usuario', 'array', 'Estados pausados (no cuentan tiempo)', 'workflow');
       `);
       
-      console.log("✅ Tabla 'dashboard_config' creada con configuraciones por defecto.");
+      logger.info("✅ Tabla 'dashboard_config' creada con configuraciones por defecto.");
     } else {
-      console.log("✅ La tabla 'dashboard_config' ya existe.");
+      logger.debug("✅ La tabla 'dashboard_config' ya existe.");
     }
 
     // Crear tabla ticket_history para seguimiento de cambios
@@ -508,7 +519,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!ticketHistoryExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'ticket_history'...");
+      logger.info("➕ Creando tabla 'ticket_history'...");
       await client.query(`
         CREATE TABLE ticket_history (
           id SERIAL PRIMARY KEY,
@@ -529,9 +540,80 @@ const checkAndCreateTables = async () => {
         CREATE INDEX idx_ticket_history_created_at ON ticket_history(created_at);
       `);
       
-      console.log("✅ Tabla 'ticket_history' creada con índices.");
+      logger.info("✅ Tabla 'ticket_history' creada con índices.");
     } else {
-      console.log("✅ La tabla 'ticket_history' ya existe.");
+      logger.debug("✅ La tabla 'ticket_history' ya existe.");
+    }
+
+    // ==========================================
+    // TABLA TICKET_SURVEYS (Encuestas de Satisfacción)
+    // ==========================================
+    logger.debug("🔧 Verificando tabla 'ticket_surveys'...");
+    const ticketSurveysExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'ticket_surveys'
+      );
+    `);
+
+    if (!ticketSurveysExists.rows[0].exists) {
+      logger.info("➕ Creando tabla 'ticket_surveys'...");
+      await client.query(`
+        CREATE TABLE ticket_surveys (
+          id SERIAL PRIMARY KEY,
+          ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE UNIQUE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          tech_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+          comment TEXT,
+          area VARCHAR(255),
+          category VARCHAR(100),
+          response_time_minutes INTEGER,
+          resolution_time_minutes INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Crear índices para estadísticas
+      await client.query(`
+        CREATE INDEX idx_ticket_surveys_rating ON ticket_surveys(rating);
+        CREATE INDEX idx_ticket_surveys_tech_id ON ticket_surveys(tech_id);
+        CREATE INDEX idx_ticket_surveys_area ON ticket_surveys(area);
+        CREATE INDEX idx_ticket_surveys_category ON ticket_surveys(category);
+        CREATE INDEX idx_ticket_surveys_created_at ON ticket_surveys(created_at);
+      `);
+      
+      logger.info("✅ Tabla 'ticket_surveys' creada con índices para estadísticas.");
+    } else {
+      logger.debug("✅ La tabla 'ticket_surveys' ya existe.");
+      
+      // Migración: añadir columnas faltantes si no existen
+      const surveyColumns = await client.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'ticket_surveys'
+      `);
+      const existingCols = surveyColumns.rows.map(r => r.column_name);
+
+      if (!existingCols.includes('tech_id')) {
+        logger.info("➕ Añadiendo columna 'tech_id' a ticket_surveys...");
+        await client.query(`ALTER TABLE ticket_surveys ADD COLUMN tech_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+      }
+      if (!existingCols.includes('area')) {
+        logger.info("➕ Añadiendo columna 'area' a ticket_surveys...");
+        await client.query(`ALTER TABLE ticket_surveys ADD COLUMN area VARCHAR(255)`);
+      }
+      if (!existingCols.includes('category')) {
+        logger.info("➕ Añadiendo columna 'category' a ticket_surveys...");
+        await client.query(`ALTER TABLE ticket_surveys ADD COLUMN category VARCHAR(100)`);
+      }
+      if (!existingCols.includes('response_time_minutes')) {
+        logger.info("➕ Añadiendo columna 'response_time_minutes' a ticket_surveys...");
+        await client.query(`ALTER TABLE ticket_surveys ADD COLUMN response_time_minutes INTEGER`);
+      }
+      if (!existingCols.includes('resolution_time_minutes')) {
+        logger.info("➕ Añadiendo columna 'resolution_time_minutes' a ticket_surveys...");
+        await client.query(`ALTER TABLE ticket_surveys ADD COLUMN resolution_time_minutes INTEGER`);
+      }
     }
 
     // Eliminar tabla ticket_participants si existe (ya no se usa)
@@ -543,15 +625,15 @@ const checkAndCreateTables = async () => {
     `);
 
     if (ticketParticipantsTableExists.rows[0].exists) {
-      console.log("🗑️ Eliminando tabla 'ticket_participants' (ya no se usa)...");
+      logger.info("🗑️ Eliminando tabla 'ticket_participants' (ya no se usa)...");
       await client.query(`DROP TABLE IF EXISTS ticket_participants CASCADE;`);
-      console.log("✅ Tabla 'ticket_participants' eliminada exitosamente.");
+      logger.info("✅ Tabla 'ticket_participants' eliminada exitosamente.");
     }
 
     // ==========================================
     // 8. TABLA SYSTEM_SETTINGS (Configuración Global)
     // ==========================================
-    console.log("🔧 Verificando tabla 'system_settings'...");
+    logger.debug("🔧 Verificando tabla 'system_settings'...");
     const systemSettingsTableExists = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables
@@ -560,7 +642,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!systemSettingsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'system_settings' (configuración global del sistema)...");
+      logger.info("➕ Creando tabla 'system_settings' (configuración global del sistema)...");
       await client.query(`
         CREATE TABLE system_settings (
           id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- Solo una fila de configuración
@@ -608,9 +690,9 @@ const checkAndCreateTables = async () => {
         );
       `);
       
-      console.log("✅ Tabla 'system_settings' creada exitosamente con configuración por defecto.");
+      logger.info("✅ Tabla 'system_settings' creada exitosamente con configuración por defecto.");
     } else {
-      console.log("✅ La tabla 'system_settings' ya existe.");
+      logger.debug("✅ La tabla 'system_settings' ya existe.");
       
       // Verificar y agregar columnas de antibloqueo si no existen
       const antiblockColumns = [
@@ -629,9 +711,9 @@ const checkAndCreateTables = async () => {
         );
         
         if (columnExists.rows.length === 0) {
-          console.log(`➕ Agregando columna '${column.name}' a 'system_settings'...`);
+          logger.info(`➕ Agregando columna '${column.name}' a 'system_settings'...`);
           await client.query(`ALTER TABLE system_settings ADD COLUMN ${column.name} ${column.type};`);
-          console.log(`✅ Columna '${column.name}' agregada exitosamente.`);
+          logger.info(`✅ Columna '${column.name}' agregada exitosamente.`);
         }
       }
     }
@@ -651,7 +733,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!maintenanceTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'maintenance_status' (versión simplificada)...");
+      logger.info("➕ Creando tabla 'maintenance_status' (versión simplificada)...");
       await client.query(`
         CREATE TABLE maintenance_status (
           id SERIAL PRIMARY KEY,
@@ -668,9 +750,9 @@ const checkAndCreateTables = async () => {
       await client.query(`
         INSERT INTO maintenance_status (is_active) VALUES (false);
       `);
-      console.log("✅ Tabla 'maintenance_status' creada exitosamente (versión simple).");
+      logger.info("✅ Tabla 'maintenance_status' creada exitosamente (versión simple).");
     } else {
-      console.log("✅ La tabla 'maintenance_status' ya existe.");
+      logger.debug("✅ La tabla 'maintenance_status' ya existe.");
     }
 
     // Validar y crear la tabla "processed_emails" para el monitor de correo
@@ -682,7 +764,7 @@ const checkAndCreateTables = async () => {
     `);
 
     if (!processedEmailsTableExists.rows[0].exists) {
-      console.log("➕ Creando tabla 'processed_emails'...");
+      logger.info("➕ Creando tabla 'processed_emails'...");
       await client.query(`
         CREATE TABLE processed_emails (
           id SERIAL PRIMARY KEY,
@@ -697,14 +779,14 @@ const checkAndCreateTables = async () => {
       await client.query(`
         CREATE INDEX idx_processed_emails_message_id ON processed_emails(message_id);
       `);
-      console.log("✅ Tabla 'processed_emails' creada exitosamente.");
+      logger.info("✅ Tabla 'processed_emails' creada exitosamente.");
     } else {
-      console.log("✅ La tabla 'processed_emails' ya existe.");
+      logger.debug("✅ La tabla 'processed_emails' ya existe.");
     }
 
-    console.log("✅ Validación y creación de tablas completada.");
+    logger.info("✅ Validación y creación de tablas completada.");
   } catch (error) {
-    console.error("❌ Error al validar la base de datos:", error);
+    logger.error("❌ Error al validar la base de datos:", error);
   } finally {
     client.release();
   }

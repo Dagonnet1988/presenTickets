@@ -42,6 +42,7 @@ import { finalize } from 'rxjs/operators';
 import { AnalyticsService, DashboardMetrics, TicketByStatus, TechPerformance, TicketByArea } from '../shared/services/analytics.service';
 import { DashboardConfigService, DashboardConfig } from '../shared/services/dashboard-config.service';
 import { AuthService } from '../shared/services/auth.service';
+import { SurveyService, SurveyStats } from '../shared/services/survey.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -85,6 +86,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ticketsByStatus: TicketByStatus[] = [];
   techPerformance: TechPerformance[] = [];
   ticketsByArea: TicketByArea[] = [];
+  surveyStats: SurveyStats | null = null;
 
   // Estados de loading
   loading = {
@@ -93,7 +95,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     saving: false,
     charts: false,
     performance: false,
-    areas: false
+    areas: false,
+    surveys: false
   };
 
   // Configuración del gráfico removida temporalmente por problemas de compatibilidad
@@ -119,7 +122,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ];
 
   // Columnas para tabla de tickets detallados
-  ticketColumns: string[] = ['id', 'subject', 'status', 'priority', 'realWorkTime', 'responseTime', 'isOverdue'];
+  ticketColumns: string[] = ['id', 'subject', 'status', 'priority', 'realWorkTime', 'responseTime', 'isOverdue', 'surveyRating'];
 
   // Subscripciones
   private subscriptions: Subscription[] = [];
@@ -128,6 +131,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private analyticsService: AnalyticsService,
     private configService: DashboardConfigService,
     private authService: AuthService,
+    private surveyService: SurveyService,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef,
     private snackBar: MatSnackBar
@@ -205,6 +209,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadChartData();
     this.loadTechPerformance();
     this.loadAreaAnalysis();
+    this.loadSurveyStats();
 
     if (this.isAdmin) {
       this.loadConfiguration();
@@ -348,6 +353,52 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
 
     this.subscriptions.push(areasSub);
+  }
+
+  /**
+   * Cargar estadísticas de encuestas de satisfacción
+   */
+  loadSurveyStats() {
+    // Solo mostrar para administradores y técnicos
+    if (this.userRole === 'user') return;
+
+    this.loading.surveys = true;
+
+    const surveysSub = this.surveyService.getStats()
+      .pipe(finalize(() => this.loading.surveys = false))
+      .subscribe({
+        next: (data) => {
+          this.surveyStats = data;
+          this.cdr.detectChanges();
+        },
+        error: (error) => {
+          console.error('Error cargando estadísticas de encuestas:', error);
+          // No mostrar error al usuario, simplemente no mostrar la sección
+          this.surveyStats = null;
+        }
+      });
+
+    this.subscriptions.push(surveysSub);
+  }
+
+  /**
+   * Generar array de estrellas para mostrar calificación
+   */
+  getStarsArray(rating: number): string[] {
+    const stars: string[] = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    for (let i = 0; i < 5; i++) {
+      if (i < fullStars) {
+        stars.push('star');
+      } else if (i === fullStars && hasHalfStar) {
+        stars.push('star_half');
+      } else {
+        stars.push('star_border');
+      }
+    }
+    return stars;
   }
 
   /**

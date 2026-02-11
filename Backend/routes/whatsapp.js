@@ -646,6 +646,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         'ticket_asignado': 'whatsapp_global_ticket_assigned',
         'cambio_estado': 'whatsapp_global_ticket_status',
         'ticket_reabierto': 'whatsapp_global_ticket_status',
+        'ticket_resuelto_encuesta': 'whatsapp_global_ticket_status',
         'comentario': 'whatsapp_global_comments',
         'comentario_user': 'whatsapp_global_comments',
         'admin_comentario': 'whatsapp_global_comments'
@@ -694,6 +695,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
       'ticket_asignado': 'whatsapp_ticket_assigned',
       'cambio_estado': 'whatsapp_ticket_status',
       'ticket_reabierto': 'whatsapp_ticket_status',
+      'ticket_resuelto_encuesta': 'whatsapp_ticket_status',
       'comentario': 'whatsapp_comments',
       'comentario_user': 'whatsapp_comments',
       'admin_comentario': 'whatsapp_comments',
