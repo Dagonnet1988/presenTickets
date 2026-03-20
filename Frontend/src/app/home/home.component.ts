@@ -33,6 +33,7 @@ import { UserService } from '../shared/services/user.service';
 import { RefreshTicketsService } from '../shared/services/refresh-tickets.service';
 import { ExportDialogComponent, ExportColumn, ExportDialogResult } from './export-dialog/export-dialog.component';
 import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import localeEs from '@angular/common/locales/es';
 
 registerLocaleData(localeEs, 'es');
@@ -798,9 +799,6 @@ export class HomeComponent implements OnInit {
     this.isExporting = true;
 
     try {
-      // Importación dinámica de file-saver
-      const { saveAs } = await import('file-saver');
-
       // Crear libro de trabajo
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'PresenTickets';

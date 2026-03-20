@@ -80,7 +80,6 @@ router.post('/read/:id', authMiddleware, async (req, res) => {
         'UPDATE notifications SET is_read = true WHERE external_ticket_id = $1 AND type = $2 RETURNING id',
         [notification.external_ticket_id, 'external_email']
       );
-      console.log(`📧 Notificaciones de email externo #${notification.external_ticket_id} marcadas como leídas: ${updateResult.rowCount} (compartidas entre técnicos)`);
       
       // Emitir WebSocket a TODOS los técnicos afectados para que actualicen sus notificaciones
       const io = req.app.get('io');
@@ -94,7 +93,6 @@ router.post('/read/:id', authMiddleware, async (req, res) => {
             });
           }
         }
-        console.log(`📧 WebSocket emitido a ${affectedUsersResult.rows.length - 1} técnicos`);
       }
       
       return res.json({ 

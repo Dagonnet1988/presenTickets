@@ -450,7 +450,7 @@ router.patch("/:id", async (req, res) => {
         const ticketDataQuery = `
           SELECT 
             t.id, t.title, t.priority, t.status, t.external_ticket_id,
-            t.user_id
+            t.user_id, t.assigned_to
           FROM tickets t 
           WHERE t.id = $1
         `;
@@ -460,16 +460,17 @@ router.patch("/:id", async (req, res) => {
         if (ticketResult.rows.length > 0) {
           const ticketData = ticketResult.rows[0];
           
-          // Obtener usuarios que deben ser notificados
+          // Obtener usuarios que deben ser notificados (solo el creador del ticket y técnico asignado)
+          // Los admins NO reciben notificación de ID externo actualizado
           const usersQuery = `
             SELECT DISTINCT u.id 
             FROM users u 
             WHERE 
               u.id = $1 OR  -- Creador del ticket
-              u.role = 'admin'  -- Administradores
+              u.id = $2     -- Técnico asignado (si existe)
           `;
           
-          const usersResult = await client.query(usersQuery, [ticketData.user_id]);
+          const usersResult = await client.query(usersQuery, [ticketData.user_id, ticketData.assigned_to]);
           
           // Definir el mensaje una vez
           const mensaje = `ID Externo actualizado en ticket "${ticketData.title}"`;
@@ -648,21 +649,45 @@ router.patch("/:id", async (req, res) => {
               );
             }
           }
-          // Si es "En revisión" - notificar al técnico asignado (si no es quien hace el cambio)
+          // Si es "En revisión" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En revisión") {
-            const actorId = req.user?.id;
-            if (assigned_to && assigned_to !== actorId) {
-              recipients.push(assigned_to);
-
-              // Crear notificación en la base de datos
+            const actorId = parseInt(req.user?.id);
+            
+            // Usar Set para evitar duplicados
+            const recipientSet = new Set();
+            
+            // Agregar técnico asignado (si no es quien hace el cambio)
+            if (assigned_to && parseInt(assigned_to) !== actorId) {
+              recipientSet.add(parseInt(assigned_to));
+            }
+            
+            // Agregar usuario creador (si no es quien hace el cambio)
+            if (user_id && parseInt(user_id) !== actorId) {
+              recipientSet.add(parseInt(user_id));
+            }
+            
+            // Agregar participantes (excluyendo al actor)
+            for (const participantId of ticketParticipants) {
+              const pId = parseInt(participantId);
+              if (pId !== actorId) {
+                recipientSet.add(pId);
+              }
+            }
+            
+            recipients = Array.from(recipientSet);
+            
+            // Crear notificaciones para todos los destinatarios
+            for (const recipientId of recipients) {
               await createNotification({
-                user_id: assigned_to,
+                user_id: recipientId,
                 type: notificationType,
                 message: notificationMessage,
                 ticket_id: id,
               });
+            }
 
-              // Emitir notificación en tiempo real
+            // Emitir notificación en tiempo real a todos
+            if (recipients.length > 0) {
               emitTicketNotification(
                 notificationType,
                 {
@@ -671,25 +696,49 @@ router.patch("/:id", async (req, res) => {
                   createdAt: new Date(),
                   message: notificationMessage,
                 },
-                [assigned_to]
+                recipients
               );
             }
           }
-          // Si es "En proceso" - notificar al técnico asignado (si no es quien hace el cambio)
+          // Si es "En proceso" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En proceso") {
-            const actorId = req.user?.id;
-            if (assigned_to && assigned_to !== actorId) {
-              recipients.push(assigned_to);
-
-              // Crear notificación en la base de datos
+            const actorId = parseInt(req.user?.id);
+            
+            // Usar Set para evitar duplicados
+            const recipientSet = new Set();
+            
+            // Agregar técnico asignado (si no es quien hace el cambio)
+            if (assigned_to && parseInt(assigned_to) !== actorId) {
+              recipientSet.add(parseInt(assigned_to));
+            }
+            
+            // Agregar usuario creador (si no es quien hace el cambio)
+            if (user_id && parseInt(user_id) !== actorId) {
+              recipientSet.add(parseInt(user_id));
+            }
+            
+            // Agregar participantes (excluyendo al actor)
+            for (const participantId of ticketParticipants) {
+              const pId = parseInt(participantId);
+              if (pId !== actorId) {
+                recipientSet.add(pId);
+              }
+            }
+            
+            recipients = Array.from(recipientSet);
+            
+            // Crear notificaciones para todos los destinatarios
+            for (const recipientId of recipients) {
               await createNotification({
-                user_id: assigned_to,
+                user_id: recipientId,
                 type: notificationType,
                 message: notificationMessage,
                 ticket_id: id,
               });
+            }
 
-              // Emitir notificación en tiempo real
+            // Emitir notificación en tiempo real a todos
+            if (recipients.length > 0) {
               emitTicketNotification(
                 notificationType,
                 {
@@ -698,7 +747,7 @@ router.patch("/:id", async (req, res) => {
                   createdAt: new Date(),
                   message: notificationMessage,
                 },
-                [assigned_to]
+                recipients
               );
             }
           }

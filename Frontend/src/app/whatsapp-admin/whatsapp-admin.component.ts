@@ -38,6 +38,7 @@ import { AuthService } from '../shared/services/auth.service';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
 import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { PLATFORM_ID, Inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -955,9 +956,6 @@ export class WhatsAppAdminComponent implements OnInit {
     }
 
     try {
-      // Importación dinámica de file-saver para mejor compatibilidad ESM
-      const { saveAs } = await import('file-saver');
-
       // Crear libro de trabajo con ExcelJS
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Historial WhatsApp');
@@ -1102,6 +1100,10 @@ export class WhatsAppAdminComponent implements OnInit {
         return 'Mensaje Prueba';
       case 'maintenance':
         return 'Mantenimiento';
+      case 'external_email':
+        return 'Email Externo';
+      case 'ticket_resuelto_encuesta':
+        return 'Ticket Resuelto';
       default:
         return `Desconocido (${type})`;
     }
@@ -1136,6 +1138,10 @@ export class WhatsAppAdminComponent implements OnInit {
         return 'type-comment';
       case 'test_message':
         return 'type-test';
+      case 'external_email':
+        return 'type-external-email';
+      case 'ticket_resuelto_encuesta':
+        return 'type-status-change';
       default:
         return 'type-unknown';
     }

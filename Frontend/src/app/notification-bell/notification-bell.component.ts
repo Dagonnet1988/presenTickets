@@ -13,7 +13,7 @@
  * de este código sin el consentimiento expreso por escrito del autor.
  */
 
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -21,6 +21,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { Router } from '@angular/router';
 import { NotificationService, TicketNotification } from '../shared/services/notification.service';
 import { NotificationTypePipe } from '../shared/pipes/notification-type.pipe';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-notification-bell',
@@ -29,17 +30,22 @@ import { NotificationTypePipe } from '../shared/pipes/notification-type.pipe';
   templateUrl: './notification-bell.component.html',
   styleUrls: ['./notification-bell.component.css']
 })
-export class NotificationBellComponent {
+export class NotificationBellComponent implements OnInit, OnDestroy {
   notifications: TicketNotification[] = [];
   unreadNotifications: TicketNotification[] = [];
   unreadCount = 0;
+  private subscription: Subscription | null = null;
+  private viewInitialized = false;
 
   constructor(
     private notificationService: NotificationService,
     private router: Router,
     private cdr: ChangeDetectorRef
-  ) {
-    this.notificationService.notifications$.subscribe((n) => {
+  ) {}
+
+  ngOnInit() {
+    this.viewInitialized = true;
+    this.subscription = this.notificationService.notifications$.subscribe((n) => {
       this.notifications = n;
       // Filtrar solo las notificaciones no leídas
       const unread = n.filter((x) => !(x.read || (x as any).is_read));
@@ -50,8 +56,14 @@ export class NotificationBellComponent {
       this.unreadCount = this.unreadNotifications.length;
 
       // Forzar detección de cambios para actualizar la UI inmediatamente
-      this.cdr.detectChanges();
+      if (this.viewInitialized) {
+        this.cdr.detectChanges();
+      }
     });
+  }
+
+  ngOnDestroy() {
+    this.subscription?.unsubscribe();
   }
 
   /**

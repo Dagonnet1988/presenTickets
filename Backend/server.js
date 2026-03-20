@@ -52,8 +52,16 @@ if (!process.env.pm_id) {
     console.warn(`⚠️ No se encontró archivo .env ni ${envPath}. Usando variables de entorno del sistema.`);
   }
 } else {
-  // Usando PM2, las variables de entorno ya están cargadas
-  console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables de entorno cargadas desde ecosystem.config`);
+  // Usando PM2, las variables base vienen del ecosystem.config
+  // Pero también cargar .env.production para variables adicionales (como EMAIL_MONITOR)
+  const envPath = `.env.${ENV}`;
+  if (fs.existsSync(envPath)) {
+    // Cargar sin sobrescribir las variables de PM2
+    dotenv.config({ path: envPath });
+    console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables adicionales cargadas desde ${envPath}`);
+  } else {
+    console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables de entorno cargadas desde ecosystem.config`);
+  }
 }
 
 const app = express();
@@ -474,11 +482,18 @@ checkAndCreateTables().then(async () => {
     
     // Auto-iniciar monitor de email si está configurado
     if (process.env.EMAIL_MONITOR_USER && process.env.EMAIL_MONITOR_PASSWORD) {
-      setTimeout(() => {
+      setTimeout(async () => {
         console.log('📧 Iniciando monitor de email...');
-        emailMonitorService.start().catch(err => {
+        try {
+          const result = await emailMonitorService.start();
+          if (result.success) {
+            console.log('📧 ✅', result.message);
+          } else {
+            console.error('📧 ❌', result.message);
+          }
+        } catch (err) {
           console.error('❌ Error al iniciar monitor de email:', err.message);
-        });
+        }
       }, 5000);
     } else {
       console.log('📧 Monitor de email no configurado (faltan credenciales)');

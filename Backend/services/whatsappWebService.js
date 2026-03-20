@@ -1608,13 +1608,15 @@ class WhatsAppWebService {
         return false;
       }
 
-      // Obtener información adicional del ticket
-      const ticketResult = await client.query(
-        'SELECT title FROM tickets WHERE id = $1',
-        [ticketId]
-      );
-
-      const ticketSubject = ticketResult.rows.length > 0 ? ticketResult.rows[0].title : 'Sin asunto';
+      // Obtener información adicional del ticket (si existe)
+      let ticketSubject = 'Sin asunto';
+      if (ticketId) {
+        const ticketResult = await client.query(
+          'SELECT title FROM tickets WHERE id = $1',
+          [ticketId]
+        );
+        ticketSubject = ticketResult.rows.length > 0 ? ticketResult.rows[0].title : 'Sin asunto';
+      }
 
       // Crear mensaje formateado usando plantillas personalizadas
       const formattedMessage = await this.formatTicketMessageFromTemplate(
@@ -1652,6 +1654,15 @@ class WhatsAppWebService {
    */
   async formatTicketMessageFromTemplate(userName, ticketId, ticketSubject, message, notificationType, client) {
     try {
+      // Para external_email, el mensaje ya viene pre-formateado desde emailMonitorService
+      // Solo agregamos el saludo y el wrapper
+      if (notificationType === 'external_email') {
+        const template = this.getRandomTemplate(notificationType);
+        return template
+          .replace(/{userName}/g, userName)
+          .replace(/{comment}/g, message || 'Sin contenido');
+      }
+
       // Usar directamente las plantillas variadas sin consultar la DB
       const template = this.getRandomTemplate(notificationType, ticketId);
 
@@ -1667,8 +1678,8 @@ class WhatsAppWebService {
 
       let formattedMessage = template
         .replace(/{userName}/g, userName)
-        .replace(/{ticketId}/g, ticketId)
-        .replace(/{subject}/g, ticketSubject)
+        .replace(/{ticketId}/g, ticketId || 'N/A')
+        .replace(/{subject}/g, ticketSubject || 'Sin asunto')
         .replace(/{timestamp}/g, timestamp)
         .replace(/{comment}/g, message || 'Sin comentario')
         .replace(/{newStatus}/g, message || 'Sin estado');
@@ -1710,6 +1721,12 @@ class WhatsAppWebService {
         '💬 *Nuevo Comentario*\n─────────────────\n 💭 COMENTARIO NUEVO \n─────────────────\n\nHola {userName},\n\n💬 "Mensaje: {comment}"\n🎫 Ticket: #{ticketId}\n📋 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
         '💭 *PresenTickets*\n════════════════\n💬 NUEVO COMENTARIO\n════════════════\n\n{userName}, comentario agregado:\n\n💭 "Mensaje: {comment}"\n🎫 #{ticketId} - {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
         '💭 *Comentario Agregado*\n━━━━━━━━━━━━━━━━\n 💬 NUEVO COMENTARIO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n💭 "Mensaje: {comment}"\n📄 Ticket #{ticketId}: {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
+      ],
+
+      'external_email': [
+        '📧 *Respuesta de Soporte Externo*\n─────────────────\n 📩 EMAIL RECIBIDO \n─────────────────\n\nHola {userName},\n\n{comment}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nRevisa la bandeja del sistema.',
+        '📩 *PresenTickets*\n════════════════\n📧 CORREO EXTERNO\n════════════════\n\n{userName}:\n\n{comment}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Revisa el sistema.',
+        '📧 *Soporte Externo*\n━━━━━━━━━━━━━━━━\n 📩 CORREO RECIBIDO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n{comment}\n\n─────────────────\n⚠️ *Mensaje automático*\nRevisa la bandeja del sistema.'
       ]
     };
 

@@ -34,8 +34,8 @@ class EmailMonitorService {
       port: parseInt(process.env.EMAIL_MONITOR_PORT) || 993,
       secure: true,
       auth: {
-        user: process.env.EMAIL_MONITOR_USER || '',
-        pass: process.env.EMAIL_MONITOR_PASSWORD || ''
+        user: process.env.EMAIL_MONITOR_USER || 'desarrollo@clinicadelapresentacion.com.co',
+        pass: process.env.EMAIL_MONITOR_PASSWORD || 'hwbc ovsb xvwa sejx'
       },
       // Remitente a filtrar
       filterSender: process.env.EMAIL_FILTER_SENDER || 'soporte@osigu.com',
@@ -44,9 +44,10 @@ class EmailMonitorService {
     };
 
     // Patrón para extraer número de ticket externo del asunto
-    // Ejemplo: Re: [CHERMZ] [33405] Ticket re-abierto – [CHERMZ] [#28495] MIPRES...
-    // Captura el primer número entre corchetes después de [CHERMZ]
-    this.ticketPattern = /\[CHERMZ\]\s*\[#?(\d+)\]/i;
+    // Soporta dos formatos:
+    // 1. [CHERMZ] [#XXXXX] - formato estándar
+    // 2. #XXXXX - formato alternativo
+    this.ticketPattern = /(?:\[CHERMZ\]\s*\[#?(\d+)\]|#\s*(\d+))/i;
   }
 
   /**
@@ -88,6 +89,7 @@ class EmailMonitorService {
 
       // Manejar eventos de error y cierre
       this.client.on('error', (err) => {
+        console.error('📧 ❌ IMAP client error:', err.message);
         this.isConnected = false;
         // No propagar - se reintenta en checkEmails
       });
@@ -135,6 +137,7 @@ class EmailMonitorService {
     }
 
     if (!this.isConfigured()) {
+      console.log('📧 ❌ Monitor no configurado - faltan credenciales');
       return { 
         success: false, 
         message: 'El monitor no está configurado. Configure las variables EMAIL_MONITOR_USER y EMAIL_MONITOR_PASSWORD' 
@@ -144,10 +147,12 @@ class EmailMonitorService {
     // Conectar inicialmente
     const connected = await this.connect();
     if (!connected) {
+      console.log('📧 ❌ No se pudo conectar al servidor IMAP');
       return { success: false, message: 'No se pudo conectar al servidor de correo' };
     }
 
     this.isRunning = true;
+    console.log(`📧 ✅ Monitor de email activo - Verificando cada ${this.config.checkInterval / 1000}s`);
 
     // Realizar primera revisión inmediatamente
     await this.checkEmails();
@@ -305,7 +310,7 @@ class EmailMonitorService {
 
       // Extraer número de ticket externo del asunto
       const ticketMatch = subject.match(this.ticketPattern);
-      const externalTicketId = ticketMatch ? ticketMatch[1] : null;
+      const externalTicketId = ticketMatch ? (ticketMatch[1] || ticketMatch[2]) : null;
 
       // Crear notificación para técnicos (incluye messageId para notificación compartida)
       await this.createNotificationForTechnicians({

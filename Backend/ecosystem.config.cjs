@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
       {
-        name: 'PresenTickets-Backend', // Nombre de la aplicación
+        name: 'presentickets-backend', // Nombre de la aplicación
         script: './server.js', // Archivo principal del backend
         env: {
           NODE_ENV: 'development', // Entorno de desarrollo
@@ -9,7 +9,13 @@ module.exports = {
         },
         env_production: {
           NODE_ENV: 'production', // Entorno de producción
-          PORT: 3000
+          PORT: 3000,
+          // Configuración de Email Monitor (IMAP)
+          EMAIL_MONITOR_HOST: 'imap.gmail.com',
+          EMAIL_MONITOR_PORT: 993,
+          EMAIL_MONITOR_USER: '', // Agregar correo aquí
+          EMAIL_MONITOR_PASSWORD: '', // Agregar contraseña/app password aquí
+          EMAIL_MONITOR_INTERVAL: 120000
         }
       }
     ]

@@ -1339,6 +1339,11 @@ mat-icon {
   color: #607d8b;
 }
 
+.type-external-email {
+  color: #e91e63;
+  font-weight: 500;
+}
+
 .type-unknown {
   color: #666;
 }
