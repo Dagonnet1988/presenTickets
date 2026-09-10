@@ -25,13 +25,19 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   EmailMonitorService,
   EmailMonitorSettings,
   EmailMonitorStatus,
-  ProcessedEmail
+  ProcessedEmail,
+  Mailbox
 } from '../shared/services/email-monitor.service';
+
+interface MailboxRow extends Mailbox {
+  password: string;
+}
 
 @Component({
   selector: 'app-email-monitor-admin',
@@ -48,6 +54,7 @@ import {
     MatSlideToggleModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatPaginatorModule,
     MatSnackBarModule
   ],
   templateUrl: './email-monitor-admin.component.html',
@@ -56,17 +63,32 @@ import {
 export class EmailMonitorAdminComponent implements OnInit {
   loading = { settings: true, saving: false, checking: false, history: false };
 
-  // Editable en el formulario (los correos, uno por línea)
+  // Editable en el formulario
   form = {
     enabled: true,
     sendersText: '',
-    recipientsText: '',
-    checkIntervalSeconds: 120,
-    notifyParticipants: true
+    checkIntervalSeconds: 120
   };
+
+  mailboxes: MailboxRow[] = [];
 
   status: EmailMonitorStatus | null = null;
   history: ProcessedEmail[] = [];
+
+  // Paginación del historial
+  pageSize = 10;
+  pageIndex = 0;
+  readonly pageSizeOptions = [10, 25, 50];
+
+  get pagedHistory(): ProcessedEmail[] {
+    const start = this.pageIndex * this.pageSize;
+    return this.history.slice(start, start + this.pageSize);
+  }
+
+  onPage(e: PageEvent): void {
+    this.pageIndex = e.pageIndex;
+    this.pageSize = e.pageSize;
+  }
 
   constructor(
     private emailMonitor: EmailMonitorService,
@@ -90,10 +112,16 @@ export class EmailMonitorAdminComponent implements OnInit {
         this.form = {
           enabled: s.enabled,
           sendersText: (s.filterSenders || []).join('\n'),
-          recipientsText: (s.techRecipients || []).join('\n'),
-          checkIntervalSeconds: s.checkIntervalSeconds || 120,
-          notifyParticipants: s.notifyParticipants
+          checkIntervalSeconds: s.checkIntervalSeconds || 120
         };
+        this.mailboxes = (s.mailboxes || []).map((mb) => ({
+          user: mb.user,
+          password: '',            // vacío = conservar la guardada
+          host: mb.host || 'imap.gmail.com',
+          port: mb.port || 993,
+          label: mb.label || mb.user,
+          hasPassword: mb.hasPassword
+        }));
         this.loading.settings = false;
       },
       error: () => {
@@ -101,6 +129,17 @@ export class EmailMonitorAdminComponent implements OnInit {
         this.snackBar.open('No se pudo cargar la configuración del monitor', 'Cerrar', { duration: 4000 });
       }
     });
+  }
+
+  addMailbox(): void {
+    this.mailboxes = [
+      ...this.mailboxes,
+      { user: '', password: '', host: 'imap.gmail.com', port: 993, label: '', hasPassword: false }
+    ];
+  }
+
+  removeMailbox(index: number): void {
+    this.mailboxes = this.mailboxes.filter((_, i) => i !== index);
   }
 
   private loadStatus(): void {
@@ -112,9 +151,10 @@ export class EmailMonitorAdminComponent implements OnInit {
 
   loadHistory(): void {
     this.loading.history = true;
-    this.emailMonitor.getHistory(50).subscribe({
+    this.emailMonitor.getHistory(200).subscribe({
       next: (rows) => {
         this.history = rows;
+        this.pageIndex = 0;
         this.loading.history = false;
       },
       error: () => {
@@ -133,14 +173,30 @@ export class EmailMonitorAdminComponent implements OnInit {
 
   save(): void {
     const filterSenders = this.parseLines(this.form.sendersText);
-    const techRecipients = this.parseLines(this.form.recipientsText);
 
     if (filterSenders.length === 0) {
-      this.snackBar.open('Agrega al menos un remitente permitido', 'Cerrar', { duration: 4000 });
+      this.snackBar.open('Agrega al menos un remitente permitido (OSIGU)', 'Cerrar', { duration: 4000 });
       return;
     }
-    if (techRecipients.length === 0) {
-      this.snackBar.open('Agrega al menos un buzón técnico', 'Cerrar', { duration: 4000 });
+
+    const cleanMailboxes = this.mailboxes
+      .map((mb) => ({
+        user: (mb.user || '').trim().toLowerCase(),
+        password: (mb.password || '').trim(),
+        host: (mb.host || 'imap.gmail.com').trim(),
+        port: Number(mb.port) || 993,
+        label: (mb.label || mb.user || '').trim(),
+        hasPassword: mb.hasPassword
+      }))
+      .filter((mb) => mb.user.includes('@'));
+
+    if (cleanMailboxes.length === 0) {
+      this.snackBar.open('Configura al menos un buzón a vigilar', 'Cerrar', { duration: 4000 });
+      return;
+    }
+    const faltaPass = cleanMailboxes.filter((mb) => !mb.password && !mb.hasPassword).map((mb) => mb.user);
+    if (faltaPass.length > 0) {
+      this.snackBar.open(`Falta la contraseña de aplicación para: ${faltaPass.join(', ')}`, 'Cerrar', { duration: 5000 });
       return;
     }
 
@@ -151,9 +207,8 @@ export class EmailMonitorAdminComponent implements OnInit {
       .saveSettings({
         enabled: this.form.enabled,
         filterSenders,
-        techRecipients,
         checkIntervalSeconds: interval,
-        notifyParticipants: this.form.notifyParticipants
+        mailboxes: cleanMailboxes.map(({ hasPassword, ...mb }) => mb)
       })
       .subscribe({
         next: (res) => {

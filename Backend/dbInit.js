@@ -797,6 +797,25 @@ const checkAndCreateTables = async () => {
       );
     `);
 
+    // Semilla común desde variables de entorno
+    const seedSenders = [
+      process.env.EMAIL_FILTER_SENDER || '',
+      process.env.EMAIL_FILTER_SENDERS || ''
+    ].join(',').split(',').map((s) => s.trim()).filter(Boolean);
+    const uniqueSeedSenders = [...new Set(seedSenders)].join(',');
+    const seedRecipients = (process.env.EMAIL_TECH_RECIPIENTS || '')
+      .split(',').map((s) => s.trim()).filter(Boolean).join(',');
+    const seedInterval = Math.max(30, Math.round((parseInt(process.env.EMAIL_MONITOR_INTERVAL, 10) || 120000) / 1000));
+    const seedMailboxes = (process.env.EMAIL_MONITOR_USER && process.env.EMAIL_MONITOR_PASSWORD)
+      ? [{
+          user: process.env.EMAIL_MONITOR_USER.trim().toLowerCase(),
+          password: process.env.EMAIL_MONITOR_PASSWORD.trim(),
+          host: process.env.EMAIL_MONITOR_HOST || 'imap.gmail.com',
+          port: parseInt(process.env.EMAIL_MONITOR_PORT, 10) || 993,
+          label: 'principal'
+        }]
+      : [];
+
     if (!emailMonitorSettingsExists.rows[0].exists) {
       logger.info("➕ Creando tabla 'email_monitor_settings'...");
       await client.query(`
@@ -807,29 +826,37 @@ const checkAndCreateTables = async () => {
           tech_recipients TEXT DEFAULT '',
           check_interval_seconds INTEGER DEFAULT 120,
           notify_participants BOOLEAN DEFAULT true,
+          mailboxes JSONB DEFAULT '[]'::jsonb,
           updated_by INTEGER REFERENCES users(id),
           updated_at TIMESTAMP DEFAULT NOW()
         );
       `);
 
-      // Semilla desde variables de entorno (si existen)
-      const seedSenders = [
-        process.env.EMAIL_FILTER_SENDER || '',
-        process.env.EMAIL_FILTER_SENDERS || ''
-      ].join(',').split(',').map((s) => s.trim()).filter(Boolean);
-      const uniqueSeedSenders = [...new Set(seedSenders)].join(',');
-      const seedRecipients = (process.env.EMAIL_TECH_RECIPIENTS || '')
-        .split(',').map((s) => s.trim()).filter(Boolean).join(',');
-      const seedInterval = Math.max(30, Math.round((parseInt(process.env.EMAIL_MONITOR_INTERVAL, 10) || 120000) / 1000));
-
       await client.query(
-        `INSERT INTO email_monitor_settings (id, enabled, filter_senders, tech_recipients, check_interval_seconds, notify_participants)
-         VALUES (1, true, $1, $2, $3, true)`,
-        [uniqueSeedSenders, seedRecipients, seedInterval]
+        `INSERT INTO email_monitor_settings
+           (id, enabled, filter_senders, tech_recipients, check_interval_seconds, notify_participants, mailboxes)
+         VALUES (1, true, $1, $2, $3, true, $4::jsonb)`,
+        [uniqueSeedSenders, seedRecipients, seedInterval, JSON.stringify(seedMailboxes)]
       );
       logger.info("✅ Tabla 'email_monitor_settings' creada y sembrada desde el entorno.");
     } else {
       logger.debug("✅ La tabla 'email_monitor_settings' ya existe.");
+
+      const mailboxesColExists = await client.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'email_monitor_settings' AND column_name = 'mailboxes'`
+      );
+      if (mailboxesColExists.rows.length === 0) {
+        logger.info("➕ Agregando columna 'mailboxes' a 'email_monitor_settings'...");
+        await client.query(`ALTER TABLE email_monitor_settings ADD COLUMN mailboxes JSONB DEFAULT '[]'::jsonb`);
+        // Sembrar el buzón del entorno si la columna quedó vacía
+        await client.query(
+          `UPDATE email_monitor_settings
+           SET mailboxes = $1::jsonb
+           WHERE id = 1 AND (mailboxes IS NULL OR mailboxes = '[]'::jsonb)`,
+          [JSON.stringify(seedMailboxes)]
+        );
+      }
     }
 
     logger.info("✅ Validación y creación de tablas completada.");

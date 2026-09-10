@@ -6,9 +6,9 @@
 <div class="email-monitor-admin">
   <h2><mat-icon>mark_email_read</mat-icon> Monitor de Correo (OSIGU)</h2>
   <p class="subtitle">
-    Vigila la bandeja de <strong>{{ status?.config?.user || '—' }}</strong>, detecta las respuestas
-    de los remitentes permitidos, extrae el <code>TKT-xxxxxx</code> del asunto y notifica al técnico
-    asignado (y participantes) del ticket cuyo ID externo coincida.
+    Revisa los buzones configurados, detecta las respuestas de los remitentes permitidos,
+    extrae el <code>TKT-xxxxxx</code> del asunto y notifica al técnico asignado (y participantes)
+    del ticket cuyo ID externo coincida.
   </p>
 
   <!-- Estado -->
@@ -59,18 +59,46 @@
       </div>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>Remitentes permitidos (uno por línea)</mat-label>
-        <textarea matInput rows="3" [(ngModel)]="form.sendersText" name="senders"
+        <mat-label>Remitentes permitidos - OSIGU (uno por línea)</mat-label>
+        <textarea matInput rows="2" [(ngModel)]="form.sendersText" name="senders"
                   placeholder="help@osigu.com"></textarea>
         <mat-hint>Solo se procesan correos que vengan exactamente de estas direcciones.</mat-hint>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full">
-        <mat-label>Buzones técnicos (uno por línea)</mat-label>
-        <textarea matInput rows="4" [(ngModel)]="form.recipientsText" name="recipients"
-                  placeholder="soporte@clinicadelapresentacion.com.co"></textarea>
-        <mat-hint>El correo debe ir dirigido (To/CC) a alguno de estos buzones para ser tenido en cuenta.</mat-hint>
-      </mat-form-field>
+      <!-- Buzones a vigilar -->
+      <div class="mailboxes">
+        <div class="mailboxes-header">
+          <h4><mat-icon>inbox</mat-icon> Buzones a vigilar</h4>
+          <button mat-stroked-button color="primary" type="button" (click)="addMailbox()">
+            <mat-icon>add</mat-icon> Agregar buzón
+          </button>
+        </div>
+        <p class="hint">
+          Cada buzón se revisa por separado buscando correos de OSIGU. Usa una
+          <strong>contraseña de aplicación</strong> de Google (no la contraseña normal).
+        </p>
+
+        <div class="mailbox-row" *ngFor="let mb of mailboxes; let i = index">
+          <mat-form-field appearance="outline">
+            <mat-label>Correo</mat-label>
+            <input matInput [(ngModel)]="mb.user" [name]="'mbUser' + i" placeholder="soporte@clinicadelapresentacion.com.co" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ mb.hasPassword ? 'Contraseña (guardada — dejar vacío para conservar)' : 'Contraseña de aplicación' }}</mat-label>
+            <input matInput type="password" [(ngModel)]="mb.password" [name]="'mbPass' + i"
+                   [placeholder]="mb.hasPassword ? '••••••••' : 'xxxx xxxx xxxx xxxx'" />
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="narrow">
+            <mat-label>Etiqueta</mat-label>
+            <input matInput [(ngModel)]="mb.label" [name]="'mbLabel' + i" placeholder="Soporte" />
+          </mat-form-field>
+          <button mat-icon-button color="warn" type="button" (click)="removeMailbox(i)" matTooltip="Quitar buzón">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+
+        <p class="empty" *ngIf="mailboxes.length === 0">Sin buzones. Agrega al menos uno.</p>
+      </div>
 
       <div class="config-grid">
         <mat-form-field appearance="outline">
@@ -78,14 +106,12 @@
           <input matInput type="number" min="30" max="3600" [(ngModel)]="form.checkIntervalSeconds" name="interval" />
           <mat-hint>Entre 30 y 3600.</mat-hint>
         </mat-form-field>
-
-        <div class="config-row">
-          <mat-slide-toggle [(ngModel)]="form.notifyParticipants" name="notifyParticipants">
-            Notificar también a participantes
-          </mat-slide-toggle>
-          <p class="hint">Además del técnico asignado, avisa a los participantes (tech/admin) del ticket.</p>
-        </div>
       </div>
+
+      <p class="hint">
+        Se notifica siempre al técnico asignado y a los participantes del ticket que sean
+        técnicos o administradores (los participantes con rol usuario nunca reciben estas alertas).
+      </p>
 
       <div class="actions">
         <button mat-raised-button color="primary" (click)="save()" [disabled]="loading.saving">
@@ -112,30 +138,40 @@
       </button>
     </mat-card-header>
     <mat-card-content>
-      <div class="table-wrap" *ngIf="history.length > 0; else emptyHistory">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>De</th>
-              <th>Asunto</th>
-              <th>TKT</th>
-              <th>Ticket interno</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let e of history">
-              <td>{{ e.processed_at | date:'short' }}</td>
-              <td>{{ e.from_address }}</td>
-              <td class="subject" [title]="e.subject">{{ e.subject }}</td>
-              <td>{{ e.external_ticket_id || '—' }}</td>
-              <td>
-                <a *ngIf="e.ticket_id" [routerLink]="['/ticket', e.ticket_id]">#{{ e.ticket_id }}</a>
-                <span *ngIf="!e.ticket_id">sin coincidencia</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div *ngIf="history.length > 0; else emptyHistory">
+        <div class="table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>De</th>
+                <th>Asunto</th>
+                <th>TKT</th>
+                <th>Ticket interno</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of pagedHistory">
+                <td>{{ e.processed_at | date:'dd-MM-yyyy, HH:mm' }}</td>
+                <td>{{ e.from_address }}</td>
+                <td class="subject" [title]="e.subject">{{ e.subject }}</td>
+                <td>{{ e.external_ticket_id || '—' }}</td>
+                <td>
+                  <a *ngIf="e.ticket_id" [routerLink]="['/ticket', e.ticket_id]">#{{ e.ticket_id }}</a>
+                  <span *ngIf="!e.ticket_id">sin coincidencia</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <mat-paginator
+          [length]="history.length"
+          [pageSize]="pageSize"
+          [pageIndex]="pageIndex"
+          [pageSizeOptions]="pageSizeOptions"
+          (page)="onPage($event)"
+          aria-label="Páginas de correos procesados">
+        </mat-paginator>
       </div>
       <ng-template #emptyHistory>
         <p class="empty">Aún no se han procesado correos.</p>

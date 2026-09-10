@@ -18,12 +18,20 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
+export interface Mailbox {
+  user: string;
+  password?: string;   // solo se envía al guardar; el GET nunca la devuelve
+  host: string;
+  port: number;
+  label: string;
+  hasPassword?: boolean;
+}
+
 export interface EmailMonitorSettings {
   enabled: boolean;
   filterSenders: string[];
-  techRecipients: string[];
   checkIntervalSeconds: number;
-  notifyParticipants: boolean;
+  mailboxes: Mailbox[];
   updatedAt?: string | null;
 }
 
@@ -32,14 +40,12 @@ export interface EmailMonitorStatus {
   isConnected: boolean;
   isConfigured: boolean;
   enabled: boolean;
-  notifyParticipants: boolean;
   lastCheckTime: string | null;
   errorCount: number;
   processedEmailsCount: number;
+  mailboxes: Mailbox[];
   config: {
-    user: string;
     filterSenders: string[];
-    techRecipients: string[];
     checkIntervalSeconds: number;
   };
 }

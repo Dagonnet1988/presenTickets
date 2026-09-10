@@ -36,7 +36,9 @@ class EmailMonitorService {
     // Config gestionable desde el panel admin (tabla email_monitor_settings).
     // Si la fila existe, manda sobre las variables de entorno.
     this.settingsEnabled = true;
-    this.notifyParticipants = true;
+    // Buzones a vigilar: [{ user, password, host, port, label }]. Cada uno se
+    // revisa en cada ciclo con una conexión IMAP efímera.
+    this.mailboxes = [];
     this.monitorInterval = null;
     this.lastCheckTime = null;
     this.errorCount = 0;
@@ -89,7 +91,7 @@ class EmailMonitorService {
   async loadSettingsFromDB() {
     try {
       const result = await pool.query(
-        `SELECT enabled, filter_senders, tech_recipients, check_interval_seconds, notify_participants
+        `SELECT enabled, filter_senders, tech_recipients, check_interval_seconds, mailboxes
          FROM email_monitor_settings WHERE id = 1`
       );
       if (result.rows.length === 0) {
@@ -101,14 +103,44 @@ class EmailMonitorService {
       this.config.filterSenders = s.filter_senders || '';
       this.config.techRecipients = s.tech_recipients || '';
       this.config.checkInterval = Math.max(30, parseInt(s.check_interval_seconds, 10) || 120) * 1000;
-      this.notifyParticipants = s.notify_participants !== false;
       this.settingsEnabled = s.enabled !== false;
+
+      // mailboxes viene como JSONB (array ya parseado por pg)
+      const rawMailboxes = Array.isArray(s.mailboxes) ? s.mailboxes : [];
+      this.mailboxes = rawMailboxes
+        .filter((mb) => mb && mb.user)
+        .map((mb) => ({
+          user: String(mb.user).trim().toLowerCase(),
+          password: mb.password || '',
+          host: mb.host || this.config.host || 'imap.gmail.com',
+          port: parseInt(mb.port, 10) || this.config.port || 993,
+          label: mb.label || mb.user
+        }));
 
       return { found: true, enabled: this.settingsEnabled };
     } catch (error) {
       console.error('📧 ⚠️  No se pudo cargar email_monitor_settings, se usa el entorno:', error.message);
       return { found: false, enabled: this.settingsEnabled };
     }
+  }
+
+  /**
+   * Buzones a vigilar. Si no hay configurados en BD, usa el del entorno.
+   */
+  getMailboxes() {
+    if (this.mailboxes.length > 0) {
+      return this.mailboxes;
+    }
+    if (this.config.auth.user && this.config.auth.pass) {
+      return [{
+        user: this.config.auth.user.toLowerCase(),
+        password: this.config.auth.pass,
+        host: this.config.host,
+        port: this.config.port,
+        label: 'principal (entorno)'
+      }];
+    }
+    return [];
   }
 
   /**
@@ -340,23 +372,17 @@ class EmailMonitorService {
       return { success: false, message: 'El monitor está deshabilitado en la configuración' };
     }
 
-    if (!this.isConfigured()) {
-      console.log('📧 ❌ Monitor no configurado - faltan credenciales');
-      return { 
-        success: false, 
-        message: 'El monitor no está configurado. Configure las variables EMAIL_MONITOR_USER y EMAIL_MONITOR_PASSWORD' 
+    const mailboxes = this.getMailboxes().filter((mb) => mb.user && mb.password);
+    if (mailboxes.length === 0) {
+      console.log('📧 ❌ Monitor no configurado - no hay buzones con credenciales');
+      return {
+        success: false,
+        message: 'No hay buzones configurados. Agrega al menos un buzón con su contraseña de aplicación.'
       };
     }
 
-    // Conectar inicialmente
-    const connected = await this.connect();
-    if (!connected) {
-      console.log('📧 ❌ No se pudo conectar al servidor IMAP');
-      return { success: false, message: 'No se pudo conectar al servidor de correo' };
-    }
-
     this.isRunning = true;
-    console.log(`📧 ✅ Monitor de email activo - Verificando cada ${this.config.checkInterval / 1000}s`);
+    console.log(`📧 ✅ Monitor de email activo - ${mailboxes.length} buzón(es), cada ${this.config.checkInterval / 1000}s`);
 
     // Realizar primera revisión inmediatamente
     await this.checkEmails();
@@ -391,89 +417,89 @@ class EmailMonitorService {
   }
 
   /**
-   * Revisar correos nuevos (busca por fecha reciente, no por estado leído)
+   * Revisar todos los buzones configurados.
    */
   async checkEmails() {
-    if (this.nextConnectionRetryAt && Date.now() < this.nextConnectionRetryAt) {
+    this.lastCheckTime = new Date();
+
+    const mailboxes = this.getMailboxes().filter((mb) => mb.user && mb.password);
+    if (mailboxes.length === 0) {
+      console.warn('📧 ⚠️  No hay buzones con credenciales para revisar');
       return;
     }
 
-    // Forzar reconexión si no está conectado
-    if (!this.isConnected || !this.client) {
-      const connected = await this.connect();
-      if (!connected) {
-        return;
-      }
+    let anyOk = false;
+    for (const mb of mailboxes) {
+      const ok = await this.checkOneMailbox(mb);
+      anyOk = anyOk || ok;
     }
 
+    this.isConnected = anyOk;
+    if (anyOk) {
+      this.errorCount = 0;
+    }
+  }
+
+  /**
+   * Revisar un buzón concreto con una conexión IMAP efímera.
+   * Devuelve true si la conexión y la lectura fueron correctas.
+   */
+  async checkOneMailbox(mb) {
+    const label = mb.label || mb.user;
+    let client = null;
     try {
-      this.lastCheckTime = new Date();
-      
-      // Abrir INBOX
-      const lock = await this.client.getMailboxLock('INBOX');
-      
+      client = new ImapFlow({
+        host: mb.host || 'imap.gmail.com',
+        port: mb.port || 993,
+        secure: true,
+        auth: { user: mb.user, pass: mb.password },
+        logger: false,
+        socketTimeout: 60000,
+        greetingTimeout: 30000,
+        authTimeout: 30000
+      });
+
+      await client.connect();
+
+      const lock = await client.getMailboxLock('INBOX');
       try {
-        // Buscar correos recientes (últimos 15 minutos) del remitente específico
-        // Esto funciona incluso si el correo ya está marcado como leído
-        const lookbackMinutes = 15;
-        const sinceDate = new Date(Date.now() - lookbackMinutes * 60 * 1000);
-        
-        const messages = [];
-        let totalChecked = 0;
-        let skippedSender = 0;
-        let skippedProcessed = 0;
+        const sinceDate = new Date(Date.now() - 15 * 60 * 1000);
         const allowedSenders = this.getAllowedSenders();
+        let checked = 0;
+        let nuevos = 0;
+        let yaProcesados = 0;
 
-        // Buscar por fecha (SINCE) y luego filtrar por remitente
-        for await (const message of this.client.fetch(
+        for await (const message of client.fetch(
           { since: sinceDate },
-          { 
-            envelope: true, 
-            source: true,
-            bodyStructure: true 
-          }
+          { envelope: true, source: true }
         )) {
-          totalChecked++;
+          checked++;
           const fromAddress = message.envelope?.from?.[0]?.address?.toLowerCase() || '';
+          if (!this.isAllowedSender(fromAddress)) continue;
 
-          if (this.isAllowedSender(fromAddress)) {
-            const messageId = message.envelope?.messageId;
-            const subject = message.envelope?.subject || 'Sin asunto';
-
-            // Verificar si ya procesamos este correo (en BD)
-            const alreadyProcessed = await this.isEmailProcessed(messageId);
-
-            if (!alreadyProcessed) {
-              messages.push(message);
-            } else {
-              skippedProcessed++;
-            }
-          } else {
-            skippedSender++;
+          const messageId = message.envelope?.messageId;
+          if (await this.isEmailProcessed(messageId)) {
+            yaProcesados++;
+            continue;
           }
+
+          nuevos++;
+          await this.processEmail(message, mb);
         }
 
-        console.log(`📧 Revisión: ${totalChecked} correos revisados, ${messages.length} nuevos de Osigu (${skippedProcessed} ya procesados, ${skippedSender} de otros remitentes). Filtro activo: [${allowedSenders.join(', ')}]`);
-
-        if (messages.length > 0) {
-          for (const message of messages) {
-            await this.processEmail(message);
-          }
-        }
-
-        this.errorCount = 0;
+        console.log(`📧 [${label}] ${checked} revisados, ${nuevos} nuevos de [${allowedSenders.join(', ')}] (${yaProcesados} ya procesados)`);
       } finally {
-        try {
-          lock.release();
-        } catch (e) {
-          // Ignorar error al liberar lock - conexión puede estar cerrada
-        }
+        try { lock.release(); } catch (e) { /* noop */ }
       }
+
+      await client.logout();
+      return true;
     } catch (error) {
-      console.error('❌ Error revisando correos:', error.message);
+      console.error(`📧 ❌ Error revisando buzón ${label}:`, error.message);
       this.errorCount++;
-      // Forzar desconexión limpia para que el próximo ciclo reconecte
-      await this.disconnect();
+      try { if (client) await client.logout(); } catch (e) { /* noop */ }
+      try { if (client) client.close(); } catch (e) { /* noop */ }
+      return false;
     }
   }
 
@@ -512,9 +538,11 @@ class EmailMonitorService {
   }
 
   /**
-   * Procesar un correo individual
+   * Procesar un correo individual encontrado en un buzón vigilado.
+   * El correo ya pasó el filtro de remitente permitido, así que se procesa
+   * (no se exige que el destinatario coincida con una lista).
    */
-  async processEmail(message) {
+  async processEmail(message, mailbox = null) {
     try {
       const messageId = message.envelope?.messageId;
 
@@ -525,24 +553,20 @@ class EmailMonitorService {
       const date = message.envelope?.date || new Date();
       const emailSource = this.extractTextFromSource(message.source);
       const recipientEmails = this.extractRecipientEmails(message);
-      const allowedRecipients = this.getAllowedTechRecipients();
-      const matchedRecipients = recipientEmails.filter((email) => allowedRecipients.includes(email));
 
-      console.log(`📧 Procesando correo de [${fromAddress}] asunto="${subject.substring(0, 80)}"`);
-      console.log(`📧   Destinatarios del correo: [${recipientEmails.join(', ')}]`);
-      console.log(`📧   Técnicos permitidos (env): [${allowedRecipients.join(', ')}]`);
-      console.log(`📧   Técnicos coincidentes: [${matchedRecipients.join(', ')}]`);
+      // Para el enrutado fallback (cuando no hay ticket interno): el buzón que
+      // recibió el correo + los destinatarios To/CC + la lista de buzones técnicos.
+      const routingHints = [...new Set([
+        ...(mailbox?.user ? [mailbox.user.toLowerCase()] : []),
+        ...recipientEmails,
+        ...this.getAllowedTechRecipients()
+      ])];
 
-      if (matchedRecipients.length === 0) {
-        console.warn(`📧 ⚠️  Correo descartado: ningún destinatario coincide con EMAIL_TECH_RECIPIENTS`);
-        return;
-      }
-
-      // Extraer número de ticket externo desde cuerpo (formato TKT-xxxxx)
       const externalTicketId = this.extractExternalTicketId(subject, emailSource);
-      console.log(`📧   ID externo extraído del cuerpo: ${externalTicketId || '(no encontrado)'}`);
 
-      // Crear notificación para técnicos (incluye messageId para notificación compartida)
+      console.log(`📧 Procesando correo de [${fromAddress}] en buzón [${mailbox?.label || mailbox?.user || '?'}] asunto="${subject.substring(0, 80)}"`);
+      console.log(`📧   TKT extraído del asunto: ${externalTicketId || '(no encontrado)'}`);
+
       await this.createNotificationForTechnicians({
         messageId,
         externalTicketId,
@@ -550,10 +574,9 @@ class EmailMonitorService {
         fromName,
         fromAddress,
         date,
-        recipientEmails: matchedRecipients
+        recipientEmails: routingHints
       });
 
-      // Marcar correo como procesado en BD (no en memoria)
       await this.markEmailAsProcessed(messageId, externalTicketId, subject, fromAddress);
 
     } catch (error) {
@@ -606,20 +629,17 @@ class EmailMonitorService {
         }
       }
 
-      // Si el ticket existe, notificar al técnico asignado y (si está habilitado) a los
-      // participantes (rol tech/admin, activos). Si no hay ninguno válido, fallback al
+      // Si el ticket existe, notificar al técnico asignado y a los participantes que
+      // sean tech/admin y estén activos (los participantes con rol 'user' nunca reciben
+      // estas alertas de soporte externo). Si no hay ninguno válido, fallback al
       // destinatario del correo.
       let usersResult;
       let routingMode;
       if (relatedTicketId) {
-        const assignedOrParticipant = this.notifyParticipants
-          ? '(u.id = t.assigned_to OR u.id = ANY(t.participants))'
-          : 'u.id = t.assigned_to';
-
         usersResult = await pool.query(
           `SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
            FROM tickets t
-           JOIN users u ON ${assignedOrParticipant}
+           JOIN users u ON (u.id = t.assigned_to OR u.id = ANY(t.participants))
            WHERE t.id = $1
              AND u.role IN ('tech', 'admin')
              AND u.status = true`,
@@ -627,7 +647,7 @@ class EmailMonitorService {
         );
 
         if (usersResult.rows.length > 0) {
-          routingMode = this.notifyParticipants ? 'asignado/participantes del ticket' : 'asignado al ticket';
+          routingMode = 'asignado/participantes del ticket';
         } else {
           // Si no hay asignado/participante válido, fallback a destinatario(s) del correo.
           usersResult = await pool.query(
@@ -752,22 +772,25 @@ class EmailMonitorService {
       // Error no crítico - continuar sin conteo
     }
 
+    const mailboxes = this.getMailboxes().map((mb) => ({
+      user: mb.user,
+      label: mb.label || mb.user,
+      host: mb.host,
+      port: mb.port,
+      hasPassword: !!mb.password
+    }));
+
     return {
       isRunning: this.isRunning,
       isConnected: this.isConnected,
-      isConfigured: this.isConfigured(),
+      isConfigured: mailboxes.length > 0,
       enabled: this.settingsEnabled,
-      notifyParticipants: this.notifyParticipants,
       lastCheckTime: this.lastCheckTime,
       errorCount: this.errorCount,
       maxErrors: this.maxErrors,
+      mailboxes,
       config: {
-        host: this.config.host,
-        port: this.config.port,
-        user: this.config.auth.user ? this.config.auth.user.replace(/(.{3}).*(@.*)/, '$1***$2') : 'No configurado',
-        filterSender: this.config.filterSender,
         filterSenders: this.getAllowedSenders(),
-        techRecipients: this.getAllowedTechRecipients(),
         checkIntervalSeconds: this.config.checkInterval / 1000
       },
       processedEmailsCount: processedCount
