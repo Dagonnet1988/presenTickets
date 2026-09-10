@@ -36,6 +36,10 @@ class EmailMonitorService {
     // Config gestionable desde el panel admin (tabla email_monitor_settings).
     // Si la fila existe, manda sobre las variables de entorno.
     this.settingsEnabled = true;
+    // Ventana de búsqueda hacia atrás (IMAP SINCE es por día). El dedupe por
+    // message_id evita reprocesar; conviene una ventana holgada por si el
+    // servicio estuvo caído.
+    this.lookbackDays = parseInt(process.env.EMAIL_MONITOR_LOOKBACK_DAYS, 10) || 3;
     // Buzones a vigilar: [{ user, password, host, port, label }]. Cada uno se
     // revisa en cada ciclo con una conexión IMAP efímera.
     this.mailboxes = [];
@@ -196,6 +200,9 @@ class EmailMonitorService {
 
   /**
    * Validar si un remitente pertenece a Osigu según configuración.
+   * Una entrada con "@" exige coincidencia exacta.
+   * Una entrada sin "@" se trata como dominio (coincide help@osigu.com,
+   * noreply@osigu.com, x@mail.osigu.com, ...).
    */
   isAllowedSender(fromAddress) {
     const normalizedFrom = (fromAddress || '').toLowerCase().trim();
@@ -204,7 +211,14 @@ class EmailMonitorService {
     const allowedSenders = this.getAllowedSenders();
     if (allowedSenders.length === 0) return false;
 
-    return allowedSenders.some((sender) => normalizedFrom === sender);
+    return allowedSenders.some((sender) => {
+      if (sender.includes('@')) {
+        return normalizedFrom === sender;
+      }
+      return normalizedFrom === sender
+        || normalizedFrom.endsWith('@' + sender)
+        || normalizedFrom.endsWith('.' + sender);
+    });
   }
 
   /**
@@ -461,35 +475,71 @@ class EmailMonitorService {
 
       await client.connect();
 
-      const lock = await client.getMailboxLock('INBOX');
+      // Escanear "Todos los mensajes" (\All) si existe — así se ven también los
+      // correos que fueron archivados. Si no, INBOX.
+      let folder = 'INBOX';
       try {
-        const sinceDate = new Date(Date.now() - 15 * 60 * 1000);
-        const allowedSenders = this.getAllowedSenders();
-        let checked = 0;
-        let nuevos = 0;
-        let yaProcesados = 0;
+        const boxes = await client.list();
+        const allMail = boxes.find((b) => (b.specialUse || '').toLowerCase() === '\\all');
+        if (allMail?.path) folder = allMail.path;
+      } catch (e) {
+        /* usar INBOX */
+      }
 
-        for await (const message of client.fetch(
-          { since: sinceDate },
-          { envelope: true, source: true }
-        )) {
+      const sinceDate = new Date(Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000);
+      const allowedSenders = this.getAllowedSenders();
+
+      let checked = 0;
+      let osiguVistos = 0;
+      let yaProcesados = 0;
+      let nuevos = 0;
+      const otrosRemitentes = [];
+      const pendientes = []; // { envelope, uid }
+
+      const lock = await client.getMailboxLock(folder);
+      try {
+        // 1ª pasada: solo envelope (rápido)
+        for await (const message of client.fetch({ since: sinceDate }, { envelope: true })) {
           checked++;
           const fromAddress = message.envelope?.from?.[0]?.address?.toLowerCase() || '';
-          if (!this.isAllowedSender(fromAddress)) continue;
 
+          if (!this.isAllowedSender(fromAddress)) {
+            if (fromAddress) otrosRemitentes.push(fromAddress);
+            continue;
+          }
+
+          osiguVistos++;
           const messageId = message.envelope?.messageId;
           if (await this.isEmailProcessed(messageId)) {
             yaProcesados++;
             continue;
           }
-
-          nuevos++;
-          await this.processEmail(message, mb);
+          pendientes.push({ envelope: message.envelope, uid: message.uid });
         }
 
-        console.log(`📧 [${label}] ${checked} revisados, ${nuevos} nuevos de [${allowedSenders.join(', ')}] (${yaProcesados} ya procesados)`);
+        // 2ª pasada: bajar el cuerpo solo si el asunto no trae el TKT
+        for (const item of pendientes) {
+          const subject = item.envelope?.subject || '';
+          let source = '';
+          if (!this.ticketPattern.test(subject)) {
+            try {
+              const full = await client.fetchOne(item.uid, { source: true }, { uid: true });
+              source = this.extractTextFromSource(full?.source);
+            } catch (e) {
+              /* seguimos solo con el asunto */
+            }
+          }
+          await this.processEmail({ envelope: item.envelope, source }, mb);
+          nuevos++;
+        }
       } finally {
         try { lock.release(); } catch (e) { /* noop */ }
+      }
+
+      console.log(`📧 [${label}] carpeta="${folder}" · ${checked} correos (${this.lookbackDays}d) · OSIGU: ${osiguVistos} · nuevos: ${nuevos} · ya procesados: ${yaProcesados} · filtro: [${allowedSenders.join(', ')}]`);
+      if (osiguVistos === 0 && checked > 0) {
+        const muestra = [...new Set(otrosRemitentes)].slice(0, 10).join(', ');
+        console.log(`📧 [${label}] ⚠️  Sin correos de OSIGU. Remitentes vistos: ${muestra || '(ninguno)'}`);
       }
 
       await client.logout();
@@ -681,9 +731,25 @@ class EmailMonitorService {
       console.log(`📧   Enrutando notificación a [${techNames}] — modo: ${routingMode}`);
 
       // Mensaje de notificación
-      const message = externalTicketId 
+      const message = externalTicketId
         ? `📧 Respuesta de soporte externo - Ticket #${externalTicketId}: ${subject.substring(0, 100)}`
         : `📧 Correo de soporte externo: ${subject.substring(0, 100)}`;
+
+      // Anti-spam de hilos: si en los últimos 20 min ya se notificó por este mismo
+      // ticket externo (aún sin leer), no volver a notificar por cada respuesta del hilo.
+      if (externalTicketId) {
+        const reciente = await pool.query(
+          `SELECT 1 FROM notifications
+           WHERE type = 'external_email' AND external_ticket_id = $1 AND is_read = false
+             AND created_at > NOW() - INTERVAL '20 minutes'
+           LIMIT 1`,
+          [externalTicketId]
+        );
+        if (reciente.rows.length > 0) {
+          console.log(`📧   Hilo #${externalTicketId}: ya hay una notificación reciente sin leer, se omite la de este correo`);
+          return [];
+        }
+      }
 
       // Crear notificación para cada técnico (comparten email_message_id)
       const notifications = [];
