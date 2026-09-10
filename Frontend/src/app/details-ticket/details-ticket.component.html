@@ -66,52 +66,21 @@
             Cerrar Ticket
           </button>
 
-          <button
-            mat-raised-button
-            color="accent"
-            class="action-button"
-            (click)="confirmAction('Escalar a Externo')"
-            *ngIf="
-              ticket?.status !== 'Cerrado' &&
-              ticket?.status !== 'Resuelto' &&
-              ticket?.status !== 'Escalado a externo' &&
-              userRole !== 'user'
-            "
+          <!-- Cambio de estado (admin/tech): desplegable con todos los estados -->
+          <mat-form-field
+            *ngIf="userRole !== 'user'"
+            appearance="outline"
+            class="status-select-field"
+            subscriptSizing="dynamic"
           >
-            <mat-icon>trending_up</mat-icon>
-            Escalar a Externo
-          </button>
-
-          <button
-            mat-raised-button
-            color="warn"
-            class="action-button"
-            (click)="confirmAction('Escalar a Tier 3')"
-            *ngIf="
-              ticket?.status !== 'Cerrado' &&
-              ticket?.status !== 'Resuelto' &&
-              ticket?.status !== 'Escalado a Tier 3 / Gerente de Cuenta' &&
-              userRole !== 'user'
-            "
-          >
-            <mat-icon>supervisor_account</mat-icon>
-            Escalar a Tier 3
-          </button>
-
-          <button
-            mat-raised-button
-            color="primary"
-            class="action-button"
-            (click)="confirmAction('resolver')"
-            *ngIf="
-              ticket?.status !== 'Cerrado' &&
-              ticket?.status !== 'Resuelto' &&
-              userRole !== 'user'
-            "
-          >
-            <mat-icon>check_circle</mat-icon>
-            Resolver Ticket
-          </button>
+            <mat-label>Estado del ticket</mat-label>
+            <mat-select
+              [(ngModel)]="statusModel"
+              (selectionChange)="onStatusSelect($event.value)"
+            >
+              <mat-option *ngFor="let s of allStatuses" [value]="s">{{ s }}</mat-option>
+            </mat-select>
+          </mat-form-field>
 
           <button
             *ngIf="userRole !== 'user' && (ticket?.status === 'Cerrado' || ticket?.status === 'Resuelto')"
@@ -519,10 +488,13 @@
 <!-- Diálogo de confirmación -->
 <ng-template #confirmDialog let-data>
   <h1 mat-dialog-title>Confirmación</h1>
-  <div mat-dialog-content>¿Estás seguro de que deseas {{ data.action }} este ticket?</div>
+  <div mat-dialog-content>
+    <ng-container *ngIf="data.customMessage; else defaultConfirm">{{ data.customMessage }}</ng-container>
+    <ng-template #defaultConfirm>¿Estás seguro de que deseas {{ data.action }} este ticket?</ng-template>
+  </div>
   <div mat-dialog-actions>
-    <button mat-button (click)="dialogRef.close(false)">Cancelar</button>
-    <button mat-button (click)="dialogRef.close(true)">Confirmar</button>
+    <button mat-button mat-dialog-close>Cancelar</button>
+    <button mat-button [mat-dialog-close]="true" color="primary">Confirmar</button>
   </div>
 </ng-template>
 

@@ -86,6 +86,21 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   private assignmentDialogRef: MatDialogRef<any> | null = null;
   selectedPriority: string = '';
   selectedAssignedTo: string = '';
+
+  // Cambio manual de estado (admin/tech) — el desplegable expone todos los estados.
+  // Los cambios automáticos (por comentario/asignación) siguen igual en el backend.
+  statusModel: string = '';
+  readonly allStatuses: string[] = [
+    'Creado',
+    'En revisión',
+    'En proceso',
+    'En gestión',
+    'Esperando respuesta del usuario',
+    'Escalado a externo',
+    'Escalado a Tier 3 / Gerente de Cuenta',
+    'Resuelto',
+    'Cerrado'
+  ];
   showStickyHeader: boolean = false; // Para el header sticky al hacer scroll
   private subscriptions: Subscription = new Subscription();
 
@@ -192,6 +207,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       ]).subscribe({
         next: ([ticket, comments]) => {
           this.ticket = ticket;
+          this.statusModel = ticket?.status || '';
           if (this.ticket.created_at) {
             this.ticket.created_at = new Date(this.ticket.created_at);
           }
@@ -575,6 +591,75 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   goBack(): void {
     // Navegar al home - los filtros se restaurarán desde sessionStorage
     this.router.navigate(['/home']);
+  }
+
+  // Cambio de estado desde el desplegable (admin/tech)
+  onStatusSelect(newStatus: string): void {
+    const current = this.ticket?.status || '';
+    if (!newStatus || newStatus === current) {
+      return;
+    }
+
+    const dref = this.dialog.open(this.confirmDialog, {
+      data: {
+        action: 'cambiar-estado',
+        customMessage: `Vas a cambiar el estado de "${current}" a "${newStatus}". ¿Continuar?`
+      }
+    });
+
+    dref.afterClosed().subscribe(ok => {
+      if (!ok) {
+        // Revertir la selección visual del desplegable
+        this.statusModel = current;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.applyStatusChange(newStatus, current);
+    });
+  }
+
+  private applyStatusChange(newStatus: string, prevStatus: string): void {
+    const closedStates = ['Cerrado', 'Resuelto'];
+
+    if (newStatus === 'Cerrado') {
+      this.closeTicket();
+      return;
+    }
+    if (newStatus === 'Resuelto') {
+      this.resolveTicket();
+      return;
+    }
+    // De un estado cerrado/resuelto a uno activo => reapertura (mantiene la lógica de uncloseTicket)
+    if (closedStates.includes(prevStatus) && !closedStates.includes(newStatus)) {
+      this.reopenToStatus(newStatus);
+      return;
+    }
+    this.updateStatus(newStatus);
+  }
+
+  private reopenToStatus(newStatus: string): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      return;
+    }
+
+    const originalTitle = this.ticket?.title || '';
+    const newTitle = originalTitle.startsWith('REABIERTO') ? originalTitle : 'REABIERTO ' + originalTitle;
+
+    this.subscriptions.add(
+      this.ticketService.updateTicketName(ticketId, newTitle).pipe(
+        switchMap(() => this.ticketService.updateTicketStatus(ticketId, newStatus, this.userRole)),
+        catchError((error: any) => {
+          console.error('Error al reabrir el ticket:', error);
+          this.cdr.markForCheck();
+          return of(null);
+        })
+      ).subscribe((res: any) => {
+        if (res !== null) {
+          this.loadTicketDetails(ticketId);
+        }
+      })
+    );
   }
 
   confirmAction(action: string): void {

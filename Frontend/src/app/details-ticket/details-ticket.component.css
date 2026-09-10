@@ -263,6 +263,16 @@
   backdrop-filter: blur(10px);
 }
 
+/* Desplegable de cambio de estado (admin/tech) */
+.status-select-field {
+  min-width: 240px;
+  max-width: 300px;
+}
+
+.status-select-field .mat-mdc-text-field-wrapper {
+  background: #ffffff;
+}
+
 .action-button .mat-icon {
   font-size: 18px;
   width: 18px;
