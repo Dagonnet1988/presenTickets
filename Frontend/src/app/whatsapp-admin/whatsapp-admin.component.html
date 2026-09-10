@@ -242,6 +242,24 @@
                 </p>
               </div>
 
+              <!-- Reglas de creación de tickets -->
+              <mat-divider class="setting-divider"></mat-divider>
+              <h4><mat-icon>rule</mat-icon>Reglas de creación de tickets</h4>
+
+              <div class="setting-item">
+                <mat-form-field appearance="outline" style="width: 100%; max-width: 420px;">
+                  <mat-label>Tope de tickets en "Esperando respuesta del usuario"</mat-label>
+                  <input matInput type="number" min="1" max="50"
+                         [(ngModel)]="systemSettings.max_pending_user_tickets"
+                         name="maxPendingUserTickets" />
+                </mat-form-field>
+                <p class="setting-description">
+                  Un usuario (rol <em>user</em>) no podrá crear tickets nuevos si ya tiene
+                  este número o más en estado "Esperando respuesta del usuario".
+                  Admin y técnicos no tienen límite.
+                </p>
+              </div>
+
               <!-- Tipos de Notificaciones -->
               <mat-divider class="setting-divider"></mat-divider>
               <h4><mat-icon>notifications</mat-icon>Tipos de Notificaciones</h4>

@@ -263,7 +263,8 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
         whatsapp_global_comments,
-        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope
+        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope,
+        COALESCE(max_pending_user_tickets, 3) as max_pending_user_tickets
       FROM system_settings
       WHERE id = 1
     `);
@@ -278,7 +279,8 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
         whatsapp_global_ticket_assigned: true,
         whatsapp_global_ticket_status: true,
         whatsapp_global_comments: true,
-        whatsapp_recipient_scope: 'all'
+        whatsapp_recipient_scope: 'all',
+        max_pending_user_tickets: 3
       };
       return res.json(defaultSettings);
     }
@@ -306,6 +308,9 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
     // Alcance de destinatarios: solo se aceptan valores conocidos
     const recipientScope = req.body.whatsapp_recipient_scope === 'tech_only' ? 'tech_only' : 'all';
 
+    // Tope de tickets "Esperando respuesta del usuario" para bloquear la creación (1..50)
+    const maxPending = Math.min(50, Math.max(1, parseInt(req.body.max_pending_user_tickets, 10) || 3));
+
     const client = await pool.connect();
 
     // Verificar si existe la tabla system_settings y el registro
@@ -323,15 +328,17 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_assigned,
           whatsapp_global_ticket_status,
           whatsapp_global_comments,
-          whatsapp_recipient_scope
-        ) VALUES (1, $1, $2, $3, $4, $5, $6)
+          whatsapp_recipient_scope,
+          max_pending_user_tickets
+        ) VALUES (1, $1, $2, $3, $4, $5, $6, $7)
       `, [
         whatsapp_global_enabled ?? true,
         whatsapp_global_ticket_created ?? true,
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
         whatsapp_global_comments ?? true,
-        recipientScope
+        recipientScope,
+        maxPending
       ]);
     } else {
       // Actualizar registro existente
@@ -343,6 +350,7 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_status = $4,
           whatsapp_global_comments = $5,
           whatsapp_recipient_scope = $6,
+          max_pending_user_tickets = $7,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = 1
       `, [
@@ -351,7 +359,8 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
         whatsapp_global_comments ?? true,
-        recipientScope
+        recipientScope,
+        maxPending
       ]);
     }
 
