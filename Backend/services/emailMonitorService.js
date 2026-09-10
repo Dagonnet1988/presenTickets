@@ -33,6 +33,10 @@ class EmailMonitorService {
     this.io = null;
     this.isRunning = false;
     this.isConnected = false;
+    // Config gestionable desde el panel admin (tabla email_monitor_settings).
+    // Si la fila existe, manda sobre las variables de entorno.
+    this.settingsEnabled = true;
+    this.notifyParticipants = true;
     this.monitorInterval = null;
     this.lastCheckTime = null;
     this.errorCount = 0;
@@ -76,6 +80,65 @@ class EmailMonitorService {
    */
   isConfigured() {
     return this.config.auth.user && this.config.auth.pass;
+  }
+
+  /**
+   * Cargar la configuración desde la BD (email_monitor_settings).
+   * Si la fila existe, sus valores sobrescriben a los del entorno.
+   */
+  async loadSettingsFromDB() {
+    try {
+      const result = await pool.query(
+        `SELECT enabled, filter_senders, tech_recipients, check_interval_seconds, notify_participants
+         FROM email_monitor_settings WHERE id = 1`
+      );
+      if (result.rows.length === 0) {
+        return { found: false, enabled: this.settingsEnabled };
+      }
+
+      const s = result.rows[0];
+      this.config.filterSender = '';
+      this.config.filterSenders = s.filter_senders || '';
+      this.config.techRecipients = s.tech_recipients || '';
+      this.config.checkInterval = Math.max(30, parseInt(s.check_interval_seconds, 10) || 120) * 1000;
+      this.notifyParticipants = s.notify_participants !== false;
+      this.settingsEnabled = s.enabled !== false;
+
+      return { found: true, enabled: this.settingsEnabled };
+    } catch (error) {
+      console.error('📧 ⚠️  No se pudo cargar email_monitor_settings, se usa el entorno:', error.message);
+      return { found: false, enabled: this.settingsEnabled };
+    }
+  }
+
+  /**
+   * Releer la configuración de la BD y aplicarla en caliente:
+   * ajusta el intervalo y arranca/detiene el monitor según "enabled".
+   */
+  async applySettings() {
+    const prevInterval = this.config.checkInterval;
+    await this.loadSettingsFromDB();
+
+    if (this.isRunning && this.monitorInterval && this.config.checkInterval !== prevInterval) {
+      clearInterval(this.monitorInterval);
+      this.monitorInterval = setInterval(async () => {
+        if (this.errorCount >= this.maxErrors) {
+          await this.stop();
+          return;
+        }
+        await this.checkEmails();
+      }, this.config.checkInterval);
+      console.log(`📧 Intervalo de revisión actualizado a ${this.config.checkInterval / 1000}s`);
+    }
+
+    if (this.settingsEnabled && !this.isRunning) {
+      await this.start();
+    } else if (!this.settingsEnabled && this.isRunning) {
+      await this.stop();
+      console.log('📧 Monitor detenido por configuración (enabled = false)');
+    }
+
+    return this.getStatus();
   }
 
   /**
@@ -268,6 +331,13 @@ class EmailMonitorService {
   async start() {
     if (this.isRunning) {
       return { success: false, message: 'El monitor ya está en ejecución' };
+    }
+
+    // Cargar configuración gestionable antes de arrancar
+    await this.loadSettingsFromDB();
+    if (!this.settingsEnabled) {
+      console.log('📧 Monitor deshabilitado en la configuración (email_monitor_settings.enabled = false)');
+      return { success: false, message: 'El monitor está deshabilitado en la configuración' };
     }
 
     if (!this.isConfigured()) {
@@ -536,16 +606,20 @@ class EmailMonitorService {
         }
       }
 
-      // Si el ticket existe, notificar al técnico asignado Y a los participantes
-      // (rol tech/admin, activos). Si no hay ninguno válido, fallback al destinatario del correo.
+      // Si el ticket existe, notificar al técnico asignado y (si está habilitado) a los
+      // participantes (rol tech/admin, activos). Si no hay ninguno válido, fallback al
+      // destinatario del correo.
       let usersResult;
       let routingMode;
       if (relatedTicketId) {
+        const assignedOrParticipant = this.notifyParticipants
+          ? '(u.id = t.assigned_to OR u.id = ANY(t.participants))'
+          : 'u.id = t.assigned_to';
+
         usersResult = await pool.query(
           `SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
            FROM tickets t
-           JOIN users u
-             ON (u.id = t.assigned_to OR u.id = ANY(t.participants))
+           JOIN users u ON ${assignedOrParticipant}
            WHERE t.id = $1
              AND u.role IN ('tech', 'admin')
              AND u.status = true`,
@@ -553,7 +627,7 @@ class EmailMonitorService {
         );
 
         if (usersResult.rows.length > 0) {
-          routingMode = 'asignado/participantes del ticket';
+          routingMode = this.notifyParticipants ? 'asignado/participantes del ticket' : 'asignado al ticket';
         } else {
           // Si no hay asignado/participante válido, fallback a destinatario(s) del correo.
           usersResult = await pool.query(
@@ -682,6 +756,8 @@ class EmailMonitorService {
       isRunning: this.isRunning,
       isConnected: this.isConnected,
       isConfigured: this.isConfigured(),
+      enabled: this.settingsEnabled,
+      notifyParticipants: this.notifyParticipants,
       lastCheckTime: this.lastCheckTime,
       errorCount: this.errorCount,
       maxErrors: this.maxErrors,

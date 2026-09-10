@@ -1,0 +1,145 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+-->
+
+<div class="email-monitor-admin">
+  <h2><mat-icon>mark_email_read</mat-icon> Monitor de Correo (OSIGU)</h2>
+  <p class="subtitle">
+    Vigila la bandeja de <strong>{{ status?.config?.user || '—' }}</strong>, detecta las respuestas
+    de los remitentes permitidos, extrae el <code>TKT-xxxxxx</code> del asunto y notifica al técnico
+    asignado (y participantes) del ticket cuyo ID externo coincida.
+  </p>
+
+  <!-- Estado -->
+  <mat-card class="status-card">
+    <mat-card-content>
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="status-label">Estado</span>
+          <span class="status-value" [class.ok]="status?.isRunning" [class.off]="!status?.isRunning">
+            <mat-icon>{{ status?.isRunning ? 'play_circle' : 'pause_circle' }}</mat-icon>
+            {{ status?.isRunning ? 'En ejecución' : 'Detenido' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Conexión IMAP</span>
+          <span class="status-value" [class.ok]="status?.isConnected" [class.off]="!status?.isConnected">
+            {{ status?.isConnected ? 'Conectado' : 'Sin conexión' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Última revisión</span>
+          <span class="status-value">{{ status?.lastCheckTime ? (status?.lastCheckTime | date:'short') : 'Nunca' }}</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Correos procesados</span>
+          <span class="status-value">{{ status?.processedEmailsCount ?? 0 }}</span>
+        </div>
+      </div>
+      <button mat-stroked-button color="primary" (click)="checkNow()" [disabled]="loading.checking">
+        <mat-icon>refresh</mat-icon>
+        {{ loading.checking ? 'Revisando…' : 'Revisar ahora' }}
+      </button>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Configuración -->
+  <mat-card class="config-card" *ngIf="!loading.settings; else loadingTpl">
+    <mat-card-header>
+      <mat-card-title>Configuración</mat-card-title>
+      <mat-card-subtitle>Se aplica en caliente al guardar (sin reiniciar el servidor)</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="config-row">
+        <mat-slide-toggle [(ngModel)]="form.enabled" name="enabled">
+          Monitor activo
+        </mat-slide-toggle>
+        <p class="hint">Si lo desactivas, el servicio deja de revisar la bandeja.</p>
+      </div>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Remitentes permitidos (uno por línea)</mat-label>
+        <textarea matInput rows="3" [(ngModel)]="form.sendersText" name="senders"
+                  placeholder="help@osigu.com"></textarea>
+        <mat-hint>Solo se procesan correos que vengan exactamente de estas direcciones.</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Buzones técnicos (uno por línea)</mat-label>
+        <textarea matInput rows="4" [(ngModel)]="form.recipientsText" name="recipients"
+                  placeholder="soporte@clinicadelapresentacion.com.co"></textarea>
+        <mat-hint>El correo debe ir dirigido (To/CC) a alguno de estos buzones para ser tenido en cuenta.</mat-hint>
+      </mat-form-field>
+
+      <div class="config-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Intervalo de revisión (segundos)</mat-label>
+          <input matInput type="number" min="30" max="3600" [(ngModel)]="form.checkIntervalSeconds" name="interval" />
+          <mat-hint>Entre 30 y 3600.</mat-hint>
+        </mat-form-field>
+
+        <div class="config-row">
+          <mat-slide-toggle [(ngModel)]="form.notifyParticipants" name="notifyParticipants">
+            Notificar también a participantes
+          </mat-slide-toggle>
+          <p class="hint">Además del técnico asignado, avisa a los participantes (tech/admin) del ticket.</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button mat-raised-button color="primary" (click)="save()" [disabled]="loading.saving">
+          <mat-icon>save</mat-icon>
+          {{ loading.saving ? 'Guardando…' : 'Guardar configuración' }}
+        </button>
+        <button mat-button (click)="loadAll()" [disabled]="loading.saving">
+          <mat-icon>restore</mat-icon> Descartar cambios
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <ng-template #loadingTpl>
+    <div class="loading-box"><mat-spinner diameter="32"></mat-spinner></div>
+  </ng-template>
+
+  <!-- Historial -->
+  <mat-card class="history-card">
+    <mat-card-header>
+      <mat-card-title>Últimos correos procesados</mat-card-title>
+      <button mat-icon-button (click)="loadHistory()" matTooltip="Actualizar">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="table-wrap" *ngIf="history.length > 0; else emptyHistory">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>De</th>
+              <th>Asunto</th>
+              <th>TKT</th>
+              <th>Ticket interno</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of history">
+              <td>{{ e.processed_at | date:'short' }}</td>
+              <td>{{ e.from_address }}</td>
+              <td class="subject" [title]="e.subject">{{ e.subject }}</td>
+              <td>{{ e.external_ticket_id || '—' }}</td>
+              <td>
+                <a *ngIf="e.ticket_id" [routerLink]="['/ticket', e.ticket_id]">#{{ e.ticket_id }}</a>
+                <span *ngIf="!e.ticket_id">sin coincidencia</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #emptyHistory>
+        <p class="empty">Aún no se han procesado correos.</p>
+      </ng-template>
+    </mat-card-content>
+  </mat-card>
+</div>

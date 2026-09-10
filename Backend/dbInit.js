@@ -789,6 +789,49 @@ const checkAndCreateTables = async () => {
       logger.debug("✅ La tabla 'processed_emails' ya existe.");
     }
 
+    // Validar y crear la tabla "email_monitor_settings" (config gestionable del monitor)
+    const emailMonitorSettingsExists = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'email_monitor_settings'
+      );
+    `);
+
+    if (!emailMonitorSettingsExists.rows[0].exists) {
+      logger.info("➕ Creando tabla 'email_monitor_settings'...");
+      await client.query(`
+        CREATE TABLE email_monitor_settings (
+          id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+          enabled BOOLEAN DEFAULT true,
+          filter_senders TEXT DEFAULT '',
+          tech_recipients TEXT DEFAULT '',
+          check_interval_seconds INTEGER DEFAULT 120,
+          notify_participants BOOLEAN DEFAULT true,
+          updated_by INTEGER REFERENCES users(id),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+
+      // Semilla desde variables de entorno (si existen)
+      const seedSenders = [
+        process.env.EMAIL_FILTER_SENDER || '',
+        process.env.EMAIL_FILTER_SENDERS || ''
+      ].join(',').split(',').map((s) => s.trim()).filter(Boolean);
+      const uniqueSeedSenders = [...new Set(seedSenders)].join(',');
+      const seedRecipients = (process.env.EMAIL_TECH_RECIPIENTS || '')
+        .split(',').map((s) => s.trim()).filter(Boolean).join(',');
+      const seedInterval = Math.max(30, Math.round((parseInt(process.env.EMAIL_MONITOR_INTERVAL, 10) || 120000) / 1000));
+
+      await client.query(
+        `INSERT INTO email_monitor_settings (id, enabled, filter_senders, tech_recipients, check_interval_seconds, notify_participants)
+         VALUES (1, true, $1, $2, $3, true)`,
+        [uniqueSeedSenders, seedRecipients, seedInterval]
+      );
+      logger.info("✅ Tabla 'email_monitor_settings' creada y sembrada desde el entorno.");
+    } else {
+      logger.debug("✅ La tabla 'email_monitor_settings' ya existe.");
+    }
+
     logger.info("✅ Validación y creación de tablas completada.");
   } catch (error) {
     logger.error("❌ Error al validar la base de datos:", error);

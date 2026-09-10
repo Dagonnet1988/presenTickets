@@ -31,6 +31,7 @@ import { MainLayoutComponent } from './shared/components/main-layout.component';
 import { AboutComponent } from './about/about.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { WhatsAppAdminComponent } from './whatsapp-admin/whatsapp-admin.component';
+import { EmailMonitorAdminComponent } from './email-monitor-admin/email-monitor-admin.component';
 import { MaintenanceSimpleComponent } from './maintenance/maintenance-simple.component';
 import { MaintenancePageComponent } from './maintenance/maintenance-page.component';
 import { MaintenanceGuard } from './shared/guards/maintenance.guard';
@@ -53,6 +54,7 @@ export const routes: Routes = [
       { path: 'manage-users', component: ManageUsersComponent, canActivate: [AdminGuard] },
       { path: 'edit-user/:id', component: EditUserComponent, canActivate: [AdminGuard] },
       { path: 'whatsapp-admin', component: WhatsAppAdminComponent, canActivate: [AdminGuard] },
+      { path: 'email-monitor-admin', component: EmailMonitorAdminComponent, canActivate: [AdminGuard] },
       { path: 'maintenance-admin', component: MaintenanceSimpleComponent, canActivate: [AdminGuard] },
       { path: 'about', component: AboutComponent },
     ]
