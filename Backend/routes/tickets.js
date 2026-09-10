@@ -227,7 +227,7 @@ router.post("/", async (req, res) => {
           code: "PENDING_LIMIT",
           limit,
           count,
-          message: `No puedes crear un nuevo ticket porque tienes ${count} tickets en estado "${PENDING_STATUS}" (máximo permitido: ${limit}). Por favor responde o cierra esos tickets antes de crear uno nuevo.`,
+          message: `No puedes crear un nuevo ticket porque tienes ${count} tickets en estado "${PENDING_STATUS}". Por favor responde o cierra esos tickets antes de crear uno nuevo.`,
         });
       }
     } catch (err) {

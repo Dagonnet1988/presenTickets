@@ -1665,8 +1665,11 @@ mat-card:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 120px;
-  flex: 1;
+  /* flex-basis 180px: cuando no caben 3 en la fila, envuelven en vez de solaparse.
+     min-width: 0 + overflow: hidden: el contenido nunca desborda el item. */
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -1709,6 +1712,7 @@ mat-card:hover {
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
 }
 
 .control-edit-container {
@@ -1716,6 +1720,7 @@ mat-card:hover {
   align-items: center;
   gap: 8px;
   flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   background: #ffffff;
   border: 1px solid #ced4da;
@@ -1831,6 +1836,14 @@ mat-card:hover {
   .controls-horizontal-container {
     min-width: auto;
     width: 100%;
+    /* Debajo de 1200px hay ancho de sobra en vertical: apilar los 3 controles
+       evita cualquier solape en la zona de reajuste de la fila. */
+    flex-direction: column;
+  }
+
+  .controls-horizontal-container .control-item {
+    width: 100%;
+    flex: 1 1 auto;
   }
 
   .actions-container {

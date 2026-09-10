@@ -77,6 +77,11 @@ export class NotificationService {
       }
     });
 
+    // Reconexión: volver a registrar el socket con el usuario actual
+    this.socket.io.on('reconnect', () => {
+      this.registerSocket();
+    });
+
     this.socket.on('disconnect', () => {
       // Manejador de desconexión
     });
@@ -209,10 +214,27 @@ export class NotificationService {
     return this.notificationsSubject.value;
   }
 
-  // Método público para forzar la carga inicial de notificaciones
+  // Método público para forzar la carga inicial de notificaciones (se llama tras el login)
   initializeNotificationsForUser() {
-    if (isPlatformBrowser(this.platformId)) {
-      this.fetchUnreadNotifications();
+    if (!isPlatformBrowser(this.platformId)) return;
+    // El socket puede haberse conectado ANTES del login (en el arranque de la app):
+    // en ese caso quedó sin 'register' para este usuario y no recibiría pushes en
+    // tiempo real hasta una reconexión. Registrarlo aquí explícitamente.
+    this.registerSocket();
+    this.fetchUnreadNotifications();
+  }
+
+  // Registra (o re-registra) el socket con el usuario autenticado actual
+  private registerSocket() {
+    if (!isPlatformBrowser(this.platformId) || !this.socket) return;
+    const userId = this.authService.getUserId();
+    if (!userId) return;
+
+    if (this.socket.connected) {
+      this.socket.emit('register', String(userId));
+    } else {
+      // Si estaba desconectado, forzar conexión; el handler 'connect' hará el register
+      this.socket.connect();
     }
   }
 
