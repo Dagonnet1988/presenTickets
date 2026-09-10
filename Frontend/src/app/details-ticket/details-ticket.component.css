@@ -1660,14 +1660,14 @@ mat-card:hover {
   background: linear-gradient(90deg, #1976d2 0%, #2196f3 50%, #4caf50 100%);
 }
 
-/* Estilo para cada item de control - más compacto y elegante */
+/* Estilo para cada item de control - compacto: ocupa solo lo que necesita.
+   flex: 0 1 auto -> no se estira; puede encogerse y, si no cabe, envuelve.
+   min-width: 0 + overflow: hidden -> el contenido nunca desborda ni se solapa. */
 .control-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  /* flex-basis 180px: cuando no caben 3 en la fila, envuelven en vez de solaparse.
-     min-width: 0 + overflow: hidden: el contenido nunca desborda el item. */
-  flex: 1 1 180px;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   position: relative;
@@ -1711,7 +1711,7 @@ mat-card:hover {
 .control-content {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -1719,8 +1719,9 @@ mat-card:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 90px;
+  max-width: 220px;
   padding: 6px 10px;
   background: #ffffff;
   border: 1px solid #ced4da;
@@ -1836,14 +1837,6 @@ mat-card:hover {
   .controls-horizontal-container {
     min-width: auto;
     width: 100%;
-    /* Debajo de 1200px hay ancho de sobra en vertical: apilar los 3 controles
-       evita cualquier solape en la zona de reajuste de la fila. */
-    flex-direction: column;
-  }
-
-  .controls-horizontal-container .control-item {
-    width: 100%;
-    flex: 1 1 auto;
   }
 
   .actions-container {
@@ -1885,6 +1878,8 @@ mat-card:hover {
 
   .control-edit-container {
     justify-content: space-between;
+    max-width: none;
+    flex: 1;
   }
 
   .control-value {
@@ -1988,46 +1983,6 @@ mat-card:hover {
   .file-info span {
     font-size: 0.85rem;
   }
-}
-
-/* Estilos para controles en línea compactos */
-.ticket-controls-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.control-inline {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 12px;
-  background: #ffffff;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-  min-height: 44px;
-  border-left: 4px solid #28a745;
-}
-
-.control-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: #495057;
-  min-width: 100px;
-}
-
-.control-label mat-icon {
-  font-size: 18px;
-  color: #28a745;
-}
-
-.control-value {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
 }
 
 /* Mejoras para la sección de drag and drop */
