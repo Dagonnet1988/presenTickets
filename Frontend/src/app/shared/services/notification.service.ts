@@ -34,6 +34,7 @@ export class NotificationService {
   private socket!: Socket;
   private notificationsSubject = new BehaviorSubject<TicketNotification[]>([]);
   notifications$ = this.notificationsSubject.asObservable();
+  private unreadRefreshTimer: any = null;
 
   constructor(
     private ngZone: NgZone,
@@ -123,46 +124,35 @@ export class NotificationService {
 
     this.socket.on('ticket-notification', (notification: TicketNotification) => {
       this.ngZone.run(() => {
-        const current = this.notificationsSubject.value;
         const currentTicketId = this.getCurrentTicketIdFromUrl();
 
-        // Extraer ticketId correctamente del objeto de notificación en tiempo real
-        const notificationTicketId = notification.data?.ticketId || notification.ticket_id;
+        // El backend (createNotification) emite el id real de BD dentro de `data`
+        const notificationId = notification.id ?? notification.data?.id;
+        const notificationTicketId = notification.data?.ticketId ?? notification.ticket_id;
+        const externalTicketId = notification.data?.external_ticket_id ?? notification.external_ticket_id;
 
-        if (currentTicketId === notificationTicketId) {
-          if (notification.id) {
-            this.markSingleNotificationAsRead(notification.id.toString()).subscribe({
+        // La lista de la campana SIEMPRE se reconstruye desde el backend (fuente única
+        // de verdad, con ids reales). No se agregan items locales -> se evitan duplicados.
+        if (currentTicketId != null && currentTicketId === notificationTicketId) {
+          // Ya estamos viendo el ticket: marcar como leído y refrescar el detalle
+          if (notificationId) {
+            this.markSingleNotificationAsRead(notificationId.toString()).subscribe({
               error: (error) => console.error('Error marcando notificación como leída:', error)
             });
+          } else {
+            this.markTicketNotificationsAsRead(String(notificationTicketId));
           }
           setTimeout(() => {
             window.dispatchEvent(new CustomEvent('refresh-ticket-details'));
           }, 100);
-        } else {
-          // Adaptar la notificación en tiempo real al formato esperado
-          const adaptedNotification: TicketNotification = {
-            id: notification.id,
-            ticket_id: notificationTicketId,
-            external_ticket_id: notification.data?.external_ticket_id,
-            type: notification.type,
-            message: notification.message,
-            data: notification.data,
-            timestamp: new Date(),
-            read: false
-          };
-
-          const newNotifications = [...current, adaptedNotification];
-          this.notificationsSubject.next(newNotifications);
         }
 
         if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            const ticketId = notification.data?.ticketId || notification.ticket_id;
-            const externalTicketId = notification.data?.external_ticket_id || notification.external_ticket_id;
-            new Notification(`Nuevo comentario en Ticket #${externalTicketId || ticketId}`, {
-              body: notification.message,
+            new Notification(`Ticket #${externalTicketId || notificationTicketId}`, {
+              body: notification.message || 'Tienes una nueva notificación',
               icon: '/favicon.ico',
-              tag: `ticket-${ticketId}`,
+              tag: `ticket-${notificationTicketId}`,
               badge: '/favicon.ico'
             });
           } catch (error) {
@@ -170,7 +160,7 @@ export class NotificationService {
           }
         }
 
-        setTimeout(() => this.fetchUnreadNotifications(), 500);
+        this.scheduleUnreadRefresh();
       });
     });
 
@@ -195,7 +185,7 @@ export class NotificationService {
         }
 
         // Actualizar lista de notificaciones
-        setTimeout(() => this.fetchUnreadNotifications(), 500);
+        this.scheduleUnreadRefresh();
       });
     });
 
@@ -226,6 +216,19 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Refresca la lista de notificaciones con un pequeño debounce.
+   * Varios eventos de socket seguidos colapsan en una sola llamada al backend.
+   */
+  scheduleUnreadRefresh(delayMs = 350) {
+    if (!isPlatformBrowser(this.platformId)) return;
+    if (this.unreadRefreshTimer) clearTimeout(this.unreadRefreshTimer);
+    this.unreadRefreshTimer = setTimeout(() => {
+      this.unreadRefreshTimer = null;
+      this.fetchUnreadNotifications();
+    }, delayMs);
+  }
+
   fetchUnreadNotifications() {
     if (!isPlatformBrowser(this.platformId)) return;
 
@@ -236,29 +239,19 @@ export class NotificationService {
       headers: { Authorization: `Bearer ${token}` }
     }).subscribe({
       next: (notifications) => {
-        // Transformar is_read a read para compatibilidad con el frontend
-        const serverNotifications = notifications.map(n => ({
-          ...n,
-          read: n.is_read || n.read || false
-        }));
+        // El backend es la fuente única de verdad. Solo normalizamos is_read -> read
+        // y de-duplicamos por id de forma defensiva.
+        const seenIds = new Set<number>();
+        const serverNotifications = notifications
+          .map(n => ({ ...n, read: n.is_read || n.read || false }))
+          .filter(n => {
+            if (n.id == null) return true;
+            if (seenIds.has(n.id)) return false;
+            seenIds.add(n.id);
+            return true;
+          });
 
-        // Obtener notificaciones actuales sin ID (recibidas por socket pero no persistidas aún)
-        const currentSocketOnlyNotifications = this.notificationsSubject.value.filter(n => !n.id);
-
-        // Combinar: notificaciones del servidor + notificaciones temporales de socket
-        // Las del servidor tienen prioridad (por si ya se persistió)
-        const existingServerIds = new Set(serverNotifications.map(n => n.id));
-        const socketNotificationsToKeep = currentSocketOnlyNotifications.filter(n => {
-          // Mantener solo si no hay una del servidor con el mismo ticket_id
-          return !serverNotifications.some(sn =>
-            sn.ticket_id === n.ticket_id &&
-            sn.type === n.type &&
-            Math.abs(new Date(sn.created_at || sn.timestamp || 0).getTime() - new Date(n.timestamp || 0).getTime()) < 10000
-          );
-        });
-
-        const combinedNotifications = [...serverNotifications, ...socketNotificationsToKeep];
-        this.notificationsSubject.next(combinedNotifications);
+        this.notificationsSubject.next(serverNotifications);
       },
       error: (error) => {
         if (isDevMode()) {

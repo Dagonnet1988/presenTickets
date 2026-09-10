@@ -282,18 +282,6 @@ router.post("/", (req, res) => {
               ticket_id: ticketId,
             });
           }
-
-          // Emitir notificación en tiempo real
-          emitTicketNotification(
-            "nuevo_ticket",
-            {
-              ticketId,
-              title: ticketData.title,
-              createdAt: new Date(),
-              message: `Nuevo ticket creado: ${ticketData.title}`,
-            },
-            techIds
-          );
         }
       } catch (notifyErr) {
         console.error(
@@ -560,18 +548,6 @@ router.patch("/:id", async (req, res) => {
                 message: notificationMessage,
                 ticket_id: id,
               });
-
-              // Emitir notificación en tiempo real
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                [user_id]
-              );
             }
           }
           // Si es "Resuelto" - notificar al usuario creador Y a todos los participantes
@@ -634,20 +610,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                  showSurvey: true // Flag para que el frontend muestre el botón de encuesta
-                },
-                recipients
-              );
-            }
           }
           // Si es "En revisión" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En revisión") {
@@ -686,19 +648,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "En proceso" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En proceso") {
@@ -737,19 +686,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "Cerrado" - notificar al usuario creador, técnico asignado Y participantes
           else if (status === "Cerrado") {
@@ -790,19 +726,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "Esperando respuesta del usuario" - verificar si es una reapertura
           else if (status === "Esperando respuesta del usuario") {
@@ -835,18 +758,6 @@ router.patch("/:id", async (req, res) => {
                   message: notificationMessage,
                   ticket_id: id,
                 });
-
-                // Emitir notificación en tiempo real
-                emitTicketNotification(
-                  notificationType,
-                  {
-                    ticketId: id,
-                    title: ticketTitle,
-                    createdAt: new Date(),
-                    message: notificationMessage,
-                  },
-                  [recipientId]
-                );
               }
             }
           } else {
@@ -876,25 +787,13 @@ router.patch("/:id", async (req, res) => {
         const ticketTitle = ticketResult.rows[0]?.title || "Ticket sin título";
         const userId = ticketResult.rows[0]?.user_id || null;
 
-        // Crear notificación en la base de datos
+        // Crear notificación en la base de datos (inserta + emite socket + WhatsApp)
         await createNotification({
           user_id: userId,
           type: "ticket_asignado",
           message: `Ticket ${ticketTitle} asignado`,
           ticket_id: id,
         });
-
-        // Enviar notificación en tiempo real
-        emitTicketNotification(
-          "ticket_asignado",
-          {
-            ticketId: id,
-            title: ticketTitle,
-            createdAt: new Date(),
-            message: `Ticket ${ticketTitle} asignado a técnico`,
-          },
-          [userId]
-        );
       } catch (notifyErr) {
         console.error("Error al enviar notificación de asignación:", notifyErr);
       }
