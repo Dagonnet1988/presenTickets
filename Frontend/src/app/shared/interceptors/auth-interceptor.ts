@@ -57,6 +57,28 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => error);
       }
 
+      // Usuario deshabilitado mientras tenía sesión activa: cerrar sesión
+      if (
+        error.status === 403 &&
+        error.error?.code === 'USER_DISABLED' &&
+        !isHandlingSessionExpired &&
+        !req.url.includes('/auth/login')
+      ) {
+        console.log('🚫 Usuario deshabilitado detectado, cerrando sesión');
+        isHandlingSessionExpired = true;
+        authService.logout();
+        const dialogRef = dialog.open(SessionExpiredDialogComponent, {
+          width: '400px',
+          disableClose: true,
+          panelClass: 'session-expired-dialog'
+        });
+        dialogRef.afterClosed().subscribe(() => {
+          router.navigate(['/auth'], { queryParams: { disabled: 'true' } });
+          setTimeout(() => { isHandlingSessionExpired = false; }, 1000);
+        });
+        return throwError(() => error);
+      }
+
       // Solo procesar errores de token expirado/inválido, no errores de permisos específicos
       const isTokenError = error.status === 401 &&
                           (error.error?.message?.includes('Token') ||

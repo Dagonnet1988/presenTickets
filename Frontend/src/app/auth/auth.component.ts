@@ -74,6 +74,19 @@ export class AuthComponent implements OnInit {
 
     // Verificar si el usuario fue redirigido por sesión expirada
     this.route.queryParams.subscribe(params => {
+      if (params['disabled'] === 'true') {
+        this.loginError = 'Tu usuario está deshabilitado. Contacta al administrador.';
+        this.snackBar.open(
+          '🚫 Tu usuario está deshabilitado. Contacta al administrador.',
+          'Entendido',
+          {
+            duration: 10000,
+            panelClass: 'session-expired-snackbar',
+            horizontalPosition: 'center',
+            verticalPosition: 'top'
+          }
+        );
+      }
       if (params['expired'] === 'true') {
         this.sessionExpired = true;
 
