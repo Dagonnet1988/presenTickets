@@ -677,13 +677,13 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         COALESCE(ups.whatsapp_external_email, true) as whatsapp_external_email
       FROM users u
       LEFT JOIN user_preferences_settings ups ON u.id = ups.user_id
-      WHERE u.id = $1
+      WHERE u.id = $1 AND u.status = true
     `, [userId]);
 
     client.release();
 
     if (settingsResult.rows.length === 0) {
-      console.log(`⚠️ Usuario ${userId} no encontrado`);
+      console.log(`⚠️ Usuario ${userId} no encontrado o inactivo`);
       return false;
     }
 

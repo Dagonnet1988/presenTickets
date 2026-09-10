@@ -267,7 +267,7 @@ router.post("/", (req, res) => {
       try {
         // Obtener todos los usuarios con rol de técnico
         const techsResult = await client.query(
-          "SELECT id FROM users WHERE role = $1",
+          "SELECT id FROM users WHERE role = $1 AND status = true",
           ["tech"]
         );
         const techIds = techsResult.rows.map((tech) => tech.id);

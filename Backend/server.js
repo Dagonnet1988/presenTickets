@@ -479,7 +479,17 @@ export async function getNotificationRecipients(ticketId, actorId) {
       });
     }
 
-    return Array.from(recipients);
+    const ids = Array.from(recipients);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    // Excluir usuarios inactivos: no deben recibir notificaciones
+    const activeResult = await client.query(
+      'SELECT id FROM users WHERE id = ANY($1::int[]) AND status = true',
+      [ids.map(Number)]
+    );
+    return activeResult.rows.map(row => String(row.id));
   } catch (err) {
     console.error('Error al obtener destinatarios de notificación:', err);
     return [];

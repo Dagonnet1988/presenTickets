@@ -1634,12 +1634,20 @@ class WhatsAppWebService {
       }
 
       const userResult = await client.query(
-        'SELECT firstname, lastname, email, phone FROM users WHERE id = $1',
+        'SELECT firstname, lastname, email, phone, status FROM users WHERE id = $1',
         [userId]
       );
 
       if (userResult.rows.length === 0) {
         throw new Error('Usuario no encontrado');
+      }
+
+      // No enviar WhatsApp a usuarios inactivos
+      if (userResult.rows[0].status === false) {
+        logger.debug(`⚠️ Notificación WhatsApp omitida: usuario ${userId} inactivo`);
+        await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Usuario inactivo', null, notificationType);
+        client.release();
+        return false;
       }
 
       const user = userResult.rows[0];
