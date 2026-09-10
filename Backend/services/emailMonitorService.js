@@ -16,6 +16,7 @@
 import { ImapFlow } from 'imapflow';
 import { pool } from '../db.js';
 import { sendWhatsAppNotification } from '../routes/whatsapp.js';
+import { logger } from '../logger.js';
 
 class EmailMonitorService {
   constructor() {
@@ -297,7 +298,7 @@ class EmailMonitorService {
         ? this.config.auth.user.replace(/(.{3}).*(@.*)/, '$1***$2')
         : 'no-configurado';
 
-      console.log(`📧 Intentando conexión IMAP host=${this.config.host} port=${this.config.port} user=${maskedUser} passLen=${(this.config.auth.pass || '').length}`);
+      logger.debug(`📧 Intentando conexión IMAP host=${this.config.host} port=${this.config.port} user=${maskedUser} passLen=${(this.config.auth.pass || '').length}`);
 
       this.client = new ImapFlow({
         host: this.config.host,
@@ -328,7 +329,7 @@ class EmailMonitorService {
       this.connectionRetryDelay = 15000;
       this.nextConnectionRetryAt = 0;
 
-      console.log(`📧 ✅ Conexión IMAP establecida con ${this.config.host}:${this.config.port}`);
+      logger.debug(`📧 ✅ Conexión IMAP establecida con ${this.config.host}:${this.config.port}`);
       
       return true;
     } catch (error) {
@@ -536,10 +537,13 @@ class EmailMonitorService {
         try { lock.release(); } catch (e) { /* noop */ }
       }
 
-      console.log(`📧 [${label}] carpeta="${folder}" · ${checked} correos (${this.lookbackDays}d) · OSIGU: ${osiguVistos} · nuevos: ${nuevos} · ya procesados: ${yaProcesados} · filtro: [${allowedSenders.join(', ')}]`);
+      logger.debug(`📧 [${label}] carpeta="${folder}" · ${checked} correos (${this.lookbackDays}d) · OSIGU: ${osiguVistos} · nuevos: ${nuevos} · ya procesados: ${yaProcesados} · filtro: [${allowedSenders.join(', ')}]`);
       if (osiguVistos === 0 && checked > 0) {
         const muestra = [...new Set(otrosRemitentes)].slice(0, 10).join(', ');
-        console.log(`📧 [${label}] ⚠️  Sin correos de OSIGU. Remitentes vistos: ${muestra || '(ninguno)'}`);
+        logger.debug(`📧 [${label}] ⚠️  Sin correos de OSIGU. Remitentes vistos: ${muestra || '(ninguno)'}`);
+      }
+      if (nuevos > 0) {
+        logger.info(`📧 [${label}] ${nuevos} correo(s) nuevo(s) de OSIGU procesado(s)`);
       }
 
       await client.logout();
@@ -614,8 +618,8 @@ class EmailMonitorService {
 
       const externalTicketId = this.extractExternalTicketId(subject, emailSource);
 
-      console.log(`📧 Procesando correo de [${fromAddress}] en buzón [${mailbox?.label || mailbox?.user || '?'}] asunto="${subject.substring(0, 80)}"`);
-      console.log(`📧   TKT extraído del asunto: ${externalTicketId || '(no encontrado)'}`);
+      logger.debug(`📧 Procesando correo de [${fromAddress}] en buzón [${mailbox?.label || mailbox?.user || '?'}] asunto="${subject.substring(0, 80)}"`);
+      logger.debug(`📧   TKT extraído del asunto: ${externalTicketId || '(no encontrado)'}`);
 
       await this.createNotificationForTechnicians({
         messageId,
@@ -673,9 +677,9 @@ class EmailMonitorService {
         );
         if (ticketResult.rows.length > 0) {
           relatedTicketId = ticketResult.rows[0].id;
-          console.log(`📧   Ticket interno relacionado: #${relatedTicketId}`);
+          logger.debug(`📧   Ticket interno relacionado: #${relatedTicketId}`);
         } else {
-          console.log(`📧   Sin ticket interno para external_ticket_id=${externalTicketId}`);
+          logger.debug(`📧   Sin ticket interno para external_ticket_id=${externalTicketId}`);
         }
       }
 
@@ -740,7 +744,7 @@ class EmailMonitorService {
       }
 
       const techNames = usersResult.rows.map((u) => `${u.firstname} <${u.email}>`).join(', ');
-      console.log(`📧   Enrutando notificación a [${techNames}] — modo: ${routingMode}`);
+      logger.debug(`📧   Enrutando notificación a [${techNames}] — modo: ${routingMode}`);
 
       // Mensaje de notificación
       const message = externalTicketId

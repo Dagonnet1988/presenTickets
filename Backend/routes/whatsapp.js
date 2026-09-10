@@ -15,6 +15,7 @@
 
 import express from 'express';
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { authMiddleware } from './auth.js';
 import whatsappWebService from '../services/whatsappWebService.js';
 
@@ -662,7 +663,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
 
       // Verificar si WhatsApp está globalmente deshabilitado
       if (!globalSettings.whatsapp_global_enabled) {
-        console.log(`⚠️ WhatsApp está globalmente deshabilitado`);
+        logger.debug(`⚠️ WhatsApp está globalmente deshabilitado`);
         client.release();
         return false;
       }
@@ -680,7 +681,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
       };
 
       if (globalTypeMapping[notificationType] && !globalSettings[globalTypeMapping[notificationType]]) {
-        console.log(`⚠️ Tipo de notificación ${notificationType} está globalmente deshabilitado`);
+        logger.debug(`⚠️ Tipo de notificación ${notificationType} está globalmente deshabilitado`);
         client.release();
         return false;
       }
@@ -705,7 +706,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     client.release();
 
     if (settingsResult.rows.length === 0) {
-      console.log(`⚠️ Usuario ${userId} no encontrado o inactivo`);
+      logger.debug(`⚠️ Usuario ${userId} no encontrado o inactivo`);
       return false;
     }
 
@@ -714,13 +715,13 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     // Alcance de destinatarios: en modo 'tech_only' solo se envía a técnicos/admin,
     // no a usuarios finales (rol 'user').
     if (recipientScope === 'tech_only' && settings.role === 'user') {
-      console.log(`⚠️ WhatsApp omitido: alcance 'solo técnicos' y el destinatario ${userId} es usuario final`);
+      logger.debug(`⚠️ WhatsApp omitido: alcance 'solo técnicos' y el destinatario ${userId} es usuario final`);
       return false;
     }
 
     // Verificar si WhatsApp está habilitado para el usuario
     if (!settings.whatsapp_enabled) {
-      console.log(`⚠️ Usuario ${userId} no tiene WhatsApp habilitado`);
+      logger.debug(`⚠️ Usuario ${userId} no tiene WhatsApp habilitado`);
       return false;
     }
 
@@ -738,7 +739,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     };
 
     if (typeMapping[notificationType] && !settings[typeMapping[notificationType]]) {
-      console.log(`⚠️ Usuario ${userId} no tiene habilitado el tipo de notificación ${notificationType}`);
+      logger.debug(`⚠️ Usuario ${userId} no tiene habilitado el tipo de notificación ${notificationType}`);
       return false;
     }
 

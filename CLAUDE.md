@@ -83,6 +83,15 @@ se le bloquee crear tickets nuevos (`POST /api/tickets` → 409 `PENDING_LIMIT`;
 - Sesión de WhatsApp persistida en `Backend/whatsapp_auth_web/`. **Un cambio de versión puede
   invalidar la sesión** → hay que reescanear el QR desde el panel admin (tener el teléfono a mano).
 
+## Logging
+
+- `Backend/logger.js` — logger por nivel controlado con `LOG_LEVEL`
+  (`error` < `warn` < `info` < `debug`). Dev (`nodemon.json`) usa `debug`;
+  producción (`ecosystem.production.config.json`) usa `info`.
+- Los diagnósticos por ciclo (resumen por buzón del monitor de correo, motivos
+  por los que se omite un WhatsApp, etc.) van en `logger.debug` → **no** salen
+  en producción. Errores y arranque van en `console.error` / `logger.info`.
+
 ## Convenciones
 
 - Identificadores, comentarios y mensajes al usuario **en español**.
