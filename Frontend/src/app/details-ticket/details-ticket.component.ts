@@ -245,6 +245,10 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     if (this.ticket && this.ticket.user_id) {
       userIds.push(this.ticket.user_id);
     }
+    // Incluir el técnico asignado para poder mostrar su nombre aunque esté inactivo
+    if (this.ticket && this.ticket.assigned_to) {
+      userIds.push(this.ticket.assigned_to);
+    }
     if (this.messages && this.messages.length > 0) {
       // Agregar IDs de mensajes solo si existen y son válidos
       this.messages.forEach(message => {
@@ -1082,9 +1086,17 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.closeAssignmentDialog();
   }
 
-  // Método helper para obtener el nombre del técnico asignado
+  // Método helper para obtener el nombre del técnico asignado.
+  // Prioriza la lista de técnicos activos; si el técnico fue desactivado no aparece
+  // ahí, así que se usa el nombre cargado por loadUserNames() (getUserBasic no filtra
+  // por estado). Nunca mostrar "Desconocido" para un técnico que sí existe.
   getAssignedTechnicianName(techId: number): string {
+    if (techId == null) return 'Sin asignar';
+
     const technician = this.technicians.find(tech => tech.id === techId);
-    return technician ? technician.firstname : 'Desconocido';
+    if (technician) return technician.firstname;
+
+    const cachedName = this.userNames.get(techId as any) || this.userNames.get(String(techId));
+    return cachedName || '…';
   }
 }
