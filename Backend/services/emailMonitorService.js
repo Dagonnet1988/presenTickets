@@ -60,11 +60,8 @@ class EmailMonitorService {
       checkInterval: parseInt(process.env.EMAIL_MONITOR_INTERVAL) || 120000
     };
 
-    // Patrón para extraer número de ticket externo del asunto
-    // Soporta dos formatos:
-    // 1. [CHERMZ] [#XXXXX] - formato estándar
-    // 2. #XXXXX - formato alternativo
-    this.ticketPattern = /(?:\[CHERMZ\]\s*\[#?(\d+)\]|#\s*(\d+))/i;
+    // Patrón del ID de ticket externo de Osigu: "TKT-111145" (también "TKT 111145" o "TKT111145")
+    this.ticketPattern = /\bTKT[-\s]?(\d+)\b/i;
   }
 
   /**
@@ -126,15 +123,19 @@ class EmailMonitorService {
   }
 
   /**
-   * Extraer ID externo del asunto/cuerpo priorizando el nuevo formato de Osigu.
+   * Extraer el número de ticket externo (TKT-xxxxx) del correo de Osigu.
+   * Prioriza el ASUNTO (ej: "Re: TKT-111145 Tu solicitud fue recibida...") porque
+   * el cuerpo/MIME crudo puede contener TKT antiguos citados en hilos de respuesta.
    */
-  extractExternalTicketId(subject, bodyText = '') {
-    const normalizedBody = bodyText || '';
+  extractExternalTicketId(subject = '', bodyText = '') {
+    const subjectMatch = (subject || '').match(this.ticketPattern);
+    if (subjectMatch?.[1]) {
+      return subjectMatch[1];
+    }
 
-    // Formato requerido: TKT-68774 en cuerpo
-    const tktBodyMatch = normalizedBody.match(/\bTKT[-\s]?(\d+)\b/i);
-    if (tktBodyMatch?.[1]) {
-      return tktBodyMatch[1];
+    const bodyMatch = (bodyText || '').match(this.ticketPattern);
+    if (bodyMatch?.[1]) {
+      return bodyMatch[1];
     }
 
     return null;
@@ -535,25 +536,26 @@ class EmailMonitorService {
         }
       }
 
-      // Si el ticket existe y tiene técnico asignado, enviar SOLO a ese técnico.
+      // Si el ticket existe, notificar al técnico asignado Y a los participantes
+      // (rol tech/admin, activos). Si no hay ninguno válido, fallback al destinatario del correo.
       let usersResult;
       let routingMode;
       if (relatedTicketId) {
         usersResult = await pool.query(
-          `SELECT u.id, u.username, u.firstname, u.lastname, u.email
+          `SELECT DISTINCT u.id, u.username, u.firstname, u.lastname, u.email
            FROM tickets t
-           JOIN users u ON u.id = t.assigned_to
+           JOIN users u
+             ON (u.id = t.assigned_to OR u.id = ANY(t.participants))
            WHERE t.id = $1
-             AND u.role = 'tech'
-             AND u.status = true
-           LIMIT 1`,
+             AND u.role IN ('tech', 'admin')
+             AND u.status = true`,
           [relatedTicketId]
         );
 
         if (usersResult.rows.length > 0) {
-          routingMode = 'asignado al ticket';
+          routingMode = 'asignado/participantes del ticket';
         } else {
-          // Si no hay asignado válido, fallback a destinatario(s) del correo.
+          // Si no hay asignado/participante válido, fallback a destinatario(s) del correo.
           usersResult = await pool.query(
             `SELECT id, username, firstname, lastname, email
              FROM users
@@ -562,7 +564,7 @@ class EmailMonitorService {
                AND lower(email) = ANY($1::text[])`,
             [normalizedRecipients]
           );
-          routingMode = 'fallback por destinatario (ticket sin asignado)';
+          routingMode = 'fallback por destinatario (ticket sin asignado/participantes)';
         }
       } else {
         usersResult = await pool.query(
