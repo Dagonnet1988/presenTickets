@@ -788,7 +788,8 @@ class WhatsAppWebService {
     }
     
     this.healthCheckCount = 0; // Contador para log periódico
-    
+    this.healthCheckFailures = 0; // Fallos consecutivos (tolerancia a estados transitorios)
+
     // Verificar cada 5 minutos que la conexión sigue activa
     this.healthCheckInterval = setInterval(async () => {
       this.healthCheckCount++;
@@ -821,24 +822,49 @@ class WhatsAppWebService {
       try {
         // Intentar obtener estado del cliente
         const state = await this.client.getState();
-        if (state !== 'CONNECTED') {
-          logger.debug(`🔍 Health check: Estado inesperado (${state}), reconectando...`);
-          this.isReady = false;
-          this.scheduleReconnect(`Health check: estado ${state}`);
-        } else {
-          // Solo loggear cada 12 checks (1 hora) para no saturar logs
+
+        if (state === 'CONNECTED') {
+          this.healthCheckFailures = 0;
           if (this.healthCheckCount % 12 === 0) {
             logger.info(`✅ Health check OK - WhatsApp estable (${this.healthCheckCount} verificaciones)`);
           }
+          return;
+        }
+
+        // Estados que SÍ requieren reconexión inmediata (sesión rota de verdad)
+        const badStates = ['UNPAIRED', 'UNPAIRED_IDLE', 'CONFLICT', 'DEPRECATED_VERSION', 'PROSCRIBED', 'TOS_BLOCK', 'SMB_TOS_BLOCK'];
+        if (state && badStates.includes(state)) {
+          logger.warn(`🔍 Health check: estado ${state} — reconectando...`);
+          this.isReady = false;
+          this.healthCheckFailures = 0;
+          this.scheduleReconnect(`Health check: estado ${state}`);
+          return;
+        }
+
+        // null / TIMEOUT / OPENING / PAIRING / etc. -> transitorio. getState() puede
+        // devolver null en una conexión sana (WhatsApp Web recargando internamente).
+        // Solo reconectar tras 3 verificaciones seguidas sin CONNECTED.
+        this.healthCheckFailures++;
+        logger.debug(`🔍 Health check: estado "${state}" (${this.healthCheckFailures}/3 sin CONNECTED)`);
+        if (this.healthCheckFailures >= 3) {
+          logger.warn('🔍 Health check: 3 verificaciones seguidas sin CONNECTED — reconectando...');
+          this.isReady = false;
+          this.healthCheckFailures = 0;
+          this.scheduleReconnect('Health check: sin CONNECTED tras 3 intentos');
         }
       } catch (err) {
-        logger.error('❌ Health check falló:', err.message);
-        this.isReady = false;
-        this.scheduleReconnect('Health check falló: ' + err.message);
+        this.healthCheckFailures++;
+        logger.warn(`⚠️ Health check error (${this.healthCheckFailures}/3): ${err.message}`);
+        if (this.healthCheckFailures >= 3) {
+          logger.error('❌ Health check falló 3 veces seguidas — reconectando');
+          this.isReady = false;
+          this.healthCheckFailures = 0;
+          this.scheduleReconnect('Health check falló 3 veces: ' + err.message);
+        }
       }
-    }, 300000); // 5 minutos (era 2 minutos)
+    }, 120000); // 2 minutos (con tolerancia a 3 fallos = ~6 min antes de reconectar)
     
-    logger.debug('🏥 Health check iniciado (cada 5 min, log cada 1 hora)');
+    logger.debug('🏥 Health check iniciado (cada 2 min, tolera 3 fallos)');
   }
   
   /**
