@@ -55,7 +55,9 @@ class WhatsAppWebService {
 
     // Control de generación de QR
     this.qrGenerationCount = 0;
-    this.maxQRGenerations = 3; // Máximo de QRs antes de detener (requiere reinicio manual)
+    // Cada QR vive ~20s. 20 QRs = ~7 min para escanear antes de que el servicio
+    // se detenga y pida "Conectar" manual.
+    this.maxQRGenerations = 20;
     this.qrCooldownActive = false;
     this.stoppedAwaitingManualStart = false; // Bandera: detenido esperando inicio manual
     this.lastQRTime = 0;
@@ -260,7 +262,7 @@ class WhatsAppWebService {
           handleSIGHUP: false,
           timeout: 90000 // Timeout de 90 segundos para operaciones de Puppeteer
         },
-        qrMaxRetries: 5, // Limitar reintentos de QR
+        qrMaxRetries: 20, // Reintentos de QR (alineado con maxQRGenerations)
         // takeoverOnConflict configurable vía variable de entorno para pruebas
         takeoverOnConflict: (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'),
         takeoverTimeoutMs: process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS ? parseInt(process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS, 10) : 0
