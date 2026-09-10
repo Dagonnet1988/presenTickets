@@ -49,6 +49,16 @@ export class TicketService {
     // Para FormData, dejamos que el interceptor agregue automáticamente el token
     return this.http.post<any>(this.apiUrl, ticketData);
   }
+
+  // Verifica si el usuario actual puede crear un ticket nuevo
+  getCreationEligibility(): Observable<{
+    allowed: boolean;
+    limit: number | null;
+    count: number;
+    pendingTickets: { id: number; title: string }[];
+  }> {
+    return this.http.get<any>(`${this.apiUrl}/creation-eligibility`, { headers: this.getAuthHeaders() });
+  }
   sendMessage(ticketId: string, formData: FormData): Observable<any> {
     // Para FormData, dejamos que el interceptor agregue automáticamente el token
     // No agregamos Content-Type porque el navegador lo hace automáticamente para FormData

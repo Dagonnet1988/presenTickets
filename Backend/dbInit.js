@@ -702,7 +702,10 @@ const checkAndCreateTables = async () => {
         { name: 'whatsapp_max_daily', type: 'INTEGER DEFAULT 200' },
         { name: 'whatsapp_max_burst', type: 'INTEGER DEFAULT 5' },
         // Alcance de destinatarios de WhatsApp: 'all' (todos) | 'tech_only' (solo técnicos)
-        { name: 'whatsapp_recipient_scope', type: "VARCHAR(20) DEFAULT 'all'" }
+        { name: 'whatsapp_recipient_scope', type: "VARCHAR(20) DEFAULT 'all'" },
+        // Máximo de tickets en "Esperando respuesta del usuario" que un usuario puede
+        // tener antes de que se le impida crear tickets nuevos.
+        { name: 'max_pending_user_tickets', type: 'INTEGER DEFAULT 3' }
       ];
       
       for (const column of antiblockColumns) {

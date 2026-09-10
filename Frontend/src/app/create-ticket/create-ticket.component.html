@@ -18,7 +18,29 @@
       <mat-card-title>Crear Ticket</mat-card-title>
     </mat-card-header>
     <mat-card-content>
-      <form [formGroup]="ticketForm" (ngSubmit)="onSubmit()">
+      <!-- Bloqueo: demasiados tickets en "Esperando respuesta del usuario" -->
+      <div *ngIf="creationBlocked" class="creation-blocked">
+        <mat-icon class="creation-blocked-icon" color="warn">block</mat-icon>
+        <h3>No puedes crear un ticket nuevo</h3>
+        <p>
+          Tienes <strong>{{ pendingCount }}</strong> tickets en estado
+          <strong>"Esperando respuesta del usuario"</strong><span *ngIf="pendingLimit"> (máximo permitido: {{ pendingLimit }})</span>.
+          Para crear uno nuevo, primero responde o cierra estos tickets:
+        </p>
+        <ul class="pending-ticket-list">
+          <li *ngFor="let t of pendingTickets">
+            <button type="button" mat-stroked-button color="primary" (click)="goToTicket(t.id)">
+              <mat-icon>open_in_new</mat-icon>
+              #{{ t.id }} — {{ t.title }}
+            </button>
+          </li>
+        </ul>
+        <button type="button" mat-button [disabled]="checkingEligibility" (click)="recheckEligibility()">
+          <mat-icon>refresh</mat-icon> Volver a verificar
+        </button>
+      </div>
+
+      <form *ngIf="!creationBlocked" [formGroup]="ticketForm" (ngSubmit)="onSubmit()">
         <!-- Título -->
         <mat-form-field appearance="outline">
           <mat-label>Título</mat-label>

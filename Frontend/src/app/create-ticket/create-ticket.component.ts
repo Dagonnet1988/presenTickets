@@ -51,6 +51,13 @@ export class CreateTicketComponent implements OnInit {
   isDragging = false;
   isSubmitting = false; // Nueva propiedad para controlar el estado de envío
 
+  // Bloqueo por exceso de tickets en "Esperando respuesta del usuario"
+  checkingEligibility = true;
+  creationBlocked = false;
+  pendingLimit: number | null = null;
+  pendingCount = 0;
+  pendingTickets: { id: number; title: string }[] = [];
+
   constructor(
     private fb: FormBuilder,
     private router: Router,
@@ -67,6 +74,41 @@ export class CreateTicketComponent implements OnInit {
       category: ['', [Validators.required]],
       area: ['', [Validators.required]]
     });
+
+    this.checkCreationEligibility();
+  }
+
+  recheckEligibility(): void {
+    this.checkCreationEligibility();
+  }
+
+  private checkCreationEligibility(): void {
+    this.checkingEligibility = true;
+    this.ticketService.getCreationEligibility().subscribe({
+      next: (res) => {
+        this.creationBlocked = !res.allowed;
+        this.pendingLimit = res.limit;
+        this.pendingCount = res.count;
+        this.pendingTickets = res.pendingTickets || [];
+        this.checkingEligibility = false;
+        if (this.creationBlocked) {
+          this.ticketForm.disable();
+        } else {
+          this.ticketForm.enable();
+        }
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        // fail-open: si no se puede verificar, permitir crear
+        this.creationBlocked = false;
+        this.checkingEligibility = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  goToTicket(ticketId: number): void {
+    this.router.navigate([`/ticket/${ticketId}`]);
   }
 
   onFileChange(event: any): void {
@@ -142,9 +184,21 @@ export class CreateTicketComponent implements OnInit {
         },
         error => {
           console.error('Error al crear el ticket:', error);
-          this.snackBar.open('Error al crear el ticket', 'Cerrar', {
-            duration: 3000,
-          });
+          if (error?.status === 409 && error?.error?.code === 'PENDING_LIMIT') {
+            // El backend bloqueó la creación por exceso de tickets pendientes
+            this.creationBlocked = true;
+            this.pendingLimit = error.error.limit ?? this.pendingLimit;
+            this.pendingCount = error.error.count ?? this.pendingCount;
+            this.ticketForm.disable();
+            this.checkCreationEligibility(); // refrescar la lista de tickets pendientes
+            this.snackBar.open(error.error.message || 'No puedes crear más tickets por ahora', 'Cerrar', {
+              duration: 6000,
+            });
+          } else {
+            this.snackBar.open('Error al crear el ticket', 'Cerrar', {
+              duration: 3000,
+            });
+          }
           this.isSubmitting = false; // Restablecer el estado en caso de error
         },
         () => {
