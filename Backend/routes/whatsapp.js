@@ -615,6 +615,12 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
  */
 export async function sendWhatsAppNotification(userId, ticketId, message, notificationType) {
   try {
+    // Evitar consultas y envios cuando WhatsApp no esta listo.
+    const availability = whatsappWebService.getSendAvailability();
+    if (!availability.canSend) {
+      return false;
+    }
+
     const client = await pool.connect();
 
     // 1. VERIFICAR CONFIGURACIÓN GLOBAL DEL SISTEMA PRIMERO

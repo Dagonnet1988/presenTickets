@@ -67,6 +67,7 @@ class WhatsAppWebService {
     this.lastResetDate = new Date().toDateString();
     this.messageQueue = [];
     this.processingQueue = false;
+    this.lastSendSkipLogAt = 0;
 
     // Configuración de límites de seguridad anti-detección
     this.rateLimits = {
@@ -1196,6 +1197,38 @@ class WhatsAppWebService {
   }
 
   /**
+   * Estado operativo para envios. Evita intentos cuando la sesion esta cerrada
+   * o el cliente esta en recuperacion.
+   */
+  getSendAvailability() {
+    if (this.stoppedAwaitingManualStart) {
+      return {
+        canSend: false,
+        reason: 'Servicio detenido: se requiere inicio manual desde WhatsApp Admin.'
+      };
+    }
+
+    if (this.isInitializing) {
+      return {
+        canSend: false,
+        reason: 'WhatsApp Web esta inicializando. Intente nuevamente en unos segundos.'
+      };
+    }
+
+    if (!this.isReady || !this.client) {
+      return {
+        canSend: false,
+        reason: 'WhatsApp Web no esta conectado.'
+      };
+    }
+
+    return {
+      canSend: true,
+      reason: null
+    };
+  }
+
+  /**
    * Resetear estado interno (para recuperación manual)
    */
   resetState() {
@@ -1509,6 +1542,17 @@ class WhatsAppWebService {
    */
   async sendTicketNotification(userId, ticketId, message, notificationType) {
     try {
+      // Guardia temprana: no intentar enviar si WhatsApp no esta operativo.
+      const availability = this.getSendAvailability();
+      if (!availability.canSend) {
+        const now = Date.now();
+        if (now - this.lastSendSkipLogAt > 60000) {
+          logger.warn(`⚠️ Notificación WhatsApp omitida: ${availability.reason}`);
+          this.lastSendSkipLogAt = now;
+        }
+        return false;
+      }
+
       // Obtener información del usuario
       const client = await pool.connect();
 

@@ -33,6 +33,30 @@ import { checkMaintenance } from './middleware/maintenanceMiddleware.js';
 // Cargar variables de entorno según el entorno
 // Solo cargar archivos .env si NO estamos en producción usando PM2
 const ENV = process.env.NODE_ENV || 'development';
+const hasValue = (value) => typeof value === 'string' ? value.trim() !== '' : !!value;
+
+function loadEnvFileForMissingKeys(filePath, keys) {
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
+
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(filePath));
+    let loadedAny = false;
+
+    for (const key of keys) {
+      if (!hasValue(process.env[key]) && hasValue(parsed[key])) {
+        process.env[key] = parsed[key];
+        loadedAny = true;
+      }
+    }
+
+    return loadedAny;
+  } catch (error) {
+    console.warn(`⚠️ No se pudo leer ${filePath}:`, error.message);
+    return false;
+  }
+}
 
 if (!process.env.pm_id) {
   // No estamos usando PM2, cargar desde archivos .env
@@ -53,12 +77,24 @@ if (!process.env.pm_id) {
   }
 } else {
   // Usando PM2, las variables base vienen del ecosystem.config
-  // Pero también cargar .env.production para variables adicionales (como EMAIL_MONITOR)
+  // Si PM2 trae EMAIL_MONITOR_* vacías, rellenar desde .env del servidor.
   const envPath = `.env.${ENV}`;
-  if (fs.existsSync(envPath)) {
-    // Cargar sin sobrescribir las variables de PM2
-    dotenv.config({ path: envPath });
-    console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables adicionales cargadas desde ${envPath}`);
+  const fallbackKeys = [
+    'EMAIL_MONITOR_HOST',
+    'EMAIL_MONITOR_PORT',
+    'EMAIL_MONITOR_USER',
+    'EMAIL_MONITOR_PASSWORD',
+    'EMAIL_FILTER_SENDER',
+    'EMAIL_FILTER_SENDERS',
+    'EMAIL_TECH_RECIPIENTS',
+    'EMAIL_MONITOR_INTERVAL'
+  ];
+
+  const loadedFromEnvPath = loadEnvFileForMissingKeys(envPath, fallbackKeys);
+  const loadedFromBaseEnv = loadEnvFileForMissingKeys('.env', fallbackKeys);
+
+  if (loadedFromEnvPath || loadedFromBaseEnv) {
+    console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables EMAIL_MONITOR recuperadas desde archivo .env`);
   } else {
     console.log(`✅ Ejecutando con PM2 en modo ${ENV} - Variables de entorno cargadas desde ecosystem.config`);
   }
@@ -442,7 +478,7 @@ export async function getNotificationRecipients(ticketId, actorId) {
         }
       });
     }
-    
+
     return Array.from(recipients);
   } catch (err) {
     console.error('Error al obtener destinatarios de notificación:', err);

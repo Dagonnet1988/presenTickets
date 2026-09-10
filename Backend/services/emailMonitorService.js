@@ -19,6 +19,16 @@ import { sendWhatsAppNotification } from '../routes/whatsapp.js';
 
 class EmailMonitorService {
   constructor() {
+    const normalizeEnvValue = (value) => {
+      if (value === undefined || value === null) return '';
+      return String(value).trim().replace(/^['\"]|['\"]$/g, '');
+    };
+
+    const monitorUser = normalizeEnvValue(process.env.EMAIL_MONITOR_USER) || 'desarrollo@clinicadelapresentacion.com.co';
+    const rawMonitorPassword = normalizeEnvValue(process.env.EMAIL_MONITOR_PASSWORD) || 'hwbc ovsb xvwa sejx';
+    const stripSpaces = (process.env.EMAIL_MONITOR_PASSWORD_STRIP_SPACES || 'true').toLowerCase() === 'true';
+    const monitorPassword = process.env.EMAIL_MONITOR_PASSWORD;;
+
     this.client = null;
     this.io = null;
     this.isRunning = false;
@@ -27,6 +37,9 @@ class EmailMonitorService {
     this.lastCheckTime = null;
     this.errorCount = 0;
     this.maxErrors = 5; // Máximo de errores consecutivos antes de pausar
+    this.connectionRetryDelay = 15000; // Backoff inicial de reconexión IMAP
+    this.maxConnectionRetryDelay = 120000; // Backoff máximo
+    this.nextConnectionRetryAt = 0;
 
     // Configuración por defecto (se puede sobrescribir desde variables de entorno)
     this.config = {
@@ -35,10 +48,14 @@ class EmailMonitorService {
       secure: true,
       auth: {
         user: process.env.EMAIL_MONITOR_USER || 'desarrollo@clinicadelapresentacion.com.co',
-        pass: process.env.EMAIL_MONITOR_PASSWORD || 'hwbc ovsb xvwa sejx'
+        pass: process.env.EMAIL_MONITOR_PASSWORD || 'bjkz gqkw rwlh ictg'
       },
       // Remitente a filtrar
       filterSender: process.env.EMAIL_FILTER_SENDER || 'soporte@osigu.com',
+      // Lista opcional de remitentes permitidos (separados por coma)
+      filterSenders: process.env.EMAIL_FILTER_SENDERS || '',
+      // Correos tecnicos validos para enrutar notificaciones (separados por coma)
+      techRecipients: process.env.EMAIL_TECH_RECIPIENTS || '',
       // Intervalo de revisión en ms (por defecto 2 minutos)
       checkInterval: parseInt(process.env.EMAIL_MONITOR_INTERVAL) || 120000
     };
@@ -65,6 +82,96 @@ class EmailMonitorService {
   }
 
   /**
+   * Normalizar y obtener lista de remitentes permitidos.
+   */
+  getAllowedSenders() {
+    const senders = [];
+
+    if (this.config.filterSender) {
+      senders.push(this.config.filterSender.toLowerCase().trim());
+    }
+
+    if (this.config.filterSenders) {
+      const multiSenders = this.config.filterSenders
+        .split(',')
+        .map((s) => s.toLowerCase().trim())
+        .filter(Boolean);
+      senders.push(...multiSenders);
+    }
+
+    return [...new Set(senders)];
+  }
+
+  /**
+   * Validar si un remitente pertenece a Osigu según configuración.
+   */
+  isAllowedSender(fromAddress) {
+    const normalizedFrom = (fromAddress || '').toLowerCase().trim();
+    if (!normalizedFrom) return false;
+
+    const allowedSenders = this.getAllowedSenders();
+    if (allowedSenders.length === 0) return false;
+
+    return allowedSenders.some((sender) => normalizedFrom === sender);
+  }
+
+  /**
+   * Obtener lista de correos tecnicos permitidos desde variables de entorno.
+   */
+  getAllowedTechRecipients() {
+    return (this.config.techRecipients || '')
+      .split(',')
+      .map((email) => email.toLowerCase().trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * Extraer ID externo del asunto/cuerpo priorizando el nuevo formato de Osigu.
+   */
+  extractExternalTicketId(subject, bodyText = '') {
+    const normalizedBody = bodyText || '';
+
+    // Formato requerido: TKT-68774 en cuerpo
+    const tktBodyMatch = normalizedBody.match(/\bTKT[-\s]?(\d+)\b/i);
+    if (tktBodyMatch?.[1]) {
+      return tktBodyMatch[1];
+    }
+
+    return null;
+  }
+
+  /**
+   * Extraer texto del source MIME del correo.
+   */
+  extractTextFromSource(source) {
+    if (!source) return '';
+    try {
+      if (Buffer.isBuffer(source)) {
+        return source.toString('utf8');
+      }
+      return String(source);
+    } catch (error) {
+      return '';
+    }
+  }
+
+  /**
+   * Extraer destinatarios del sobre (to/cc).
+   */
+  extractRecipientEmails(message) {
+    const recipients = [];
+    const toList = message?.envelope?.to || [];
+    const ccList = message?.envelope?.cc || [];
+
+    for (const entry of [...toList, ...ccList]) {
+      const email = entry?.address?.toLowerCase()?.trim();
+      if (email) recipients.push(email);
+    }
+
+    return [...new Set(recipients)];
+  }
+
+  /**
    * Inicializar conexión IMAP
    */
   async connect() {
@@ -76,6 +183,12 @@ class EmailMonitorService {
     await this.disconnect();
 
     try {
+      const maskedUser = this.config.auth.user
+        ? this.config.auth.user.replace(/(.{3}).*(@.*)/, '$1***$2')
+        : 'no-configurado';
+
+      console.log(`📧 Intentando conexión IMAP host=${this.config.host} port=${this.config.port} user=${maskedUser} passLen=${(this.config.auth.pass || '').length}`);
+
       this.client = new ImapFlow({
         host: this.config.host,
         port: this.config.port,
@@ -84,7 +197,8 @@ class EmailMonitorService {
         logger: false,
         // Aumentar timeout para conexiones lentas
         socketTimeout: 60000,
-        greetingTimeout: 30000
+        greetingTimeout: 30000,
+        authTimeout: 30000
       });
 
       // Manejar eventos de error y cierre
@@ -101,12 +215,31 @@ class EmailMonitorService {
       await this.client.connect();
       this.isConnected = true;
       this.errorCount = 0;
+      this.connectionRetryDelay = 15000;
+      this.nextConnectionRetryAt = 0;
+
+      console.log(`📧 ✅ Conexión IMAP establecida con ${this.config.host}:${this.config.port}`);
       
       return true;
     } catch (error) {
-      console.error('❌ Email Monitor: Error de conexión:', error.message);
+      const errorDetails = {
+        message: error?.message || 'Error desconocido',
+        code: error?.code || null,
+        command: error?.command || null,
+        responseCode: error?.responseCode || null,
+        responseStatus: error?.responseStatus || null,
+        serverResponse: error?.serverResponse || null,
+        errno: error?.errno || null,
+        syscall: error?.syscall || null,
+        address: error?.address || null,
+        port: error?.port || null
+      };
+
+      console.error('❌ Email Monitor: Error de conexión:', errorDetails);
       this.isConnected = false;
       this.errorCount++;
+      this.nextConnectionRetryAt = Date.now() + this.connectionRetryDelay;
+      this.connectionRetryDelay = Math.min(this.connectionRetryDelay * 2, this.maxConnectionRetryDelay);
       return false;
     }
   }
@@ -190,11 +323,14 @@ class EmailMonitorService {
    * Revisar correos nuevos (busca por fecha reciente, no por estado leído)
    */
   async checkEmails() {
+    if (this.nextConnectionRetryAt && Date.now() < this.nextConnectionRetryAt) {
+      return;
+    }
+
     // Forzar reconexión si no está conectado
     if (!this.isConnected || !this.client) {
       const connected = await this.connect();
       if (!connected) {
-        this.errorCount++;
         return;
       }
     }
@@ -213,31 +349,40 @@ class EmailMonitorService {
         
         const messages = [];
         let totalChecked = 0;
-        
+        let skippedSender = 0;
+        let skippedProcessed = 0;
+        const allowedSenders = this.getAllowedSenders();
+
         // Buscar por fecha (SINCE) y luego filtrar por remitente
         for await (const message of this.client.fetch(
           { since: sinceDate },
           { 
             envelope: true, 
-            source: false,
+            source: true,
             bodyStructure: true 
           }
         )) {
           totalChecked++;
           const fromAddress = message.envelope?.from?.[0]?.address?.toLowerCase() || '';
-          
-          if (fromAddress.includes(this.config.filterSender.toLowerCase())) {
+
+          if (this.isAllowedSender(fromAddress)) {
             const messageId = message.envelope?.messageId;
             const subject = message.envelope?.subject || 'Sin asunto';
-            
+
             // Verificar si ya procesamos este correo (en BD)
             const alreadyProcessed = await this.isEmailProcessed(messageId);
-            
+
             if (!alreadyProcessed) {
               messages.push(message);
+            } else {
+              skippedProcessed++;
             }
+          } else {
+            skippedSender++;
           }
         }
+
+        console.log(`📧 Revisión: ${totalChecked} correos revisados, ${messages.length} nuevos de Osigu (${skippedProcessed} ya procesados, ${skippedSender} de otros remitentes). Filtro activo: [${allowedSenders.join(', ')}]`);
 
         if (messages.length > 0) {
           for (const message of messages) {
@@ -301,16 +446,30 @@ class EmailMonitorService {
   async processEmail(message) {
     try {
       const messageId = message.envelope?.messageId;
-      
+
       const subject = message.envelope?.subject || 'Sin asunto';
       const from = message.envelope?.from?.[0];
       const fromAddress = from?.address || 'desconocido';
       const fromName = from?.name || fromAddress;
       const date = message.envelope?.date || new Date();
+      const emailSource = this.extractTextFromSource(message.source);
+      const recipientEmails = this.extractRecipientEmails(message);
+      const allowedRecipients = this.getAllowedTechRecipients();
+      const matchedRecipients = recipientEmails.filter((email) => allowedRecipients.includes(email));
 
-      // Extraer número de ticket externo del asunto
-      const ticketMatch = subject.match(this.ticketPattern);
-      const externalTicketId = ticketMatch ? (ticketMatch[1] || ticketMatch[2]) : null;
+      console.log(`📧 Procesando correo de [${fromAddress}] asunto="${subject.substring(0, 80)}"`);
+      console.log(`📧   Destinatarios del correo: [${recipientEmails.join(', ')}]`);
+      console.log(`📧   Técnicos permitidos (env): [${allowedRecipients.join(', ')}]`);
+      console.log(`📧   Técnicos coincidentes: [${matchedRecipients.join(', ')}]`);
+
+      if (matchedRecipients.length === 0) {
+        console.warn(`📧 ⚠️  Correo descartado: ningún destinatario coincide con EMAIL_TECH_RECIPIENTS`);
+        return;
+      }
+
+      // Extraer número de ticket externo desde cuerpo (formato TKT-xxxxx)
+      const externalTicketId = this.extractExternalTicketId(subject, emailSource);
+      console.log(`📧   ID externo extraído del cuerpo: ${externalTicketId || '(no encontrado)'}`);
 
       // Crear notificación para técnicos (incluye messageId para notificación compartida)
       await this.createNotificationForTechnicians({
@@ -319,7 +478,8 @@ class EmailMonitorService {
         subject,
         fromName,
         fromAddress,
-        date
+        date,
+        recipientEmails: matchedRecipients
       });
 
       // Marcar correo como procesado en BD (no en memoria)
@@ -347,20 +507,16 @@ class EmailMonitorService {
   }
 
   /**
-   * Crear notificación para todos los técnicos
-   * Las notificaciones comparten email_message_id para marcado compartido
+   * Crear notificación para técnico destino.
+   * Prioriza técnico asignado del ticket y usa destinatario del correo como fallback.
    */
-  async createNotificationForTechnicians({ messageId, externalTicketId, subject, fromName, fromAddress, date }) {
+  async createNotificationForTechnicians({ messageId, externalTicketId, subject, fromName, fromAddress, date, recipientEmails = [] }) {
     try {
-      // Obtener todos los técnicos activos (solo rol tech)
-      const usersResult = await pool.query(`
-        SELECT id, username, firstname, lastname 
-        FROM users 
-        WHERE role = 'tech' 
-        AND status = true
-      `);
+      const normalizedRecipients = recipientEmails
+        .map((email) => (email || '').toLowerCase().trim())
+        .filter(Boolean);
 
-      if (usersResult.rows.length === 0) {
+      if (normalizedRecipients.length === 0) {
         return;
       }
 
@@ -373,8 +529,60 @@ class EmailMonitorService {
         );
         if (ticketResult.rows.length > 0) {
           relatedTicketId = ticketResult.rows[0].id;
+          console.log(`📧   Ticket interno relacionado: #${relatedTicketId}`);
+        } else {
+          console.log(`📧   Sin ticket interno para external_ticket_id=${externalTicketId}`);
         }
       }
+
+      // Si el ticket existe y tiene técnico asignado, enviar SOLO a ese técnico.
+      let usersResult;
+      let routingMode;
+      if (relatedTicketId) {
+        usersResult = await pool.query(
+          `SELECT u.id, u.username, u.firstname, u.lastname, u.email
+           FROM tickets t
+           JOIN users u ON u.id = t.assigned_to
+           WHERE t.id = $1
+             AND u.role = 'tech'
+             AND u.status = true
+           LIMIT 1`,
+          [relatedTicketId]
+        );
+
+        if (usersResult.rows.length > 0) {
+          routingMode = 'asignado al ticket';
+        } else {
+          // Si no hay asignado válido, fallback a destinatario(s) del correo.
+          usersResult = await pool.query(
+            `SELECT id, username, firstname, lastname, email
+             FROM users
+             WHERE role = 'tech'
+               AND status = true
+               AND lower(email) = ANY($1::text[])`,
+            [normalizedRecipients]
+          );
+          routingMode = 'fallback por destinatario (ticket sin asignado)';
+        }
+      } else {
+        usersResult = await pool.query(
+          `SELECT id, username, firstname, lastname, email
+           FROM users
+           WHERE role = 'tech'
+             AND status = true
+             AND lower(email) = ANY($1::text[])`,
+          [normalizedRecipients]
+        );
+        routingMode = 'por destinatario del correo';
+      }
+
+      if (usersResult.rows.length === 0) {
+        console.warn(`📧 ⚠️  Sin técnico destino (modo: ${routingMode}). Destinatarios buscados: [${normalizedRecipients.join(', ')}]`);
+        return;
+      }
+
+      const techNames = usersResult.rows.map((u) => `${u.firstname} <${u.email}>`).join(', ');
+      console.log(`📧   Enrutando notificación a [${techNames}] — modo: ${routingMode}`);
 
       // Mensaje de notificación
       const message = externalTicketId 
@@ -480,6 +688,8 @@ class EmailMonitorService {
         port: this.config.port,
         user: this.config.auth.user ? this.config.auth.user.replace(/(.{3}).*(@.*)/, '$1***$2') : 'No configurado',
         filterSender: this.config.filterSender,
+        filterSenders: this.getAllowedSenders(),
+        techRecipients: this.getAllowedTechRecipients(),
         checkIntervalSeconds: this.config.checkInterval / 1000
       },
       processedEmailsCount: processedCount
@@ -520,6 +730,10 @@ class EmailMonitorService {
 
     if (newConfig.filterSender) {
       this.config.filterSender = newConfig.filterSender;
+    }
+
+    if (typeof newConfig.filterSenders === 'string') {
+      this.config.filterSenders = newConfig.filterSenders;
     }
 
     return this.getStatus();
