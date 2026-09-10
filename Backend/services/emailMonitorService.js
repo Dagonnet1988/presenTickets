@@ -732,9 +732,16 @@ class EmailMonitorService {
 
       // Enviar notificaciones WhatsApp a los técnicos (no bloqueante)
       // El mensaje incluye info del ticket externo
-      const whatsappMessage = externalTicketId
-        ? `📧 *Respuesta de Soporte Externo*\n\n🎫 *Ticket Externo:* #${externalTicketId}\n📝 *Asunto:* ${subject.substring(0, 100)}\n👤 *De:* ${fromName}\n🕒 *Fecha:* ${new Date(date).toLocaleString('es-CO')}\n\n💡 Revisa la bandeja de entrada para más detalles.`
-        : `📧 *Correo de Soporte Externo*\n\n📝 *Asunto:* ${subject.substring(0, 100)}\n👤 *De:* ${fromName}\n🕒 *Fecha:* ${new Date(date).toLocaleString('es-CO')}\n\n💡 Revisa la bandeja de entrada para más detalles.`;
+      // Solo los datos; el encabezado y el pie los pone la plantilla de WhatsApp.
+      const fecha = new Date(date).toLocaleString('es-CO', { timeZone: 'America/Bogota', hour12: false }).replace(/\//g, '-');
+      const whatsappMessage = [
+        externalTicketId ? `🎫 Ticket externo: #${externalTicketId}` : null,
+        `📝 Asunto: ${subject.substring(0, 120)}`,
+        `👤 De: ${fromName}`,
+        `🕒 ${fecha}`,
+        '',
+        '💡 Revisa la bandeja de entrada del sistema para más detalles.'
+      ].filter((line) => line !== null).join('\n');
 
       for (const notification of notifications) {
         // Enviar de forma asíncrona sin bloquear

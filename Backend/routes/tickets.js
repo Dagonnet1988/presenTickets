@@ -679,10 +679,9 @@ router.patch("/:id", async (req, res) => {
                 type: typeForRecipient,
                 message: messageForRecipient,
                 ticket_id: id,
-                // Mensaje WhatsApp solo para usuarios (con recordatorio de encuesta)
-                whatsapp_message: recipientRole === 'user'
-                  ? `🎉 *Tu ticket ha sido resuelto*\n\n📋 *Ticket:* ${ticketTitle}\n\n⭐ Por favor ingresa a PresenTickets para calificar el servicio recibido.\n\n¡Tu opinión es muy importante para nosotros!`
-                  : undefined
+                // El texto de WhatsApp lo arma la plantilla según el tipo
+                // (ticket_resuelto para usuarios, cambio_estado para técnicos)
+                whatsapp_message: 'Resuelto'
               });
             }
 
