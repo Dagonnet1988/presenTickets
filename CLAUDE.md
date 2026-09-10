@@ -75,12 +75,13 @@ se le bloquee crear tickets nuevos (`POST /api/tickets` → 409 `PENDING_LIMIT`;
 
 ## WhatsApp / whatsapp-web.js
 
-- Versión **fijada e inestable**: `whatsapp-web.js` está en `^1.34.5-alpha.3`. Cada actualización
-  suele romper la API interna (`markedUnread`, `sendSeen`, `detached Frame`, `Target closed`).
-  `server.js` ya filtra esos errores para que no tumben el proceso.
-- **No actualizar `whatsapp-web.js` sin un plan de prueba.** Fijar versión exacta (sin `^`) y
-  validar conexión + envío en un entorno de prueba antes de subir a producción.
-- Sesión de WhatsApp persistida en `Backend/whatsapp_auth_web/`.
+- Versión **fijada exacta** (sin `^`): `whatsapp-web.js` = `1.34.7`. Cada cambio de versión suele
+  romper la API interna (`markedUnread`, `sendSeen`, `detached Frame`, `Target closed`) —
+  `server.js` filtra esos errores para que no tumben el proceso.
+- **No actualizar `whatsapp-web.js` sin un plan de prueba.** Mantener la versión exacta y validar
+  conexión + envío antes de subir a producción.
+- Sesión de WhatsApp persistida en `Backend/whatsapp_auth_web/`. **Un cambio de versión puede
+  invalidar la sesión** → hay que reescanear el QR desde el panel admin (tener el teléfono a mano).
 
 ## Convenciones
 
