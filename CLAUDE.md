@@ -15,10 +15,8 @@ fuente nuevo lleva la cabecera de copyright del proyecto (ver cualquier archivo 
 
 ## Cómo ejecutar
 
-| | Dev | Prod |
-|---|---|---|
-| Backend (`Backend/`) | `npm run dev` (nodemon, puerto 3000) | PM2 con `ecosystem.production.config.json` |
-| Frontend (`Frontend/`) | `npm start` (`ng serve`, puerto 4200) | `npm run build` |
+- **Backend** (`Backend/`): dev `npm run dev` (nodemon, puerto 3000); prod PM2 con `ecosystem.production.config.json`.
+- **Frontend** (`Frontend/`): dev `npm start` (`ng serve`, puerto 4200); prod `npm run build`.
 
 No hay suite de pruebas automatizadas — la verificación es manual.
 
@@ -52,14 +50,28 @@ Tres canales para el mismo evento:
 2. **WhatsApp** — `whatsapp-web.js`; log en `whatsapp_notifications`.
 3. **Notificación nativa del navegador** — solo si la pestaña está en segundo plano.
 
-Punto único de entrada: **`createNotification()` en `Backend/routes/notifications.js`** — inserta la
-fila en `notifications` y dispara `sendWhatsAppNotification()` de forma asíncrona.
-El emit de Socket.IO se hace con `emitTicketNotification()` / `io` desde `Backend/server.js`.
+**Punto ÚNICO de entrega: `createNotification()` en `Backend/routes/notifications.js`.**
+Hace todo el trabajo de una notificación: (1) verifica que el destinatario exista y esté
+`status = true`, (2) deduplica el mismo evento repetido en 10s (salvo `dedupe: false`, que usan
+los comentarios), (3) inserta la fila en `notifications`, (4) emite el socket
+`ticket-notification` SOLO al destinatario con el id real de BD, (5) dispara
+`sendWhatsAppNotification()` async.
+**No llamar a `emitTicketNotification()` por separado para un evento que ya pasa por
+`createNotification()`** — genera notificaciones dobles en la campana.
+
 En el frontend, `NotificationService` (`Frontend/src/app/shared/services/notification.service.ts`)
-mantiene el estado de la campana.
+reconstruye SIEMPRE la lista de la campana desde el backend (`fetchUnreadNotifications`, con
+debounce). El handler de socket no crea items locales.
 
 Gating de WhatsApp (en orden): servicio conectado → `system_settings.whatsapp_global_*` →
-horario laboral (`isBusinessHours()`) → `user_preferences_settings` del destinatario → rate limits.
+`system_settings.whatsapp_recipient_scope` (`all` | `tech_only`; en `tech_only` no se envía a
+rol `user`) → destinatario activo → horario laboral (`isBusinessHours()`) →
+`user_preferences_settings` del destinatario → rate limits.
+
+`system_settings` (fila `id = 1`) también guarda `max_pending_user_tickets` (default 3): tope de
+tickets en estado "Esperando respuesta del usuario" que un rol `user` puede tener antes de que
+se le bloquee crear tickets nuevos (`POST /api/tickets` → 409 `PENDING_LIMIT`;
+`GET /api/tickets/creation-eligibility` para consultarlo desde el frontend).
 
 ## WhatsApp / whatsapp-web.js
 
