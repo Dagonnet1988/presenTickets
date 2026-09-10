@@ -567,8 +567,9 @@ process.on('uncaughtException', (err) => {
     second: '2-digit'
   });
   
-  // Filtrar errores conocidos de WhatsApp/Puppeteer que NO son críticos
+  // Filtrar errores conocidos de WhatsApp/Puppeteer/IMAP que NO son críticos
   const errorMsg = err.message || '';
+  const errorStack = err.stack || '';
   const isWhatsAppError = errorMsg.includes('WhatsApp') ||
                           errorMsg.includes('detached Frame') ||
                           errorMsg.includes('Target closed') ||
@@ -577,9 +578,13 @@ process.on('uncaughtException', (err) => {
                           errorMsg.includes('Puppeteer') ||
                           errorMsg.includes('markedUnread') ||
                           errorMsg.includes('sendSeen');
-  
-  if (isWhatsAppError) {
-    console.warn(`⚠️ [${localTime}] Error de WhatsApp/Puppeteer (no crítico):`, errorMsg);
+  const isImapError = errorMsg.includes('Socket timeout') ||
+                      errorMsg.includes('ETIMEOUT') ||
+                      errorStack.includes('imapflow') ||
+                      errorStack.includes('imap-flow');
+
+  if (isWhatsAppError || isImapError) {
+    console.warn(`⚠️ [${localTime}] Error de ${isImapError ? 'IMAP/correo' : 'WhatsApp/Puppeteer'} (no crítico):`, errorMsg);
     return; // NO crashear el servidor
   }
   
@@ -650,7 +655,15 @@ process.on('unhandledRejection', (reason, promise) => {
     console.log('ℹ️ La sesión de WhatsApp perdió conexión. Se intentará reconectar automáticamente.');
     return; // No registrar como error crítico
   }
-  
+
+  // Errores de IMAP (monitor de correo) - NO críticos, se reintenta en el próximo ciclo
+  const reasonStack = reason?.stack || '';
+  if (reasonStr.includes('Socket timeout') || reasonStr.includes('ETIMEOUT') ||
+      reasonStack.includes('imapflow') || reasonStack.includes('imap-flow')) {
+    console.warn(`⚠️ [${localTime}] Monitor de correo: error de conexión IMAP (no crítico):`, reasonStr);
+    return;
+  }
+
   // Para otros errores, registrarlos normalmente
   console.error(`🚫 [${localTime}] PROMESA RECHAZADA NO MANEJADA:`, {
     reason: reason,

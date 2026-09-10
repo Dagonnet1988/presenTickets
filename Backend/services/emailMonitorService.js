@@ -469,9 +469,17 @@ class EmailMonitorService {
         secure: true,
         auth: { user: mb.user, pass: mb.password },
         logger: false,
-        socketTimeout: 60000,
-        greetingTimeout: 30000,
-        authTimeout: 30000
+        socketTimeout: 45000,
+        greetingTimeout: 20000,
+        authTimeout: 20000,
+        emitLogs: false
+      });
+
+      // IMPRESCINDIBLE: sin este handler, un 'error' asíncrono del socket
+      // (p.ej. "Socket timeout" de imapflow) se convierte en excepción no
+      // capturada del proceso.
+      client.on('error', (err) => {
+        logger.debug(`📧 [${label}] error IMAP (ignorado, se reintenta en el próximo ciclo): ${err?.message || err}`);
       });
 
       await client.connect();
@@ -546,12 +554,11 @@ class EmailMonitorService {
         logger.info(`📧 [${label}] ${nuevos} correo(s) nuevo(s) de OSIGU procesado(s)`);
       }
 
-      await client.logout();
+      try { await client.logout(); } catch (e) { try { client.close(); } catch (e2) { /* noop */ } }
       return true;
     } catch (error) {
-      console.error(`📧 ❌ Error revisando buzón ${label}:`, error.message);
+      logger.warn(`📧 ⚠️  Error revisando buzón ${label}: ${error?.message || error}`);
       this.errorCount++;
-      try { if (client) await client.logout(); } catch (e) { /* noop */ }
       try { if (client) client.close(); } catch (e) { /* noop */ }
       return false;
     }
