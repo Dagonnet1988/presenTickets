@@ -54,6 +54,13 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Credenciales inválidas" });
     }
 
+    // Bloquear el acceso a usuarios desactivados
+    if (user.status === false) {
+      return res.status(403).json({
+        message: "Tu usuario está deshabilitado. Contacta al administrador.",
+      });
+    }
+
     // Verificar estado de mantenimiento antes de permitir login
     const isInMaintenance = await MaintenanceSimpleService.isInMaintenance();
     if (isInMaintenance && user.role !== 'admin') {
@@ -86,22 +93,50 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Cache corto del estado activo/inactivo de cada usuario, para no consultar la BD
+// en cada request. Un usuario desactivado deja de tener acceso en <= STATUS_TTL_MS.
+const userStatusCache = new Map(); // id -> { active: boolean, expires: number }
+const STATUS_TTL_MS = 60 * 1000;
+
+export function invalidateUserStatus(userId) {
+  userStatusCache.delete(Number(userId));
+}
+
+async function isUserActive(userId) {
+  const id = Number(userId);
+  const cached = userStatusCache.get(id);
+  if (cached && cached.expires > Date.now()) {
+    return cached.active;
+  }
+
+  try {
+    const result = await pool.query("SELECT status FROM users WHERE id = $1", [id]);
+    // Si el usuario ya no existe, se considera inactivo
+    const active = result.rows.length > 0 && result.rows[0].status !== false;
+    userStatusCache.set(id, { active, expires: Date.now() + STATUS_TTL_MS });
+    return active;
+  } catch (err) {
+    // Fail-open: si la BD falla, no bloquear a los usuarios por la verificación
+    console.error("No se pudo verificar el estado del usuario, se permite el acceso:", err.message);
+    return true;
+  }
+}
+
 // Middleware para proteger rutas con JWT
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader) {
     return res.status(401).json({ message: "Token no proporcionado" });
   }
-  
+
   if (!authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Formato de token inválido" });
   }
-  
+
   const token = authHeader.split(" ")[1];
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecreto");
-    req.user = decoded;
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecreto");
   } catch (err) {
     // Solo loggear errores únicos para evitar spam
     if (!errorLog.has(err.message)) {
@@ -112,6 +147,17 @@ export function authMiddleware(req, res, next) {
     }
     return res.status(401).json({ message: "Token inválido o expirado" });
   }
+
+  // Revalidar que el usuario siga activo (aunque su token siga vigente)
+  if (!(await isUserActive(decoded.id))) {
+    return res.status(403).json({
+      message: "Tu usuario está deshabilitado. Contacta al administrador.",
+      code: "USER_DISABLED",
+    });
+  }
+
+  req.user = decoded;
+  next();
 }
 
 export default router;

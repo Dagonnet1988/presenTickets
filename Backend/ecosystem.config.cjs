@@ -13,8 +13,6 @@ module.exports = {
           // Configuración de Email Monitor (IMAP)
           EMAIL_MONITOR_HOST: 'imap.gmail.com',
           EMAIL_MONITOR_PORT: 993,
-          EMAIL_MONITOR_USER: '', // Agregar correo aquí
-          EMAIL_MONITOR_PASSWORD: '', // Agregar contraseña/app password aquí
           EMAIL_MONITOR_INTERVAL: 120000
         }
       }

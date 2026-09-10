@@ -123,6 +123,20 @@
       <span class="nav-text" *ngIf="!isCollapsed">WhatsApp</span>
     </a>
 
+    <!-- Enlace para "Monitor de Correo" (solo para administradores) -->
+    <a
+      mat-list-item
+      *ngIf="userRole === 'admin'"
+      routerLink="/email-monitor-admin"
+      routerLinkActive="active-link"
+      [routerLinkActiveOptions]="{ exact: true }"
+      aria-label="Monitor de Correo"
+      class="nav-item"
+    >
+      <mat-icon class="nav-icon">mark_email_read</mat-icon>
+      <span class="nav-text" *ngIf="!isCollapsed">Monitor Correo</span>
+    </a>
+
     <!-- Enlace para "Mantenimiento" (solo para administradores) -->
     <a
       mat-list-item

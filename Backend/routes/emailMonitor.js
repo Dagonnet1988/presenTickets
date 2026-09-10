@@ -14,9 +14,19 @@
  */
 
 import express from 'express';
+import { pool } from '../db.js';
 import emailMonitorService from '../services/emailMonitorService.js';
 
 const router = express.Router();
+
+// Normaliza un bloque de texto (líneas o comas) a una lista única en minúsculas.
+// Acepta direcciones completas (help@osigu.com) y dominios (osigu.com).
+function parseEmailList(value) {
+  return String(value || '')
+    .split(/[\s,;]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 2 && e.includes('.'));
+}
 
 // Middleware para verificar autenticación
 const authMiddleware = (req, res, next) => {
@@ -118,23 +128,171 @@ router.post('/check', authMiddleware, adminMiddleware, async (req, res) => {
 router.put('/config', authMiddleware, adminMiddleware, (req, res) => {
   try {
     const { checkInterval, filterSender } = req.body;
-    
+
     const updatedConfig = {};
     if (checkInterval) updatedConfig.checkInterval = checkInterval;
     if (filterSender) updatedConfig.filterSender = filterSender;
-    
+
     const status = emailMonitorService.updateConfig(updatedConfig);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Configuración actualizada',
-      status 
+      status
     });
   } catch (error) {
     console.error('Error actualizando configuración:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error interno del servidor' 
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor'
     });
+  }
+});
+
+/**
+ * GET /api/email-monitor/settings
+ * Configuración gestionable del monitor (tabla email_monitor_settings)
+ * Acceso: solo admin
+ */
+router.get('/settings', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT enabled, filter_senders, check_interval_seconds, mailboxes, updated_at
+       FROM email_monitor_settings WHERE id = 1`
+    );
+
+    const row = result.rows[0] || {
+      enabled: true,
+      filter_senders: '',
+      check_interval_seconds: 120,
+      mailboxes: [],
+      updated_at: null
+    };
+
+    const mailboxes = (Array.isArray(row.mailboxes) ? row.mailboxes : []).map((mb) => ({
+      user: mb.user || '',
+      label: mb.label || mb.user || '',
+      host: mb.host || 'imap.gmail.com',
+      port: parseInt(mb.port, 10) || 993,
+      hasPassword: !!mb.password   // nunca se devuelve la contraseña
+    }));
+
+    res.json({
+      enabled: row.enabled !== false,
+      filterSenders: parseEmailList(row.filter_senders),
+      checkIntervalSeconds: row.check_interval_seconds || 120,
+      mailboxes,
+      updatedAt: row.updated_at
+    });
+  } catch (error) {
+    console.error('Error obteniendo configuración del monitor:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * PUT /api/email-monitor/settings
+ * Guardar la configuración gestionable y aplicarla en caliente
+ * Acceso: solo admin
+ */
+router.put('/settings', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { enabled, filterSenders, checkIntervalSeconds, mailboxes } = req.body;
+
+    const senders = parseEmailList(Array.isArray(filterSenders) ? filterSenders.join(',') : filterSenders);
+    const interval = Math.min(3600, Math.max(30, parseInt(checkIntervalSeconds, 10) || 120));
+
+    if (senders.length === 0) {
+      return res.status(400).json({ error: 'Debe especificar al menos un remitente permitido (OSIGU)' });
+    }
+
+    // Contraseñas: si el cliente no manda password para un buzón, se conserva la
+    // que ya está guardada (nunca se expone en el GET).
+    const existing = await pool.query('SELECT mailboxes FROM email_monitor_settings WHERE id = 1');
+    const prevMailboxes = Array.isArray(existing.rows[0]?.mailboxes) ? existing.rows[0].mailboxes : [];
+    const prevByUser = new Map(prevMailboxes.map((mb) => [String(mb.user || '').toLowerCase(), mb]));
+
+    const normalizedMailboxes = (Array.isArray(mailboxes) ? mailboxes : [])
+      .map((mb) => {
+        const user = String(mb?.user || '').trim().toLowerCase();
+        if (!user.includes('@')) return null;
+        const incomingPassword = (mb?.password || '').trim();
+        const password = incomingPassword || (prevByUser.get(user)?.password || '');
+        return {
+          user,
+          password,
+          host: (mb?.host || 'imap.gmail.com').trim(),
+          port: parseInt(mb?.port, 10) || 993,
+          label: (mb?.label || user).trim()
+        };
+      })
+      .filter(Boolean);
+
+    if (normalizedMailboxes.length === 0) {
+      return res.status(400).json({ error: 'Debe configurar al menos un buzón a vigilar' });
+    }
+    const sinPassword = normalizedMailboxes.filter((mb) => !mb.password).map((mb) => mb.user);
+    if (sinPassword.length > 0) {
+      return res.status(400).json({ error: `Falta la contraseña de aplicación para: ${sinPassword.join(', ')}` });
+    }
+
+    // tech_recipients se deriva de los buzones (para el enrutado fallback)
+    const techRecipients = normalizedMailboxes.map((mb) => mb.user).join(',');
+
+    await pool.query(
+      `INSERT INTO email_monitor_settings
+         (id, enabled, filter_senders, tech_recipients, check_interval_seconds, mailboxes, updated_by, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5::jsonb, $6, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         enabled = EXCLUDED.enabled,
+         filter_senders = EXCLUDED.filter_senders,
+         tech_recipients = EXCLUDED.tech_recipients,
+         check_interval_seconds = EXCLUDED.check_interval_seconds,
+         mailboxes = EXCLUDED.mailboxes,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = NOW()`,
+      [
+        enabled !== false,
+        senders.join(','),
+        techRecipients,
+        interval,
+        JSON.stringify(normalizedMailboxes),
+        req.user.id
+      ]
+    );
+
+    const status = await emailMonitorService.applySettings();
+    res.json({ success: true, message: 'Configuración guardada y aplicada', status });
+  } catch (error) {
+    console.error('Error guardando configuración del monitor:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * GET /api/email-monitor/history
+ * Últimos correos procesados
+ * Acceso: admin y técnicos
+ */
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'tech') {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const result = await pool.query(
+      `SELECT pe.id, pe.external_ticket_id, pe.subject, pe.from_address, pe.processed_at,
+              t.id AS ticket_id
+       FROM processed_emails pe
+       LEFT JOIN tickets t ON t.external_ticket_id = pe.external_ticket_id
+       ORDER BY pe.processed_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error obteniendo historial de correos:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

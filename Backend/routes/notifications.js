@@ -17,6 +17,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { authMiddleware } from './auth.js';
 import { sendWhatsAppNotification } from './whatsapp.js';
+import { emitTicketNotification } from '../server.js';
 
 const router = express.Router();
 
@@ -177,25 +178,84 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 // Crear notificación (uso interno, no expuesto al frontend)
-export async function createNotification({ user_id, type, message, ticket_id, whatsapp_message }) {
-  await pool.query(
-    'INSERT INTO notifications (user_id, type, message, ticket_id) VALUES ($1, $2, $3, $4)',
-    [user_id, type, message, ticket_id]
-  );
+//
+// Punto ÚNICO de entrega de notificaciones de la campana:
+//  1. Verifica que el destinatario exista y esté activo.
+//  2. Deduplica: no crea otra fila para el mismo evento (user_id + type + ticket_id)
+//     si ya hay una sin leer creada en los últimos 10 segundos.
+//  3. Inserta la fila y emite el socket 'ticket-notification' SOLO al destinatario,
+//     con el id real de BD (para que el frontend pueda marcarla como leída).
+//  4. Dispara la notificación WhatsApp de forma asíncrona.
+//
+// No llamar a emitTicketNotification() por separado para el mismo evento: causaría
+// notificaciones duplicadas en la campana.
+export async function createNotification({ user_id, type, message, ticket_id, whatsapp_message, dedupe = true }) {
+  if (!user_id) return null;
 
-  // Enviar notificación WhatsApp de forma asíncrona (no bloqueante)
-  // Usar el contenido real del comentario para WhatsApp si está disponible
-  const whatsappContent = whatsapp_message || message;
-  
-  // Usar setImmediate para que se ejecute después del return
-  setImmediate(async () => {
-    try {
-      await sendWhatsAppNotification(user_id, ticket_id, whatsappContent, type);
-    } catch (error) {
-      // Capturar CUALQUIER error para evitar crash del servicio
-      console.error('❌ Error enviando notificación WhatsApp (capturado):', error?.message || error);
+  const ticketIdValue = ticket_id ?? null;
+
+  try {
+    // 1. El destinatario debe existir y estar activo
+    const userResult = await pool.query(
+      'SELECT status FROM users WHERE id = $1',
+      [user_id]
+    );
+    if (userResult.rows.length === 0 || userResult.rows[0].status === false) {
+      return null;
     }
-  });
+
+    // 2. Evitar duplicados del mismo evento en una ventana corta.
+    //    Se omite para eventos con contenido propio por instancia (p.ej. comentarios).
+    if (dedupe) {
+      const dup = await pool.query(
+        `SELECT id FROM notifications
+         WHERE user_id = $1 AND type = $2 AND is_read = false
+           AND ticket_id IS NOT DISTINCT FROM $3
+           AND created_at > NOW() - INTERVAL '10 seconds'
+         LIMIT 1`,
+        [user_id, type, ticketIdValue]
+      );
+      if (dup.rows.length > 0) {
+        return null;
+      }
+    }
+
+    // 3. Insertar y emitir por socket con el id real
+    const inserted = await pool.query(
+      `INSERT INTO notifications (user_id, type, message, ticket_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, type, message, ticket_id, is_read, created_at`,
+      [user_id, type, message, ticketIdValue]
+    );
+    const notif = inserted.rows[0];
+
+    try {
+      emitTicketNotification(type, {
+        id: notif.id,
+        ticketId: notif.ticket_id,
+        ticket_id: notif.ticket_id,
+        message: notif.message,
+        createdAt: notif.created_at,
+      }, [user_id]);
+    } catch (emitError) {
+      console.error('❌ Error emitiendo notificación por socket (capturado):', emitError?.message || emitError);
+    }
+
+    // 4. Enviar notificación WhatsApp de forma asíncrona (no bloqueante)
+    const whatsappContent = whatsapp_message || message;
+    setImmediate(async () => {
+      try {
+        await sendWhatsAppNotification(user_id, ticket_id, whatsappContent, type);
+      } catch (error) {
+        console.error('❌ Error enviando notificación WhatsApp (capturado):', error?.message || error);
+      }
+    });
+
+    return notif;
+  } catch (error) {
+    console.error('❌ Error creando notificación (capturado):', error?.message || error);
+    return null;
+  }
 }
 
 export default router;

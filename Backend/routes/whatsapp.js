@@ -15,6 +15,7 @@
 
 import express from 'express';
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { authMiddleware } from './auth.js';
 import whatsappWebService from '../services/whatsappWebService.js';
 
@@ -257,18 +258,20 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
     
     // Buscar configuración global del sistema
     const result = await client.query(`
-      SELECT 
+      SELECT
         whatsapp_global_enabled,
         whatsapp_global_ticket_created,
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
-        whatsapp_global_comments
-      FROM system_settings 
+        whatsapp_global_comments,
+        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope,
+        COALESCE(max_pending_user_tickets, 3) as max_pending_user_tickets
+      FROM system_settings
       WHERE id = 1
     `);
 
     client.release();
-    
+
     // Si no existe configuración, devolver valores por defecto
     if (result.rows.length === 0) {
       const defaultSettings = {
@@ -276,7 +279,9 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
         whatsapp_global_ticket_created: true,
         whatsapp_global_ticket_assigned: true,
         whatsapp_global_ticket_status: true,
-        whatsapp_global_comments: true
+        whatsapp_global_comments: true,
+        whatsapp_recipient_scope: 'all',
+        max_pending_user_tickets: 3
       };
       return res.json(defaultSettings);
     }
@@ -293,7 +298,7 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
  */
 router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { 
+    const {
       whatsapp_global_enabled,
       whatsapp_global_ticket_created,
       whatsapp_global_ticket_assigned,
@@ -301,8 +306,14 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
       whatsapp_global_comments
     } = req.body;
 
+    // Alcance de destinatarios: solo se aceptan valores conocidos
+    const recipientScope = req.body.whatsapp_recipient_scope === 'tech_only' ? 'tech_only' : 'all';
+
+    // Tope de tickets "Esperando respuesta del usuario" para bloquear la creación (1..50)
+    const maxPending = Math.min(50, Math.max(1, parseInt(req.body.max_pending_user_tickets, 10) || 3));
+
     const client = await pool.connect();
-    
+
     // Verificar si existe la tabla system_settings y el registro
     const checkResult = await client.query(`
       SELECT id FROM system_settings WHERE id = 1
@@ -317,14 +328,18 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_created,
           whatsapp_global_ticket_assigned,
           whatsapp_global_ticket_status,
-          whatsapp_global_comments
-        ) VALUES (1, $1, $2, $3, $4, $5)
+          whatsapp_global_comments,
+          whatsapp_recipient_scope,
+          max_pending_user_tickets
+        ) VALUES (1, $1, $2, $3, $4, $5, $6, $7)
       `, [
         whatsapp_global_enabled ?? true,
         whatsapp_global_ticket_created ?? true,
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
-        whatsapp_global_comments ?? true
+        whatsapp_global_comments ?? true,
+        recipientScope,
+        maxPending
       ]);
     } else {
       // Actualizar registro existente
@@ -335,6 +350,8 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_assigned = $3,
           whatsapp_global_ticket_status = $4,
           whatsapp_global_comments = $5,
+          whatsapp_recipient_scope = $6,
+          max_pending_user_tickets = $7,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = 1
       `, [
@@ -342,7 +359,9 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
         whatsapp_global_ticket_created ?? true,
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
-        whatsapp_global_comments ?? true
+        whatsapp_global_comments ?? true,
+        recipientScope,
+        maxPending
       ]);
     }
 
@@ -615,6 +634,12 @@ router.get('/history', authMiddleware, adminMiddleware, async (req, res) => {
  */
 export async function sendWhatsAppNotification(userId, ticketId, message, notificationType) {
   try {
+    // Evitar consultas y envios cuando WhatsApp no esta listo.
+    const availability = whatsappWebService.getSendAvailability();
+    if (!availability.canSend) {
+      return false;
+    }
+
     const client = await pool.connect();
 
     // 1. VERIFICAR CONFIGURACIÓN GLOBAL DEL SISTEMA PRIMERO
@@ -624,10 +649,13 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         whatsapp_global_ticket_created,
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
-        whatsapp_global_comments
+        whatsapp_global_comments,
+        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope
       FROM system_settings
       WHERE id = 1
     `);
+
+    const recipientScope = globalSettingsResult.rows[0]?.whatsapp_recipient_scope || 'all';
 
     // Si existe configuración global, verificarla
     if (globalSettingsResult.rows.length > 0) {
@@ -635,7 +663,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
 
       // Verificar si WhatsApp está globalmente deshabilitado
       if (!globalSettings.whatsapp_global_enabled) {
-        console.log(`⚠️ WhatsApp está globalmente deshabilitado`);
+        logger.debug(`⚠️ WhatsApp está globalmente deshabilitado`);
         client.release();
         return false;
       }
@@ -653,7 +681,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
       };
 
       if (globalTypeMapping[notificationType] && !globalSettings[globalTypeMapping[notificationType]]) {
-        console.log(`⚠️ Tipo de notificación ${notificationType} está globalmente deshabilitado`);
+        logger.debug(`⚠️ Tipo de notificación ${notificationType} está globalmente deshabilitado`);
         client.release();
         return false;
       }
@@ -663,6 +691,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     const settingsResult = await client.query(`
       SELECT
         u.phone,
+        u.role,
         COALESCE(ups.whatsapp_enabled, true) as whatsapp_enabled,
         COALESCE(ups.whatsapp_ticket_created, true) as whatsapp_ticket_created,
         COALESCE(ups.whatsapp_ticket_assigned, true) as whatsapp_ticket_assigned,
@@ -671,21 +700,28 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         COALESCE(ups.whatsapp_external_email, true) as whatsapp_external_email
       FROM users u
       LEFT JOIN user_preferences_settings ups ON u.id = ups.user_id
-      WHERE u.id = $1
+      WHERE u.id = $1 AND u.status = true
     `, [userId]);
 
     client.release();
 
     if (settingsResult.rows.length === 0) {
-      console.log(`⚠️ Usuario ${userId} no encontrado`);
+      logger.debug(`⚠️ Usuario ${userId} no encontrado o inactivo`);
       return false;
     }
 
     const settings = settingsResult.rows[0];
 
+    // Alcance de destinatarios: en modo 'tech_only' solo se envía a técnicos/admin,
+    // no a usuarios finales (rol 'user').
+    if (recipientScope === 'tech_only' && settings.role === 'user') {
+      logger.debug(`⚠️ WhatsApp omitido: alcance 'solo técnicos' y el destinatario ${userId} es usuario final`);
+      return false;
+    }
+
     // Verificar si WhatsApp está habilitado para el usuario
     if (!settings.whatsapp_enabled) {
-      console.log(`⚠️ Usuario ${userId} no tiene WhatsApp habilitado`);
+      logger.debug(`⚠️ Usuario ${userId} no tiene WhatsApp habilitado`);
       return false;
     }
 
@@ -703,7 +739,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     };
 
     if (typeMapping[notificationType] && !settings[typeMapping[notificationType]]) {
-      console.log(`⚠️ Usuario ${userId} no tiene habilitado el tipo de notificación ${notificationType}`);
+      logger.debug(`⚠️ Usuario ${userId} no tiene habilitado el tipo de notificación ${notificationType}`);
       return false;
     }
 
@@ -742,7 +778,7 @@ router.get('/global-config', authMiddleware, adminMiddleware, async (req, res) =
       const defaultTemplates = {
         new_ticket: '🆕 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📋 Se ha creado un nuevo ticket en el sistema:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
         
-        ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n� Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
+        ticket_assigned: '👤 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n🔔 Se le ha asignado un nuevo ticket:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n⚡ Por favor revise y atienda este ticket a la brevedad.\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
         
         status_change: '🔄 *PresenTickets - Clínica La Presentación*\n\n¡Hola {userName}!\n\n📈 El estado de su ticket ha cambiado:\n\n🎫 *Ticket #{ticketId}*\n📝 *Asunto:* {subject}\n🔄 *Nuevo Estado:* {newStatus}\n🕒 *Fecha:* {timestamp}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n💡 Para más detalles, ingresa al sistema PresenTickets.\n\n_Este es un mensaje automático, no responder._',
         

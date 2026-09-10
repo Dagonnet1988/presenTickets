@@ -86,12 +86,28 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   private assignmentDialogRef: MatDialogRef<any> | null = null;
   selectedPriority: string = '';
   selectedAssignedTo: string = '';
+
+  // Cambio manual de estado (admin/tech) — el desplegable expone todos los estados.
+  // Los cambios automáticos (por comentario/asignación) siguen igual en el backend.
+  statusModel: string = '';
+  readonly allStatuses: string[] = [
+    'Creado',
+    'En revisión',
+    'En proceso',
+    'En gestión',
+    'Esperando respuesta del usuario',
+    'Escalado a externo',
+    'Escalado a Tier 3 / Gerente de Cuenta',
+    'Resuelto',
+    'Cerrado'
+  ];
   showStickyHeader: boolean = false; // Para el header sticky al hacer scroll
   private subscriptions: Subscription = new Subscription();
 
   // Propiedades para encuestas de satisfacción
   hasSurvey: boolean = false;
   surveyRating: number | null = null;
+  surveyComment: string = '';
   surveyLoading: boolean = false;
   private surveyJustSubmitted: boolean = false; // Flag para preservar estado después de enviar encuesta
 
@@ -179,6 +195,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     if (!preserveSurveyState) {
       this.hasSurvey = false;
       this.surveyRating = null;
+      this.surveyComment = '';
       this.surveyLoading = false;
     }
 
@@ -192,6 +209,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
       ]).subscribe({
         next: ([ticket, comments]) => {
           this.ticket = ticket;
+          this.statusModel = ticket?.status || '';
           if (this.ticket.created_at) {
             this.ticket.created_at = new Date(this.ticket.created_at);
           }
@@ -244,6 +262,10 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     const userIds = [];
     if (this.ticket && this.ticket.user_id) {
       userIds.push(this.ticket.user_id);
+    }
+    // Incluir el técnico asignado para poder mostrar su nombre aunque esté inactivo
+    if (this.ticket && this.ticket.assigned_to) {
+      userIds.push(this.ticket.assigned_to);
     }
     if (this.messages && this.messages.length > 0) {
       // Agregar IDs de mensajes solo si existen y son válidos
@@ -573,6 +595,75 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.router.navigate(['/home']);
   }
 
+  // Cambio de estado desde el desplegable (admin/tech)
+  onStatusSelect(newStatus: string): void {
+    const current = this.ticket?.status || '';
+    if (!newStatus || newStatus === current) {
+      return;
+    }
+
+    const dref = this.dialog.open(this.confirmDialog, {
+      data: {
+        action: 'cambiar-estado',
+        customMessage: `Vas a cambiar el estado de "${current}" a "${newStatus}". ¿Continuar?`
+      }
+    });
+
+    dref.afterClosed().subscribe(ok => {
+      if (!ok) {
+        // Revertir la selección visual del desplegable
+        this.statusModel = current;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.applyStatusChange(newStatus, current);
+    });
+  }
+
+  private applyStatusChange(newStatus: string, prevStatus: string): void {
+    const closedStates = ['Cerrado', 'Resuelto'];
+
+    if (newStatus === 'Cerrado') {
+      this.closeTicket();
+      return;
+    }
+    if (newStatus === 'Resuelto') {
+      this.resolveTicket();
+      return;
+    }
+    // De un estado cerrado/resuelto a uno activo => reapertura (mantiene la lógica de uncloseTicket)
+    if (closedStates.includes(prevStatus) && !closedStates.includes(newStatus)) {
+      this.reopenToStatus(newStatus);
+      return;
+    }
+    this.updateStatus(newStatus);
+  }
+
+  private reopenToStatus(newStatus: string): void {
+    const ticketId = this.getCurrentTicketId();
+    if (!ticketId) {
+      return;
+    }
+
+    const originalTitle = this.ticket?.title || '';
+    const newTitle = originalTitle.startsWith('REABIERTO') ? originalTitle : 'REABIERTO ' + originalTitle;
+
+    this.subscriptions.add(
+      this.ticketService.updateTicketName(ticketId, newTitle).pipe(
+        switchMap(() => this.ticketService.updateTicketStatus(ticketId, newStatus, this.userRole)),
+        catchError((error: any) => {
+          console.error('Error al reabrir el ticket:', error);
+          this.cdr.markForCheck();
+          return of(null);
+        })
+      ).subscribe((res: any) => {
+        if (res !== null) {
+          this.loadTicketDetails(ticketId);
+        }
+      })
+    );
+  }
+
   confirmAction(action: string): void {
     this.dialogRef = this.dialog.open(this.confirmDialog, {
       data: { action }
@@ -764,10 +855,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
    */
   checkSurveyStatus(ticketId: number): void {
     this.surveyLoading = true;
-    this.surveyService.checkSurvey(ticketId).subscribe({
+    // Traer la encuesta completa (incluye el comentario adicional)
+    this.surveyService.getSurvey(ticketId).subscribe({
       next: (result) => {
-        this.hasSurvey = result.hasSurvey;
-        this.surveyRating = result.rating;
+        this.hasSurvey = result.exists;
+        this.surveyRating = result.survey?.rating ?? null;
+        this.surveyComment = result.survey?.comment?.trim() || '';
         this.surveyLoading = false;
         this.cdr.markForCheck();
       },
@@ -1082,9 +1175,17 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     this.closeAssignmentDialog();
   }
 
-  // Método helper para obtener el nombre del técnico asignado
+  // Método helper para obtener el nombre del técnico asignado.
+  // Prioriza la lista de técnicos activos; si el técnico fue desactivado no aparece
+  // ahí, así que se usa el nombre cargado por loadUserNames() (getUserBasic no filtra
+  // por estado). Nunca mostrar "Desconocido" para un técnico que sí existe.
   getAssignedTechnicianName(techId: number): string {
+    if (techId == null) return 'Sin asignar';
+
     const technician = this.technicians.find(tech => tech.id === techId);
-    return technician ? technician.firstname : 'Desconocido';
+    if (technician) return technician.firstname;
+
+    const cachedName = this.userNames.get(techId as any) || this.userNames.get(String(techId));
+    return cachedName || '…';
   }
 }

@@ -67,6 +67,7 @@ class WhatsAppWebService {
     this.lastResetDate = new Date().toDateString();
     this.messageQueue = [];
     this.processingQueue = false;
+    this.lastSendSkipLogAt = 0;
 
     // Configuración de límites de seguridad anti-detección
     this.rateLimits = {
@@ -1196,6 +1197,38 @@ class WhatsAppWebService {
   }
 
   /**
+   * Estado operativo para envios. Evita intentos cuando la sesion esta cerrada
+   * o el cliente esta en recuperacion.
+   */
+  getSendAvailability() {
+    if (this.stoppedAwaitingManualStart) {
+      return {
+        canSend: false,
+        reason: 'Servicio detenido: se requiere inicio manual desde WhatsApp Admin.'
+      };
+    }
+
+    if (this.isInitializing) {
+      return {
+        canSend: false,
+        reason: 'WhatsApp Web esta inicializando. Intente nuevamente en unos segundos.'
+      };
+    }
+
+    if (!this.isReady || !this.client) {
+      return {
+        canSend: false,
+        reason: 'WhatsApp Web no esta conectado.'
+      };
+    }
+
+    return {
+      canSend: true,
+      reason: null
+    };
+  }
+
+  /**
    * Resetear estado interno (para recuperación manual)
    */
   resetState() {
@@ -1509,6 +1542,17 @@ class WhatsAppWebService {
    */
   async sendTicketNotification(userId, ticketId, message, notificationType) {
     try {
+      // Guardia temprana: no intentar enviar si WhatsApp no esta operativo.
+      const availability = this.getSendAvailability();
+      if (!availability.canSend) {
+        const now = Date.now();
+        if (now - this.lastSendSkipLogAt > 60000) {
+          logger.warn(`⚠️ Notificación WhatsApp omitida: ${availability.reason}`);
+          this.lastSendSkipLogAt = now;
+        }
+        return false;
+      }
+
       // Obtener información del usuario
       const client = await pool.connect();
 
@@ -1590,12 +1634,20 @@ class WhatsAppWebService {
       }
 
       const userResult = await client.query(
-        'SELECT firstname, lastname, email, phone FROM users WHERE id = $1',
+        'SELECT firstname, lastname, email, phone, status FROM users WHERE id = $1',
         [userId]
       );
 
       if (userResult.rows.length === 0) {
         throw new Error('Usuario no encontrado');
+      }
+
+      // No enviar WhatsApp a usuarios inactivos
+      if (userResult.rows[0].status === false) {
+        logger.debug(`⚠️ Notificación WhatsApp omitida: usuario ${userId} inactivo`);
+        await this.logWhatsAppNotification(userId, ticketId, message, 'skipped', 'Usuario inactivo', null, notificationType);
+        client.release();
+        return false;
       }
 
       const user = userResult.rows[0];
@@ -1667,22 +1719,31 @@ class WhatsAppWebService {
       const template = this.getRandomTemplate(notificationType, ticketId);
 
       // Reemplazar variables en la plantilla
-      const timestamp = new Date().toLocaleString('es-CO', {
+      const parts = new Date().toLocaleString('es-CO', {
         timeZone: 'America/Bogota',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }).replace(',', '');
+      // es-CO da "dd/mm/yyyy hh:mm" -> normalizar a "dd-mm-yyyy hh:mm"
+      const timestamp = parts.replace(/\//g, '-');
+
+      // {newStatus}: el "message" que llega en cambios de estado suele ser una
+      // frase ("<Ticket>: estado cambiado a En proceso"). Extraer solo el estado.
+      let cleanStatus = (message || '').trim();
+      const statusMatch = cleanStatus.match(/cambiad[oa] a\s+(.+?)\s*$/i);
+      if (statusMatch) {
+        cleanStatus = statusMatch[1].trim();
+      } else if (/reabiert/i.test(cleanStatus)) {
+        cleanStatus = 'Reabierto';
+      }
 
       let formattedMessage = template
         .replace(/{userName}/g, userName)
         .replace(/{ticketId}/g, ticketId || 'N/A')
         .replace(/{subject}/g, ticketSubject || 'Sin asunto')
         .replace(/{timestamp}/g, timestamp)
-        .replace(/{comment}/g, message || 'Sin comentario')
-        .replace(/{newStatus}/g, message || 'Sin estado');
+        .replace(/{comment}/g, (message || '').trim() || 'Sin contenido')
+        .replace(/{newStatus}/g, cleanStatus || 'Actualizado');
 
       return formattedMessage;
 
@@ -1698,44 +1759,50 @@ class WhatsAppWebService {
    */
   getRandomTemplate(notificationType) {
     // Plantillas múltiples para cada tipo para evitar patrones repetitivos
+    const FOOTER = '─────────────────\n_Mensaje automático de PresenTickets. No responder._\n_Gestiona el ticket desde el sistema._';
+
+    // Dos variantes por tipo (para no repetir siempre el mismo texto exacto).
     const templateVariations = {
       'nuevo_ticket': [
-        '🆕 *Clínica La Presentación*\n─────────────────\n 📋 NUEVO TICKET     \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📄 Asunto: {subject}\n⏰ Creado: {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
-        '📋 *PresenTickets*\n════════════════\n🆕 TICKET REGISTRADO\n════════════════\n\n¡Hola {userName}!\n\n🎫 #{ticketId} - {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
-        '🎫 *Sistema de Tickets*\n━━━━━━━━━━━━━━━━\n  📋 TICKET CREADO   \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ Ticket #{ticketId} registrado\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
+        `🆕 *Nuevo ticket* — Clínica La Presentación\n\nHola {userName},\n\n🎫 Ticket #{ticketId}\n📄 {subject}\n🕒 {timestamp}\n\n${FOOTER}`,
+        `🆕 *PresenTickets* · Nuevo ticket\n\n{userName}, se registró un ticket nuevo:\n\n🎫 #{ticketId} — {subject}\n🕒 {timestamp}\n\n${FOOTER}`
       ],
 
       'ticket_asignado': [
-        '👤 *Asignación de Ticket*\n─────────────────\n 🔧 TÉCNICO ASIGNADO \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📋 {subject}\n👨‍💻 Un técnico fue asignado\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
-        '🔔 *PresenTickets*\n════════════════\n👤 TICKET ASIGNADO\n════════════════\n\n{userName}, se asignó técnico:\n\n🎫 #{ticketId}\n📋 {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
-        '📌 *Ticket Asignado*\n━━━━━━━━━━━━━━━━\n 🔧 TÉCNICO ASIGNADO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ Ticket #{ticketId} asignado\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
+        `👤 *Ticket asignado*\n\nHola {userName},\n\nSe te asignó el ticket:\n\n🎫 Ticket #{ticketId}\n📄 {subject}\n🕒 {timestamp}\n\n${FOOTER}`,
+        `👤 *PresenTickets* · Asignación\n\n{userName}, tienes un ticket asignado:\n\n🎫 #{ticketId} — {subject}\n🕒 {timestamp}\n\n${FOOTER}`
       ],
 
       'cambio_estado': [
-        '🔄 *Actualización de Ticket*\n─────────────────\n 📊 CAMBIO DE ESTADO \n─────────────────\n\nHola {userName},\n\n🎫 Ticket: #{ticketId}\n📈 Estado: {newStatus}\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
-        '📈 *Estado Actualizado*\n════════════════\n🔄 TICKET ACTUALIZADO\n════════════════\n\n{userName}, nuevo estado:\n\n🎫 #{ticketId}: {newStatus}\n📝 {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
-        '🔄 *PresenTickets*\n━━━━━━━━━━━━━━━━\n 📊 ESTADO CAMBIADO  \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n✅ #{ticketId}: {newStatus}\n📄 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
+        `🔄 *Cambio de estado*\n\nHola {userName},\n\n🎫 Ticket #{ticketId}\n📄 {subject}\n📌 Nuevo estado: *{newStatus}*\n🕒 {timestamp}\n\n${FOOTER}`,
+        `🔄 *PresenTickets* · Estado actualizado\n\n{userName}:\n\n🎫 #{ticketId} — {subject}\n📌 Ahora está en *{newStatus}*\n🕒 {timestamp}\n\n${FOOTER}`
+      ],
+
+      'ticket_resuelto': [
+        `✅ *Ticket resuelto*\n\nHola {userName},\n\nTu ticket fue marcado como *Resuelto*:\n\n🎫 Ticket #{ticketId}\n📄 {subject}\n🕒 {timestamp}\n\n⭐ Ingresa a PresenTickets y califica el servicio recibido. ¡Tu opinión nos ayuda a mejorar!\n\n─────────────────\n_Mensaje automático. No responder._`,
+        `✅ *PresenTickets* · Ticket resuelto\n\n{userName}, tu ticket #{ticketId} ({subject}) fue resuelto el {timestamp}.\n\n⭐ Por favor califica el servicio desde el sistema.\n\n─────────────────\n_Mensaje automático. No responder._`
       ],
 
       'comentario': [
-        '💬 *Nuevo Comentario*\n─────────────────\n 💭 COMENTARIO NUEVO \n─────────────────\n\nHola {userName},\n\n💬 "Mensaje: {comment}"\n🎫 Ticket: #{ticketId}\n📋 {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nPara gestionar el ticket accede al sistema.',
-        '💭 *PresenTickets*\n════════════════\n💬 NUEVO COMENTARIO\n════════════════\n\n{userName}, comentario agregado:\n\n💭 "Mensaje: {comment}"\n🎫 #{ticketId} - {subject}\n📅 {timestamp}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Usa el sistema para seguimiento.',
-        '💭 *Comentario Agregado*\n━━━━━━━━━━━━━━━━\n 💬 NUEVO COMENTARIO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n💭 "Mensaje: {comment}"\n📄 Ticket #{ticketId}: {subject}\n⏰ {timestamp}\n\n─────────────────\n⚠️ *Este es un mensaje automático*\nNo responder. Gestiona desde el portal.'
+        `💬 *Nuevo comentario*\n\nHola {userName},\n\n🎫 Ticket #{ticketId} — {subject}\n\n"{comment}"\n\n🕒 {timestamp}\n\n${FOOTER}`,
+        `💬 *PresenTickets* · Comentario\n\n{userName}, nuevo comentario en el ticket #{ticketId} ({subject}):\n\n"{comment}"\n\n🕒 {timestamp}\n\n${FOOTER}`
       ],
 
+      // {comment} ya llega pre-formateado desde emailMonitorService: no duplicar encabezado
       'external_email': [
-        '📧 *Respuesta de Soporte Externo*\n─────────────────\n 📩 EMAIL RECIBIDO \n─────────────────\n\nHola {userName},\n\n{comment}\n\n─────────────────\n⚠️ *No responder a este mensaje*\nRevisa la bandeja del sistema.',
-        '📩 *PresenTickets*\n════════════════\n📧 CORREO EXTERNO\n════════════════\n\n{userName}:\n\n{comment}\n\n─────────────────\n🚫 *Mensaje automático*\nNo responder. Revisa el sistema.',
-        '📧 *Soporte Externo*\n━━━━━━━━━━━━━━━━\n 📩 CORREO RECIBIDO \n━━━━━━━━━━━━━━━━\n\nHola {userName},\n\n{comment}\n\n─────────────────\n⚠️ *Mensaje automático*\nRevisa la bandeja del sistema.'
+        `📧 *Respuesta de soporte externo (OSIGU)*\n\nHola {userName},\n\n{comment}\n\n─────────────────\n_Mensaje automático. No responder. Revisa la bandeja del sistema._`,
+        `📧 *PresenTickets* · Correo de OSIGU\n\n{userName}:\n\n{comment}\n\n─────────────────\n_Mensaje automático. No responder._`
       ]
     };
 
-    // Mapear tipos alternativos
+    // Mapear tipos alternativos al tipo de plantilla
     const typeMapping = {
       'new_ticket': 'nuevo_ticket',
       'ticket_assigned': 'ticket_asignado',
       'status_change': 'cambio_estado',
       'ticket_reabierto': 'cambio_estado',
+      'ticket_resuelto_encuesta': 'ticket_resuelto',
+      'ticket_resuelto': 'ticket_resuelto',
       'comentario_user': 'comentario',
       'comentario_tech': 'comentario',
       'comentario_admin': 'comentario',
@@ -1746,7 +1813,6 @@ class WhatsAppWebService {
     const mappedType = typeMapping[notificationType] || notificationType;
     const variations = templateVariations[mappedType] || templateVariations['comentario'];
 
-    // Selección verdaderamente aleatoria
     const randomIndex = Math.floor(Math.random() * variations.length);
     return variations[randomIndex];
   }

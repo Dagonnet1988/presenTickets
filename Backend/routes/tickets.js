@@ -98,6 +98,55 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Límite de tickets del usuario en estado "Esperando respuesta del usuario".
+// Configurable en system_settings.max_pending_user_tickets (por defecto 3).
+const PENDING_STATUS = "Esperando respuesta del usuario";
+
+async function getMaxPendingUserTickets(client) {
+  try {
+    const r = await client.query(
+      "SELECT COALESCE(max_pending_user_tickets, 3) AS lim FROM system_settings WHERE id = 1"
+    );
+    const lim = parseInt(r.rows[0]?.lim, 10);
+    return Number.isFinite(lim) && lim > 0 ? lim : 3;
+  } catch (e) {
+    console.error("Error leyendo max_pending_user_tickets, usando 3:", e.message);
+    return 3;
+  }
+}
+
+// Verificar si el usuario puede crear un ticket nuevo.
+// Solo aplica a rol 'user'; admin y tech no tienen límite.
+router.get("/creation-eligibility", async (req, res) => {
+  if (req.user.role !== "user") {
+    return res.json({ allowed: true, limit: null, count: 0, pendingTickets: [] });
+  }
+
+  const client = await pool.connect();
+  try {
+    const limit = await getMaxPendingUserTickets(client);
+    const pending = await client.query(
+      `SELECT id, title FROM tickets
+       WHERE user_id = $1 AND status = $2
+       ORDER BY created_at DESC`,
+      [req.user.id, PENDING_STATUS]
+    );
+    const count = pending.rows.length;
+    res.json({
+      allowed: count < limit,
+      limit,
+      count,
+      pendingTickets: pending.rows,
+    });
+  } catch (err) {
+    console.error("Error verificando elegibilidad de creación de ticket:", err);
+    // fail-open: no bloquear por un error de verificación
+    res.json({ allowed: true, limit: null, count: 0, pendingTickets: [] });
+  } finally {
+    client.release();
+  }
+});
+
 // Obtener un ticket por ID (con control de acceso)
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
@@ -161,7 +210,34 @@ router.get("/:id", async (req, res) => {
 });
 
 // Crear un nuevo ticket
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
+  // Regla: un usuario (rol 'user') no puede crear tickets si ya tiene demasiados
+  // en estado "Esperando respuesta del usuario". Admin y tech no tienen límite.
+  if (req.user.role === "user") {
+    const client = await pool.connect();
+    try {
+      const limit = await getMaxPendingUserTickets(client);
+      const pending = await client.query(
+        "SELECT COUNT(*)::int AS count FROM tickets WHERE user_id = $1 AND status = $2",
+        [req.user.id, PENDING_STATUS]
+      );
+      const count = pending.rows[0].count;
+      if (count >= limit) {
+        return res.status(409).json({
+          code: "PENDING_LIMIT",
+          limit,
+          count,
+          message: `No puedes crear un nuevo ticket porque tienes ${count} tickets en estado "${PENDING_STATUS}". Por favor responde o cierra esos tickets antes de crear uno nuevo.`,
+        });
+      }
+    } catch (err) {
+      console.error("Error verificando límite de tickets pendientes:", err);
+      // fail-open: no impedir la creación por un error de verificación
+    } finally {
+      client.release();
+    }
+  }
+
   const form = formidable({
     multiples: true,
     uploadDir: "./uploads",
@@ -267,7 +343,7 @@ router.post("/", (req, res) => {
       try {
         // Obtener todos los usuarios con rol de técnico
         const techsResult = await client.query(
-          "SELECT id FROM users WHERE role = $1",
+          "SELECT id FROM users WHERE role = $1 AND status = true",
           ["tech"]
         );
         const techIds = techsResult.rows.map((tech) => tech.id);
@@ -282,18 +358,6 @@ router.post("/", (req, res) => {
               ticket_id: ticketId,
             });
           }
-
-          // Emitir notificación en tiempo real
-          emitTicketNotification(
-            "nuevo_ticket",
-            {
-              ticketId,
-              title: ticketData.title,
-              createdAt: new Date(),
-              message: `Nuevo ticket creado: ${ticketData.title}`,
-            },
-            techIds
-          );
         }
       } catch (notifyErr) {
         console.error(
@@ -560,18 +624,6 @@ router.patch("/:id", async (req, res) => {
                 message: notificationMessage,
                 ticket_id: id,
               });
-
-              // Emitir notificación en tiempo real
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                [user_id]
-              );
             }
           }
           // Si es "Resuelto" - notificar al usuario creador Y a todos los participantes
@@ -627,27 +679,12 @@ router.patch("/:id", async (req, res) => {
                 type: typeForRecipient,
                 message: messageForRecipient,
                 ticket_id: id,
-                // Mensaje WhatsApp solo para usuarios (con recordatorio de encuesta)
-                whatsapp_message: recipientRole === 'user'
-                  ? `🎉 *Tu ticket ha sido resuelto*\n\n📋 *Ticket:* ${ticketTitle}\n\n⭐ Por favor ingresa a PresenTickets para calificar el servicio recibido.\n\n¡Tu opinión es muy importante para nosotros!`
-                  : undefined
+                // El texto de WhatsApp lo arma la plantilla según el tipo
+                // (ticket_resuelto para usuarios, cambio_estado para técnicos)
+                whatsapp_message: 'Resuelto'
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                  showSurvey: true // Flag para que el frontend muestre el botón de encuesta
-                },
-                recipients
-              );
-            }
           }
           // Si es "En revisión" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En revisión") {
@@ -686,19 +723,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "En proceso" - notificar al técnico asignado, usuario creador y participantes
           else if (status === "En proceso") {
@@ -737,19 +761,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "Cerrado" - notificar al usuario creador, técnico asignado Y participantes
           else if (status === "Cerrado") {
@@ -790,19 +801,6 @@ router.patch("/:id", async (req, res) => {
               });
             }
 
-            // Emitir notificación en tiempo real a todos
-            if (recipients.length > 0) {
-              emitTicketNotification(
-                notificationType,
-                {
-                  ticketId: id,
-                  title: ticketTitle,
-                  createdAt: new Date(),
-                  message: notificationMessage,
-                },
-                recipients
-              );
-            }
           }
           // Si es "Esperando respuesta del usuario" - verificar si es una reapertura
           else if (status === "Esperando respuesta del usuario") {
@@ -835,18 +833,6 @@ router.patch("/:id", async (req, res) => {
                   message: notificationMessage,
                   ticket_id: id,
                 });
-
-                // Emitir notificación en tiempo real
-                emitTicketNotification(
-                  notificationType,
-                  {
-                    ticketId: id,
-                    title: ticketTitle,
-                    createdAt: new Date(),
-                    message: notificationMessage,
-                  },
-                  [recipientId]
-                );
               }
             }
           } else {
@@ -876,25 +862,13 @@ router.patch("/:id", async (req, res) => {
         const ticketTitle = ticketResult.rows[0]?.title || "Ticket sin título";
         const userId = ticketResult.rows[0]?.user_id || null;
 
-        // Crear notificación en la base de datos
+        // Crear notificación en la base de datos (inserta + emite socket + WhatsApp)
         await createNotification({
           user_id: userId,
           type: "ticket_asignado",
           message: `Ticket ${ticketTitle} asignado`,
           ticket_id: id,
         });
-
-        // Enviar notificación en tiempo real
-        emitTicketNotification(
-          "ticket_asignado",
-          {
-            ticketId: id,
-            title: ticketTitle,
-            createdAt: new Date(),
-            message: `Ticket ${ticketTitle} asignado a técnico`,
-          },
-          [userId]
-        );
       } catch (notifyErr) {
         console.error("Error al enviar notificación de asignación:", notifyErr);
       }

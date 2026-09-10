@@ -109,6 +109,8 @@ export class WhatsAppAdminComponent implements OnInit {
   // Configuración global del sistema
   systemSettings: any = {
     whatsapp_enabled_globally: true,
+    recipient_scope: 'all', // 'all' = todos | 'tech_only' = solo técnicos
+    max_pending_user_tickets: 3, // tope de "Esperando respuesta del usuario" para bloquear creación
     business_hours_weekdays: '7-17:30', // Lunes a Jueves 7:00 AM - 5:30 PM
     business_hours_friday: '7-16:30',   // Viernes 7:00 AM - 4:30 PM
     default_daily_limit: '20',
@@ -699,6 +701,8 @@ export class WhatsAppAdminComponent implements OnInit {
         this.systemSettings = {
           ...this.systemSettings,
           whatsapp_enabled_globally: settings.whatsapp_global_enabled,
+          recipient_scope: settings.whatsapp_recipient_scope || 'all',
+          max_pending_user_tickets: settings.max_pending_user_tickets ?? 3,
           enable_new_ticket_notifications: settings.whatsapp_global_ticket_created,
           enable_assignment_notifications: settings.whatsapp_global_ticket_assigned,
           enable_status_change_notifications: settings.whatsapp_global_ticket_status,
@@ -743,6 +747,8 @@ export class WhatsAppAdminComponent implements OnInit {
       // Mapear las configuraciones del frontend a configuraciones globales del sistema
       const globalSettings = {
         whatsapp_global_enabled: this.systemSettings.whatsapp_enabled_globally,
+        whatsapp_recipient_scope: this.systemSettings.recipient_scope === 'tech_only' ? 'tech_only' : 'all',
+        max_pending_user_tickets: Math.min(50, Math.max(1, Number(this.systemSettings.max_pending_user_tickets) || 3)),
         whatsapp_global_ticket_created: this.systemSettings.enable_new_ticket_notifications,
         whatsapp_global_ticket_assigned: this.systemSettings.enable_assignment_notifications,
         whatsapp_global_ticket_status: this.systemSettings.enable_status_change_notifications,
@@ -765,6 +771,7 @@ export class WhatsAppAdminComponent implements OnInit {
   resetSystemSettings() {
     this.systemSettings = {
       whatsapp_enabled_globally: true,
+      recipient_scope: 'all',
       enable_new_ticket_notifications: true,
       enable_assignment_notifications: true,
       enable_status_change_notifications: true,

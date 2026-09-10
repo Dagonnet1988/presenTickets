@@ -16,6 +16,7 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import { pool } from '../db.js';
+import { invalidateUserStatus } from './auth.js';
 
 const router = express.Router();
 
@@ -237,6 +238,10 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query(query, values);
+    // Si se cambió el estado activo/inactivo, refrescar el cache de auth de inmediato
+    if (status !== undefined) {
+      invalidateUserStatus(id);
+    }
     res.status(200).json({ message: 'Usuario actualizado correctamente' });
   } catch (err) {
     console.error('Error al actualizar el usuario:', err);

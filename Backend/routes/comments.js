@@ -15,7 +15,7 @@
 
 import express from 'express';
 import { pool } from '../db.js';
-import { io, emitTicketNotification, getNotificationRecipients } from '../server.js';
+import { io, getNotificationRecipients } from '../server.js';
 import formidable from 'formidable';
 import path from 'path';
 import fs from 'fs';
@@ -220,25 +220,15 @@ router.post('/:ticketId', async (req, res) => {
 
       // SIEMPRE enviar notificaciones si hay destinatarios
       if (recipients.length > 0) {
-        // Notificación en tiempo real (campana) - sin contenido del comentario
-        emitTicketNotification(notificationType, {
-          ticketId,
-          commentId,
-          userId,
-          username,
-          title: ticketTitle,
-          message: 'Se agregó un nuevo comentario', // Mensaje genérico para la campana
-          createdAt: new Date()
-        }, recipients);
-
-        // Notificación persistente + push notification 
+        // Notificación persistente + socket + WhatsApp (createNotification es el punto único)
         for (const recipientId of recipients) {
           await createNotification({
             user_id: recipientId,
             type: notificationType,
             message: 'Se agregó un nuevo comentario', // Mensaje genérico para la campana
             ticket_id: ticketId,
-            whatsapp_message: message // Contenido real del comentario para WhatsApp
+            whatsapp_message: message, // Contenido real del comentario para WhatsApp
+            dedupe: false // cada comentario es un evento distinto
           });
         }
       }

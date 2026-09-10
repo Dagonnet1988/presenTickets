@@ -1,0 +1,182 @@
+<!--
+  PresenTickets - Sistema de Gestión de Tickets de Soporte
+  Copyright (c) 2025 Diego Sánchez. Todos los derechos reservados.
+-->
+
+<div class="email-monitor-admin">
+  <h2><mat-icon>mark_email_read</mat-icon> Monitor de Correo (OSIGU)</h2>
+  <p class="subtitle">
+    Revisa los buzones configurados, detecta las respuestas de los remitentes permitidos,
+    extrae el <code>TKT-xxxxxx</code> del asunto y notifica al técnico asignado (y participantes)
+    del ticket cuyo ID externo coincida.
+  </p>
+
+  <!-- Estado -->
+  <mat-card class="status-card">
+    <mat-card-content>
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="status-label">Estado</span>
+          <span class="status-value" [class.ok]="status?.isRunning" [class.off]="!status?.isRunning">
+            <mat-icon>{{ status?.isRunning ? 'play_circle' : 'pause_circle' }}</mat-icon>
+            {{ status?.isRunning ? 'En ejecución' : 'Detenido' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Conexión IMAP</span>
+          <span class="status-value" [class.ok]="status?.isConnected" [class.off]="!status?.isConnected">
+            {{ status?.isConnected ? 'Conectado' : 'Sin conexión' }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Última revisión</span>
+          <span class="status-value">{{ status?.lastCheckTime ? (status?.lastCheckTime | date:'short') : 'Nunca' }}</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Correos procesados</span>
+          <span class="status-value">{{ status?.processedEmailsCount ?? 0 }}</span>
+        </div>
+      </div>
+      <button mat-stroked-button color="primary" (click)="checkNow()" [disabled]="loading.checking">
+        <mat-icon>refresh</mat-icon>
+        {{ loading.checking ? 'Revisando…' : 'Revisar ahora' }}
+      </button>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Configuración -->
+  <mat-card class="config-card" *ngIf="!loading.settings; else loadingTpl">
+    <mat-card-header>
+      <mat-card-title>Configuración</mat-card-title>
+      <mat-card-subtitle>Se aplica en caliente al guardar (sin reiniciar el servidor)</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="config-row">
+        <mat-slide-toggle [(ngModel)]="form.enabled" name="enabled">
+          Monitor activo
+        </mat-slide-toggle>
+        <p class="hint">Si lo desactivas, el servicio deja de revisar la bandeja.</p>
+      </div>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Remitentes permitidos (uno por línea)</mat-label>
+        <textarea matInput rows="2" [(ngModel)]="form.sendersText" name="senders"
+                  placeholder="osigu.com"></textarea>
+        <mat-hint>
+          Un <strong>dominio</strong> (osigu.com) acepta cualquier correo de ese dominio
+          (help, noreply, jhon.posada&#64;osigu.com…). Una dirección completa exige coincidencia exacta.
+        </mat-hint>
+      </mat-form-field>
+
+      <!-- Buzones a vigilar -->
+      <div class="mailboxes">
+        <div class="mailboxes-header">
+          <h4><mat-icon>inbox</mat-icon> Buzones a vigilar</h4>
+          <button mat-stroked-button color="primary" type="button" (click)="addMailbox()">
+            <mat-icon>add</mat-icon> Agregar buzón
+          </button>
+        </div>
+        <p class="hint">
+          Cada buzón se revisa por separado buscando correos de OSIGU. Usa una
+          <strong>contraseña de aplicación</strong> de Google (no la contraseña normal).
+        </p>
+
+        <div class="mailbox-row" *ngFor="let mb of mailboxes; let i = index">
+          <mat-form-field appearance="outline">
+            <mat-label>Correo</mat-label>
+            <input matInput [(ngModel)]="mb.user" [name]="'mbUser' + i" placeholder="soporte@clinicadelapresentacion.com.co" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>{{ mb.hasPassword ? 'Contraseña (guardada — dejar vacío para conservar)' : 'Contraseña de aplicación' }}</mat-label>
+            <input matInput type="password" [(ngModel)]="mb.password" [name]="'mbPass' + i"
+                   [placeholder]="mb.hasPassword ? '••••••••' : 'xxxx xxxx xxxx xxxx'" />
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="narrow">
+            <mat-label>Etiqueta</mat-label>
+            <input matInput [(ngModel)]="mb.label" [name]="'mbLabel' + i" placeholder="Soporte" />
+          </mat-form-field>
+          <button mat-icon-button color="warn" type="button" (click)="removeMailbox(i)" matTooltip="Quitar buzón">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+
+        <p class="empty" *ngIf="mailboxes.length === 0">Sin buzones. Agrega al menos uno.</p>
+      </div>
+
+      <div class="config-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Intervalo de revisión (segundos)</mat-label>
+          <input matInput type="number" min="30" max="3600" [(ngModel)]="form.checkIntervalSeconds" name="interval" />
+          <mat-hint>Entre 30 y 3600.</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <p class="hint">
+        Se notifica siempre al técnico asignado y a los participantes del ticket que sean
+        técnicos o administradores (los participantes con rol usuario nunca reciben estas alertas).
+      </p>
+
+      <div class="actions">
+        <button mat-raised-button color="primary" (click)="save()" [disabled]="loading.saving">
+          <mat-icon>save</mat-icon>
+          {{ loading.saving ? 'Guardando…' : 'Guardar configuración' }}
+        </button>
+        <button mat-button (click)="loadAll()" [disabled]="loading.saving">
+          <mat-icon>restore</mat-icon> Descartar cambios
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <ng-template #loadingTpl>
+    <div class="loading-box"><mat-spinner diameter="32"></mat-spinner></div>
+  </ng-template>
+
+  <!-- Historial -->
+  <mat-card class="history-card">
+    <mat-card-header>
+      <mat-card-title>Últimos correos procesados</mat-card-title>
+      <button mat-icon-button (click)="loadHistory()" matTooltip="Actualizar">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngIf="history.length > 0; else emptyHistory">
+        <div class="table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Asunto</th>
+                <th>TKT</th>
+                <th>Ticket interno</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of pagedHistory">
+                <td>{{ e.processed_at | date:'dd-MM-yyyy, HH:mm' }}</td>
+                <td class="subject" [title]="e.subject">{{ e.subject }}</td>
+                <td>{{ e.external_ticket_id || '—' }}</td>
+                <td>
+                  <a *ngIf="e.ticket_id" [routerLink]="['/ticket', e.ticket_id]">#{{ e.ticket_id }}</a>
+                  <span *ngIf="!e.ticket_id">sin coincidencia</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <mat-paginator
+          [length]="history.length"
+          [pageSize]="pageSize"
+          [pageIndex]="pageIndex"
+          [pageSizeOptions]="pageSizeOptions"
+          (page)="onPage($event)"
+          aria-label="Páginas de correos procesados">
+        </mat-paginator>
+      </div>
+      <ng-template #emptyHistory>
+        <p class="empty">Aún no se han procesado correos.</p>
+      </ng-template>
+    </mat-card-content>
+  </mat-card>
+</div>
