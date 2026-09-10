@@ -66,9 +66,10 @@
             Cerrar Ticket
           </button>
 
-          <!-- Cambio de estado (admin/tech): desplegable con todos los estados -->
+          <!-- Cambio de estado (admin/tech): desplegable con todos los estados.
+               Si el ticket está Cerrado/Resuelto, solo se muestra "Reabrir Ticket". -->
           <mat-form-field
-            *ngIf="userRole !== 'user'"
+            *ngIf="userRole !== 'user' && ticket?.status !== 'Cerrado' && ticket?.status !== 'Resuelto'"
             appearance="outline"
             class="status-select-field"
             subscriptSizing="dynamic"
@@ -109,12 +110,13 @@
           <div
             *ngIf="hasSurvey && !surveyLoading"
             class="survey-rating-display"
-            matTooltip="Calificación del servicio">
+            [matTooltip]="surveyComment ? ('Comentario: ' + surveyComment) : 'Calificación del servicio'">
             <mat-icon class="survey-icon">verified</mat-icon>
             <span class="survey-label">Calificado:</span>
             <div class="survey-stars">
               <mat-icon *ngFor="let star of getSurveyStars()" [class.filled]="star === 'star'">{{ star }}</mat-icon>
             </div>
+            <mat-icon *ngIf="surveyComment" class="survey-comment-icon">chat_bubble_outline</mat-icon>
           </div>
         </div>
 
@@ -295,6 +297,20 @@
           <div class="info-content">
             <span class="info-label">{{ ticket?.status }} el</span>
             <span class="info-value">{{ ticket?.closed_at | date : "d MMM y, h:mm a" }}</span>
+          </div>
+        </div>
+
+        <div class="info-card survey" *ngIf="hasSurvey && !surveyLoading">
+          <div class="info-icon">
+            <mat-icon>star</mat-icon>
+          </div>
+          <div class="info-content">
+            <span class="info-label">Calificación del servicio</span>
+            <span class="info-value">
+              {{ surveyRating }}/5
+              <ng-container *ngIf="surveyComment"> — “{{ surveyComment }}”</ng-container>
+              <ng-container *ngIf="!surveyComment"> (sin comentario)</ng-container>
+            </span>
           </div>
         </div>
       </div>

@@ -54,10 +54,12 @@
           </mat-icon>
           <div>
             <b>{{ n.message || (n.type | notificationType) }}</b>
-            <div *ngIf="n.type === 'external_email'; else normalTicket">
-              Ticket Externo #{{ n.external_ticket_id || 'Sin ID' }}
-              <span *ngIf="n.ticket_id"> → Interno #{{ n.ticket_id }}</span>
-            </div>
+            <ng-container *ngIf="n.type === 'external_email'; else normalTicket">
+              <div *ngIf="n.external_ticket_id">
+                Ticket Externo #{{ n.external_ticket_id }}
+                <span *ngIf="n.ticket_id"> → Interno #{{ n.ticket_id }}</span>
+              </div>
+            </ng-container>
             <ng-template #normalTicket>
               <div>Ticket #{{ n.ticket_id || 'Cargando...' }}</div>
             </ng-template>

@@ -107,6 +107,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
   // Propiedades para encuestas de satisfacción
   hasSurvey: boolean = false;
   surveyRating: number | null = null;
+  surveyComment: string = '';
   surveyLoading: boolean = false;
   private surveyJustSubmitted: boolean = false; // Flag para preservar estado después de enviar encuesta
 
@@ -194,6 +195,7 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
     if (!preserveSurveyState) {
       this.hasSurvey = false;
       this.surveyRating = null;
+      this.surveyComment = '';
       this.surveyLoading = false;
     }
 
@@ -853,10 +855,12 @@ export class DetailsTicketComponent implements OnInit, OnDestroy {
    */
   checkSurveyStatus(ticketId: number): void {
     this.surveyLoading = true;
-    this.surveyService.checkSurvey(ticketId).subscribe({
+    // Traer la encuesta completa (incluye el comentario adicional)
+    this.surveyService.getSurvey(ticketId).subscribe({
       next: (result) => {
-        this.hasSurvey = result.hasSurvey;
-        this.surveyRating = result.rating;
+        this.hasSurvey = result.exists;
+        this.surveyRating = result.survey?.rating ?? null;
+        this.surveyComment = result.survey?.comment?.trim() || '';
         this.surveyLoading = false;
         this.cdr.markForCheck();
       },

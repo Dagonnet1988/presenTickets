@@ -154,10 +154,18 @@ export class NotificationService {
 
         if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            new Notification(`Ticket #${externalTicketId || notificationTicketId}`, {
+            let title = 'Nueva notificación';
+            if (externalTicketId) {
+              title = `Ticket Externo #${externalTicketId}`;
+            } else if (notificationTicketId) {
+              title = `Ticket #${notificationTicketId}`;
+            } else if (notification.type === 'external_email') {
+              title = 'Correo de soporte externo';
+            }
+            new Notification(title, {
               body: notification.message || 'Tienes una nueva notificación',
               icon: '/favicon.ico',
-              tag: `ticket-${notificationTicketId}`,
+              tag: notificationTicketId ? `ticket-${notificationTicketId}` : `notif-${notificationId || Date.now()}`,
               badge: '/favicon.ico'
             });
           } catch (error) {
