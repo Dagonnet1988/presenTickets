@@ -19,12 +19,13 @@ import emailMonitorService from '../services/emailMonitorService.js';
 
 const router = express.Router();
 
-// Normaliza un bloque de texto (líneas o comas) a una lista de correos única en minúsculas
+// Normaliza un bloque de texto (líneas o comas) a una lista única en minúsculas.
+// Acepta direcciones completas (help@osigu.com) y dominios (osigu.com).
 function parseEmailList(value) {
   return String(value || '')
     .split(/[\s,;]+/)
     .map((e) => e.trim().toLowerCase())
-    .filter((e) => e.includes('@'));
+    .filter((e) => e.length > 2 && e.includes('.'));
 }
 
 // Middleware para verificar autenticación

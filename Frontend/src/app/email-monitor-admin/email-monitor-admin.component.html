@@ -59,10 +59,13 @@
       </div>
 
       <mat-form-field appearance="outline" class="full">
-        <mat-label>Remitentes permitidos - OSIGU (uno por línea)</mat-label>
+        <mat-label>Remitentes permitidos (uno por línea)</mat-label>
         <textarea matInput rows="2" [(ngModel)]="form.sendersText" name="senders"
-                  placeholder="help@osigu.com"></textarea>
-        <mat-hint>Solo se procesan correos que vengan exactamente de estas direcciones.</mat-hint>
+                  placeholder="osigu.com"></textarea>
+        <mat-hint>
+          Un <strong>dominio</strong> (osigu.com) acepta cualquier correo de ese dominio
+          (help@, noreply@, jhon.posada@…). Una dirección completa exige coincidencia exacta.
+        </mat-hint>
       </mat-form-field>
 
       <!-- Buzones a vigilar -->
@@ -144,7 +147,6 @@
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>De</th>
                 <th>Asunto</th>
                 <th>TKT</th>
                 <th>Ticket interno</th>
@@ -153,7 +155,6 @@
             <tbody>
               <tr *ngFor="let e of pagedHistory">
                 <td>{{ e.processed_at | date:'dd-MM-yyyy, HH:mm' }}</td>
-                <td>{{ e.from_address }}</td>
                 <td class="subject" [title]="e.subject">{{ e.subject }}</td>
                 <td>{{ e.external_ticket_id || '—' }}</td>
                 <td>

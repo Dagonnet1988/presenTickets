@@ -164,11 +164,12 @@ export class EmailMonitorAdminComponent implements OnInit {
     });
   }
 
+  // Acepta direcciones completas y dominios (osigu.com)
   private parseLines(text: string): string[] {
     return (text || '')
       .split(/[\s,;]+/)
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => e.includes('@'));
+      .filter((e) => e.length > 2 && e.includes('.'));
   }
 
   save(): void {

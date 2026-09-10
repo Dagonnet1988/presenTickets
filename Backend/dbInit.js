@@ -797,12 +797,19 @@ const checkAndCreateTables = async () => {
       );
     `);
 
-    // Semilla común desde variables de entorno
+    // Semilla común desde variables de entorno.
+    // Los remitentes se guardan como DOMINIO (osigu.com) para aceptar también
+    // help@osigu.com, noreply@osigu.com, jhon.posada@osigu.com, etc.
     const seedSenders = [
       process.env.EMAIL_FILTER_SENDER || '',
       process.env.EMAIL_FILTER_SENDERS || ''
-    ].join(',').split(',').map((s) => s.trim()).filter(Boolean);
-    const uniqueSeedSenders = [...new Set(seedSenders)].join(',');
+    ]
+      .join(',')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+      .map((s) => (s.includes('@') ? s.split('@')[1] : s));
+    const uniqueSeedSenders = [...new Set(seedSenders)].join(',') || 'osigu.com';
     const seedRecipients = (process.env.EMAIL_TECH_RECIPIENTS || '')
       .split(',').map((s) => s.trim()).filter(Boolean).join(',');
     const seedInterval = Math.max(30, Math.round((parseInt(process.env.EMAIL_MONITOR_INTERVAL, 10) || 120000) / 1000));

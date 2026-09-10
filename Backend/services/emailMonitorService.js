@@ -722,9 +722,21 @@ class EmailMonitorService {
         routingMode = 'por destinatario del correo';
       }
 
+      // Fallback final: si no se pudo enrutar a nadie, notificar a TODOS los
+      // técnicos/admins activos (así ningún correo de OSIGU se pierde, incluidos
+      // los que no traen TKT — reuniones, avisos, etc.).
       if (usersResult.rows.length === 0) {
-        console.warn(`📧 ⚠️  Sin técnico destino (modo: ${routingMode}). Destinatarios buscados: [${normalizedRecipients.join(', ')}]`);
-        return;
+        usersResult = await pool.query(
+          `SELECT id, username, firstname, lastname, email
+           FROM users
+           WHERE role IN ('tech', 'admin') AND status = true`
+        );
+        routingMode = 'todos los técnicos/admins (sin enrutado específico)';
+      }
+
+      if (usersResult.rows.length === 0) {
+        console.warn('📧 ⚠️  No hay técnicos/admins activos para notificar');
+        return [];
       }
 
       const techNames = usersResult.rows.map((u) => `${u.firstname} <${u.email}>`).join(', ');
@@ -735,21 +747,8 @@ class EmailMonitorService {
         ? `📧 Respuesta de soporte externo - Ticket #${externalTicketId}: ${subject.substring(0, 100)}`
         : `📧 Correo de soporte externo: ${subject.substring(0, 100)}`;
 
-      // Anti-spam de hilos: si en los últimos 20 min ya se notificó por este mismo
-      // ticket externo (aún sin leer), no volver a notificar por cada respuesta del hilo.
-      if (externalTicketId) {
-        const reciente = await pool.query(
-          `SELECT 1 FROM notifications
-           WHERE type = 'external_email' AND external_ticket_id = $1 AND is_read = false
-             AND created_at > NOW() - INTERVAL '20 minutes'
-           LIMIT 1`,
-          [externalTicketId]
-        );
-        if (reciente.rows.length > 0) {
-          console.log(`📧   Hilo #${externalTicketId}: ya hay una notificación reciente sin leer, se omite la de este correo`);
-          return [];
-        }
-      }
+      // Cada correo distinto de OSIGU genera su propia notificación (el dedupe por
+      // message_id en processed_emails evita procesar el mismo correo dos veces).
 
       // Crear notificación para cada técnico (comparten email_message_id)
       const notifications = [];
