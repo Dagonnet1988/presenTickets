@@ -694,13 +694,15 @@ const checkAndCreateTables = async () => {
     } else {
       logger.debug("✅ La tabla 'system_settings' ya existe.");
       
-      // Verificar y agregar columnas de antibloqueo si no existen
+      // Verificar y agregar columnas de antibloqueo / configuración si no existen
       const antiblockColumns = [
         { name: 'whatsapp_min_delay', type: 'INTEGER DEFAULT 1000' },
         { name: 'whatsapp_max_delay', type: 'INTEGER DEFAULT 3000' },
         { name: 'whatsapp_max_hour', type: 'INTEGER DEFAULT 60' },
         { name: 'whatsapp_max_daily', type: 'INTEGER DEFAULT 200' },
-        { name: 'whatsapp_max_burst', type: 'INTEGER DEFAULT 5' }
+        { name: 'whatsapp_max_burst', type: 'INTEGER DEFAULT 5' },
+        // Alcance de destinatarios de WhatsApp: 'all' (todos) | 'tech_only' (solo técnicos)
+        { name: 'whatsapp_recipient_scope', type: "VARCHAR(20) DEFAULT 'all'" }
       ];
       
       for (const column of antiblockColumns) {

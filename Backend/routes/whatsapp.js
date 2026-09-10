@@ -257,18 +257,19 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
     
     // Buscar configuración global del sistema
     const result = await client.query(`
-      SELECT 
+      SELECT
         whatsapp_global_enabled,
         whatsapp_global_ticket_created,
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
-        whatsapp_global_comments
-      FROM system_settings 
+        whatsapp_global_comments,
+        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope
+      FROM system_settings
       WHERE id = 1
     `);
 
     client.release();
-    
+
     // Si no existe configuración, devolver valores por defecto
     if (result.rows.length === 0) {
       const defaultSettings = {
@@ -276,7 +277,8 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
         whatsapp_global_ticket_created: true,
         whatsapp_global_ticket_assigned: true,
         whatsapp_global_ticket_status: true,
-        whatsapp_global_comments: true
+        whatsapp_global_comments: true,
+        whatsapp_recipient_scope: 'all'
       };
       return res.json(defaultSettings);
     }
@@ -293,7 +295,7 @@ router.get('/global-settings', authMiddleware, adminMiddleware, async (req, res)
  */
 router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { 
+    const {
       whatsapp_global_enabled,
       whatsapp_global_ticket_created,
       whatsapp_global_ticket_assigned,
@@ -301,8 +303,11 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
       whatsapp_global_comments
     } = req.body;
 
+    // Alcance de destinatarios: solo se aceptan valores conocidos
+    const recipientScope = req.body.whatsapp_recipient_scope === 'tech_only' ? 'tech_only' : 'all';
+
     const client = await pool.connect();
-    
+
     // Verificar si existe la tabla system_settings y el registro
     const checkResult = await client.query(`
       SELECT id FROM system_settings WHERE id = 1
@@ -317,14 +322,16 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_created,
           whatsapp_global_ticket_assigned,
           whatsapp_global_ticket_status,
-          whatsapp_global_comments
-        ) VALUES (1, $1, $2, $3, $4, $5)
+          whatsapp_global_comments,
+          whatsapp_recipient_scope
+        ) VALUES (1, $1, $2, $3, $4, $5, $6)
       `, [
         whatsapp_global_enabled ?? true,
         whatsapp_global_ticket_created ?? true,
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
-        whatsapp_global_comments ?? true
+        whatsapp_global_comments ?? true,
+        recipientScope
       ]);
     } else {
       // Actualizar registro existente
@@ -335,6 +342,7 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
           whatsapp_global_ticket_assigned = $3,
           whatsapp_global_ticket_status = $4,
           whatsapp_global_comments = $5,
+          whatsapp_recipient_scope = $6,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = 1
       `, [
@@ -342,7 +350,8 @@ router.post('/global-settings', authMiddleware, adminMiddleware, async (req, res
         whatsapp_global_ticket_created ?? true,
         whatsapp_global_ticket_assigned ?? true,
         whatsapp_global_ticket_status ?? true,
-        whatsapp_global_comments ?? true
+        whatsapp_global_comments ?? true,
+        recipientScope
       ]);
     }
 
@@ -630,10 +639,13 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
         whatsapp_global_ticket_created,
         whatsapp_global_ticket_assigned,
         whatsapp_global_ticket_status,
-        whatsapp_global_comments
+        whatsapp_global_comments,
+        COALESCE(whatsapp_recipient_scope, 'all') as whatsapp_recipient_scope
       FROM system_settings
       WHERE id = 1
     `);
+
+    const recipientScope = globalSettingsResult.rows[0]?.whatsapp_recipient_scope || 'all';
 
     // Si existe configuración global, verificarla
     if (globalSettingsResult.rows.length > 0) {
@@ -669,6 +681,7 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     const settingsResult = await client.query(`
       SELECT
         u.phone,
+        u.role,
         COALESCE(ups.whatsapp_enabled, true) as whatsapp_enabled,
         COALESCE(ups.whatsapp_ticket_created, true) as whatsapp_ticket_created,
         COALESCE(ups.whatsapp_ticket_assigned, true) as whatsapp_ticket_assigned,
@@ -688,6 +701,13 @@ export async function sendWhatsAppNotification(userId, ticketId, message, notifi
     }
 
     const settings = settingsResult.rows[0];
+
+    // Alcance de destinatarios: en modo 'tech_only' solo se envía a técnicos/admin,
+    // no a usuarios finales (rol 'user').
+    if (recipientScope === 'tech_only' && settings.role === 'user') {
+      console.log(`⚠️ WhatsApp omitido: alcance 'solo técnicos' y el destinatario ${userId} es usuario final`);
+      return false;
+    }
 
     // Verificar si WhatsApp está habilitado para el usuario
     if (!settings.whatsapp_enabled) {

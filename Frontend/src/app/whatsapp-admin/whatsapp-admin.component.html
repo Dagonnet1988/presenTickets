@@ -225,6 +225,23 @@
                 </p>
               </div>
 
+              <div class="setting-item">
+                <mat-form-field appearance="outline" style="width: 100%; max-width: 420px;">
+                  <mat-label>Enviar notificaciones WhatsApp a</mat-label>
+                  <mat-select
+                    [(ngModel)]="systemSettings.recipient_scope"
+                    name="whatsappRecipientScope"
+                  >
+                    <mat-option value="all">Todos (técnicos y usuarios)</mat-option>
+                    <mat-option value="tech_only">Solo técnicos</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                <p class="setting-description">
+                  En modo <strong>Solo técnicos</strong>, los usuarios finales no
+                  reciben mensajes de WhatsApp (la campana interna no cambia).
+                </p>
+              </div>
+
               <!-- Tipos de Notificaciones -->
               <mat-divider class="setting-divider"></mat-divider>
               <h4><mat-icon>notifications</mat-icon>Tipos de Notificaciones</h4>
