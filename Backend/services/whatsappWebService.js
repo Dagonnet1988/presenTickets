@@ -263,6 +263,12 @@ class WhatsAppWebService {
           timeout: 90000 // Timeout de 90 segundos para operaciones de Puppeteer
         },
         qrMaxRetries: 20, // Reintentos de QR (alineado con maxQRGenerations)
+        // webVersionCache: por defecto 'local' (cachea la versión de WhatsApp Web
+        // que conectó bien y la reutiliza). Si se define WHATSAPP_WEB_VERSION_URL,
+        // se fija a ese HTML de un mirror (útil cuando WhatsApp rompe compatibilidad).
+        webVersionCache: process.env.WHATSAPP_WEB_VERSION_URL
+          ? { type: 'remote', remotePath: process.env.WHATSAPP_WEB_VERSION_URL }
+          : { type: 'local' },
         // takeoverOnConflict configurable vía variable de entorno para pruebas
         takeoverOnConflict: (process.env.WHATSAPP_TAKEOVER_ON_CONFLICT === 'true'),
         takeoverTimeoutMs: process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS ? parseInt(process.env.WHATSAPP_TAKEOVER_TIMEOUT_MS, 10) : 0
@@ -972,12 +978,18 @@ class WhatsAppWebService {
             }
           }
           
-          // Si es error de Target closed o detached Frame, el cliente se desconectó
-          if (errorMsg.includes('Target closed') || 
+          // Si es error de Target closed / Frame detached / contexto inyectado
+          // perdido (getChat/Store/WWebJS undefined), el cliente está roto.
+          if (errorMsg.includes('Target closed') ||
               errorMsg.includes('Protocol error') ||
               errorMsg.includes('detached Frame') ||
-              errorMsg.includes('Execution context was destroyed')) {
-            logger.error('❌ Cliente WhatsApp desconectado durante envío (Frame detached)');
+              errorMsg.includes('Execution context was destroyed') ||
+              errorMsg.includes('getChat') ||
+              errorMsg.includes('WWebJS') ||
+              errorMsg.includes('Store') ||
+              errorMsg.includes('getMessageModel') ||
+              errorMsg.includes("reading 'sendMessage'")) {
+            logger.error('❌ Cliente WhatsApp con contexto roto durante envío:', errorMsg);
             this.isReady = false;
             this.qrCode = null;
             
