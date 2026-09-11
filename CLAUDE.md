@@ -16,9 +16,19 @@ fuente nuevo lleva la cabecera de copyright del proyecto (ver cualquier archivo 
 ## Cómo ejecutar
 
 - **Backend** (`Backend/`): dev `npm run dev` (nodemon, puerto 3000); prod PM2 con `ecosystem.production.config.json`.
-- **Frontend** (`Frontend/`): dev `npm start` (`ng serve`, puerto 4200); prod `npm run build`.
+- **Frontend** (`Frontend/`): dev `npm start` (`ng serve`, puerto 4200); prod `npm run build`, servido por nginx desde `/var/www/html` en el servidor.
 
 No hay suite de pruebas automatizadas — la verificación es manual.
+
+## Producción (192.162.2.5)
+
+- Backend: `/var/www/presentickets-backend`, PM2 (`presentickets-backend`). Frontend: `/var/www/html`.
+- nginx: copia de referencia en `Documentacion/configuracion_nginx_produccion.conf` — léela antes de
+  tocar la config real (`/etc/nginx/sites-enabled/default`); explica por qué `index.html` no se
+  cachea y los assets con hash sí, y por qué **nunca** hay que dejar un backup dentro de
+  `sites-enabled/` (nginx carga todo archivo de esa carpeta, sin filtrar por nombre).
+- Tras un deploy de frontend, avisar que puede hacer falta un refresh forzado (Ctrl+Shift+R) una
+  vez, aunque el Cache-Control ya está configurado para minimizarlo.
 
 ## Base de datos y migraciones
 
