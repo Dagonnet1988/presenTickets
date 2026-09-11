@@ -339,6 +339,15 @@ router.post("/", async (req, res) => {
         );
       }
 
+      // Avisar a todos los clientes conectados (listas de tickets abiertas) que hay
+      // un ticket nuevo, para que se refresquen solas sin esperar a un F5.
+      // (Esto es aparte de la notificación de campana/WhatsApp de más abajo.)
+      io.emit('ticket-updated', {
+        ticketId,
+        isNew: true,
+        updatedFields: { status: ticketData.status }
+      });
+
       // Notificar a todos los técnicos sobre el nuevo ticket
       try {
         // Obtener todos los usuarios con rol de técnico
